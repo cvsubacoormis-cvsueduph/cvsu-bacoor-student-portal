@@ -1,0 +1,252 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id         String  @id @default(uuid()) // Use UUID for id
+  firstName  String
+  middleInit String?
+  lastName   String
+  address    String
+  phone      String?
+  email      String
+  birthday   String
+  sex        UserSex
+  username   String  @unique
+  role       Role    @default(admin)
+}
+
+model User {
+  id         String  @id @default(cuid())
+  username   String  @unique
+  firstName  String
+  lastName   String
+  middleInit String?
+  email      String?
+  phone      String?
+  address    String
+  sex        UserSex
+  role       Role    @default(faculty)
+
+  createdAt DateTime @default(now())
+
+  @@unique([username, email], map: "unique_user")
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  studentNumber String   @unique
+  username      String   @unique
+  firstName     String
+  lastName      String
+  middleInit    String?
+  email         String?
+  phone         String?
+  address       String
+  sex           UserSex
+  course        Courses
+  major         Major?
+  status        Status
+  role          Role     @default(student)
+  createdAt     DateTime @default(now())
+  grades        Grade[]
+  isPasswordSet Boolean  @default(false)
+  isApproved    Boolean  @default(false)
+}
+
+model CurriculumChecklist {
+  id              String            @id @default(cuid())
+  course          Courses
+  major           Major
+  yearLevel       yearLevels
+  semester        Semester
+  courseCode      String
+  courseTitle     String
+  creditLec       Int               @default(0)
+  creditLab       Int               @default(0)
+  preRequisite    String?
+  SubjectOffering SubjectOffering[]
+
+  @@unique([course, yearLevel, semester, courseCode, major], name: "course_yearLevel_semester_courseCode_major")
+}
+
+model SubjectOffering {
+  id           String              @id @default(cuid())
+  academicYear AcademicYear
+  semester     Semester
+  curriculumId String
+  curriculum   CurriculumChecklist @relation(fields: [curriculumId], references: [id])
+  isActive     Boolean             @default(true)
+
+  grades Grade[]
+
+  @@unique([curriculumId, academicYear, semester], map: "unique_offering")
+}
+
+model AcademicTerm {
+  id           String       @id @default(cuid())
+  academicYear AcademicYear
+  semester     Semester
+  grades       Grade[]
+
+  @@unique([academicYear, semester], map: "unique_academic_term")
+}
+
+model Grade {
+  id            String       @id @default(cuid())
+  studentNumber String
+  student       Student      @relation(fields: [studentNumber], references: [studentNumber], onDelete: Cascade)
+  courseCode    String
+  courseTitle   String
+  creditUnit    Int
+  grade         String
+  reExam        String?
+  remarks       String?
+  instructor    String
+  attemptNumber Int          @default(1)
+  isRetaken     Boolean      @default(false)
+  retakenAYSem  String?
+  academicYear  AcademicYear
+  semester      Semester
+  academicTerm  AcademicTerm @relation(fields: [academicYear, semester], references: [academicYear, semester])
+  createdAt     DateTime     @default(now())
+
+  subjectOfferingId String?
+  subjectOffering   SubjectOffering? @relation(fields: [subjectOfferingId], references: [id])
+
+  @@unique([studentNumber, courseCode, academicYear, semester], map: "unique_grade_per_term")
+}
+
+model GradeLog {
+  id            String       @id @default(cuid())
+  studentNumber String
+  courseCode    String
+  grade         String
+  remarks       String?
+  instructor    String
+  academicYear  AcademicYear
+  semester      Semester
+  action        String
+  performedAt   DateTime     @default(now())
+}
+
+enum AcademicYear {
+  AY_2023_2024
+  AY_2024_2025
+  AY_2025_2026
+  AY_2026_2027
+  AY_2027_2028
+  AY_2028_2029
+  AY_2029_2030
+  AY_2030_2031
+  AY_2031_2032
+  AY_2032_2033
+  AY_2033_2034
+  AY_2034_2035
+  AY_2035_2036
+  AY_2036_2037
+  AY_2037_2038
+  AY_2038_2039
+  AY_2039_2040
+}
+
+enum Semester {
+  FIRST
+  SECOND
+  MIDYEAR
+}
+
+enum Courses {
+  BSIT
+  BSCS
+  BSCRIM
+  BSP
+  BSHM
+  BSED
+  BSBA
+}
+
+enum yearLevels {
+  FIRST
+  SECOND
+  THIRD
+  FOURTH
+}
+
+enum Status {
+  REGULAR
+  IRREGULAR
+  NOT_ANNOUNCED
+  TRANSFEREE
+  RETURNEE
+}
+
+enum Major {
+  HUMAN_RESOURCE_MANAGEMENT
+  MARKETING_MANAGEMENT
+  ENGLISH
+  MATHEMATICS
+  NONE
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  startTime   String
+  endTime     String
+  createdAt   DateTime @default(now())
+}
+
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  date        String
+  createdAt   DateTime @default(now())
+}
+
+model News {
+  id          Int     @id @default(autoincrement())
+  title       String
+  description String
+  category    String
+  important   Boolean @default(false)
+  author      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+model RateLimit {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  action    String
+  timestamp DateTime @default(now())
+
+  @@index([userId, action, timestamp])
+}
+
+enum UserSex {
+  MALE
+  FEMALE
+}
+
+enum Role {
+  admin
+  student
+  superuser
+  faculty
+  registrar
+}
