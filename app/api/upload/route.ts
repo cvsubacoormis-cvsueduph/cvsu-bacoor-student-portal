@@ -6,6 +6,8 @@ import { CreateStudentSchema } from "@/lib/formValidationSchemas";
 import { clerkClient } from "@clerk/nextjs/server";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { auth } from "@clerk/nextjs/server";
+export const runtime = "nodejs";
+
 
 // Rate limiter: 20 requests per 10 seconds
 const rateLimiter = new RateLimiterMemory({

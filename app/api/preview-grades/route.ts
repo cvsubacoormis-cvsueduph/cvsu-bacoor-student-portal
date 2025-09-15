@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const { userId } = await auth();

@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { clerkClient } from "@clerk/nextjs/server";
 import { Courses, Major, Status, UserSex } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs";
+
 
 // export async function GET() {
 //   try {

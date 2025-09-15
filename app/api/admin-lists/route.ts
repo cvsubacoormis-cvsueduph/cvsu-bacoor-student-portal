@@ -5,6 +5,8 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { UserSex } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const { userId } = await auth();
   if (!userId) {

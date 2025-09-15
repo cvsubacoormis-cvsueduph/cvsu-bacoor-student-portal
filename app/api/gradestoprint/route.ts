@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
+export const runtime = "nodejs";
+
 
 export async function GET(request: Request) {
   // Parse query parameters from the URL
