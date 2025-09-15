@@ -622,7 +622,7 @@ export default function StudentSignup() {
         Already have an account?{" "}
         <Link href="/sign-in">
           {" "}
-          <p className="underline font-semibold hover:no-underline text-blue-600">
+          <p className="no-underline font-semibold hover:underline text-blue-600">
             Login
           </p>{" "}
         </Link>

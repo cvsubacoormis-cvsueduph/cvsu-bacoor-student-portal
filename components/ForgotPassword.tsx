@@ -274,14 +274,14 @@ export default function ForgotPasswordDialog() {
                 <Button
                   type="button"
                   onClick={handleClose}
-                  className="mt-2 sm:mt-0 bg-blue-700 hover:bg-blue-900 text-white"
+                  className="mt-2 sm:mt-0 bg-blue-700 hover:bg-blue-600 text-white"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={!email || isLoading}
-                  className="bg-blue-700 hover:bg-blue-900 text-white"
+                  className="bg-blue-700 hover:bg-blue-600 text-white"
                 >
                   {isLoading ? (
                     <>
@@ -414,7 +414,7 @@ export default function ForgotPasswordDialog() {
                 <Button
                   type="button"
                   onClick={() => setCurrentStep("email")}
-                  className="mt-2 sm:mt-0 bg-blue-700 hover:bg-blue-900 text-white"
+                  className="mt-2 sm:mt-0 bg-blue-700 hover:bg-blue-600 text-white"
                 >
                   Back
                 </Button>
@@ -423,7 +423,7 @@ export default function ForgotPasswordDialog() {
                   disabled={
                     !code || !password || !confirmPassword || isResetLoading
                   }
-                  className="bg-blue-700 hover:bg-blue-900 text-white"
+                  className="bg-blue-700 hover:bg-blue-600 text-white"
                 >
                   {isResetLoading ? (
                     <>
@@ -464,7 +464,7 @@ export default function ForgotPasswordDialog() {
             <DialogFooter>
               <Button
                 onClick={handleClose}
-                className="w-full bg-blue-700 hover:bg-blue-900 text-white"
+                className="w-full bg-blue-700 hover:bg-blue-600 text-white"
               >
                 Return to Dashboard
               </Button>
