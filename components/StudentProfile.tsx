@@ -6,16 +6,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -44,8 +34,8 @@ import {
 import { Grade } from "@/lib/types";
 import { useUser } from "@clerk/nextjs";
 import { courseMap, formatMajor } from "@/lib/courses";
+import { StudentCardSkeleton } from "./skeleton/StudentCardSkeleton";
 
-// Prisma-enum-aligned types (condensed to what's needed in the UI)
 type UserSex = "MALE" | "FEMALE";
 type Courses = "BSIT" | "BSCS" | "BSCRIM" | "BSP" | "BSHM" | "BSED" | "BSBA";
 type Major =
@@ -126,7 +116,7 @@ export default function StudentProfile({ data }: { data: Student }) {
   const [student, setStudent] = React.useState(data);
   const [openEdit, setOpenEdit] = React.useState(false);
   const { user } = useUser();
-
+  const [loading, setLoading] = React.useState(false);
   const displayName = [
     student.firstName.charAt(0).toUpperCase() +
       student.firstName.slice(1).toLowerCase(),
@@ -159,6 +149,10 @@ export default function StudentProfile({ data }: { data: Student }) {
     const nextTotalPages = Math.max(1, Math.ceil(totalGrades / rowsPerPage));
     if (pageIndex > nextTotalPages - 1) setPageIndex(nextTotalPages - 1);
   }, [totalGrades, rowsPerPage, pageIndex]);
+
+  if (!data) {
+    return <StudentCardSkeleton />;
+  }
 
   return (
     <section aria-label="Student profile">
