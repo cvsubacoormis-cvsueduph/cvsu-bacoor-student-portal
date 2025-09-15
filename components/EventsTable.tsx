@@ -25,6 +25,7 @@ import { useState } from "react";
 import DeleteEvent from "./events/delete-event";
 import UpdateEvent from "./events/update-event";
 import { useUser } from "@clerk/nextjs";
+import EventsTableSkeleton from "./skeleton/EventsTableSkeleton";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -40,13 +41,7 @@ export default function EventsTable() {
     totalEvents: number;
   }>(`/api/events?page=${page}&limit=${limit}`, fetcher);
 
-  if (isLoading)
-    return (
-      <div className="flex items-center justify-center h-48">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-        <p className="ml-4 text-gray-500">Loading...</p>
-      </div>
-    );
+  if (isLoading) return <EventsTableSkeleton />;
 
   if (error) {
     return (

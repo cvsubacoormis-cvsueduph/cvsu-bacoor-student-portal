@@ -18,16 +18,16 @@ export default async function EventsLists() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <div>
                 <h1 className="text-lg font-semibold">All Events</h1>
-                <p className="text-xs text-gray-500">Lists of Events</p>
+                <p className="text-xs text-gray-500 font-semibold">
+                  Lists of Events
+                </p>
               </div>
 
               {(role === "admin" || role === "superuser") && <CreateEvents />}
             </div>
-          </div>
-
-          {/* LIST CARD */}
-          <div className="bg-white p-4 rounded-md">
-            <EventsTable />
+            <div className="bg-white p-4 rounded-md">
+              <EventsTable />
+            </div>
           </div>
         </div>
       </SignedIn>

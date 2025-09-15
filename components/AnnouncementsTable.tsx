@@ -23,6 +23,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useUser } from "@clerk/nextjs";
+import AnnouncementsTableSkeleton from "./skeleton/AnnouncementsTableSkeleton";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -39,13 +40,7 @@ export default function AnnouncementsTable() {
     fetcher
   );
 
-  if (isLoading)
-    return (
-      <div className="flex items-center justify-center h-48">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-        <p className="ml-4 text-gray-500">Loading...</p>
-      </div>
-    );
+  if (isLoading) return <AnnouncementsTableSkeleton />;
 
   if (error) {
     return (
