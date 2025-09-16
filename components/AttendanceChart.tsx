@@ -18,6 +18,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import AttendanceChartSkeleton from "./skeleton/AttendanceChartSkeleton";
 
 const chartConfig = {
   desktop: {
@@ -98,10 +99,7 @@ export default function AttendanceChart() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center mb-8">
-              <SyncLoader color="#1d4ed8" size={14} />{" "}
-              {/* Updated to blue-700 */}
-            </div>
+            <AttendanceChartSkeleton />
           ) : (
             <ChartContainer config={chartConfig}>
               <BarChart

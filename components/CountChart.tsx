@@ -4,7 +4,6 @@ import * as React from "react";
 import { useMemo } from "react";
 import { TrendingUp } from "lucide-react";
 import { Label, Legend, Pie, PieChart } from "recharts";
-
 import {
   Card,
   CardContent,
@@ -19,16 +18,16 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { SyncLoader } from "react-spinners";
+import CountChartSkeleton from "./skeleton/CountChartSkeleton";
 
 const chartConfig = {
   male: {
     label: "Male",
-    color: "#1d4ed8", // blue-700
+    color: "#1d4ed8",
   },
   female: {
     label: "Female",
-    color: "#93c5fd", // blue-300 for contrast
+    color: "#93c5fd",
   },
 } satisfies ChartConfig;
 
@@ -47,8 +46,8 @@ export default function AdminPage() {
 
         const data = await response.json();
         setChartData([
-          { sex: "MALE", count: data.maleCount, fill: "#1d4ed8" }, // blue-700
-          { sex: "FEMALE", count: data.femaleCount, fill: "#93c5fd" }, // blue-300
+          { sex: "MALE", count: data.maleCount, fill: "#1d4ed8" },
+          { sex: "FEMALE", count: data.femaleCount, fill: "#93c5fd" },
         ]);
         setTotalVisitors(data.total);
       } catch (error) {
@@ -62,16 +61,12 @@ export default function AdminPage() {
   }, []);
 
   const mostStudents = useMemo(() => {
-    if (chartData.length === 0) {
-      return "NONE";
-    }
-
-    if (chartData[0].count === chartData[1].count) {
-      return "EQUAL";
-    }
-
+    if (chartData.length === 0) return "NONE";
+    if (chartData[0].count === chartData[1].count) return "EQUAL";
     return chartData[0].count > chartData[1].count ? "MALE" : "FEMALE";
   }, [chartData]);
+
+  if (loading) return <CountChartSkeleton />;
 
   return (
     <div className="w-full">
@@ -85,72 +80,66 @@ export default function AdminPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-1 pb-0 mt-28">
-          {loading ? (
-            <div className="flex items-center justify-center mb-8">
-              <SyncLoader color="#1d4ed8" size={14} /> {/* blue-700 */}
-            </div>
-          ) : (
-            <ChartContainer
-              config={chartConfig}
-              className="mx-auto aspect-square max-h-[600px]"
-            >
-              <PieChart>
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
-                />
-                <Pie
-                  data={chartData}
-                  dataKey="count"
-                  nameKey="sex"
-                  innerRadius={60}
-                  strokeWidth={5}
-                >
-                  <Label
-                    content={({ viewBox }) => {
-                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                        return (
-                          <text
+          <ChartContainer
+            config={chartConfig}
+            className="mx-auto aspect-square max-h-[600px]"
+          >
+            <PieChart>
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent hideLabel />}
+              />
+              <Pie
+                data={chartData}
+                dataKey="count"
+                nameKey="sex"
+                innerRadius={60}
+                strokeWidth={5}
+              >
+                <Label
+                  content={({ viewBox }) => {
+                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                      return (
+                        <text
+                          x={viewBox.cx}
+                          y={viewBox.cy}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                        >
+                          <tspan
                             x={viewBox.cx}
                             y={viewBox.cy}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
+                            className="fill-foreground text-3xl font-bold"
                           >
-                            <tspan
-                              x={viewBox.cx}
-                              y={viewBox.cy}
-                              className="fill-foreground text-3xl font-bold"
-                            >
-                              {totalVisitors.toLocaleString()}
-                            </tspan>
-                            <tspan
-                              x={viewBox.cx}
-                              y={(viewBox.cy || 0) + 24}
-                              className="fill-muted-foreground"
-                            >
-                              Students
-                            </tspan>
-                          </text>
-                        );
-                      }
-                    }}
-                  />
-                </Pie>
-                <Legend
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  wrapperStyle={{ marginTop: 8, marginBottom: 8 }}
+                            {totalVisitors.toLocaleString()}
+                          </tspan>
+                          <tspan
+                            x={viewBox.cx}
+                            y={(viewBox.cy || 0) + 24}
+                            className="fill-muted-foreground"
+                          >
+                            Students
+                          </tspan>
+                        </text>
+                      );
+                    }
+                  }}
                 />
-              </PieChart>
-            </ChartContainer>
-          )}
+              </Pie>
+              <Legend
+                layout="horizontal"
+                verticalAlign="bottom"
+                align="center"
+                wrapperStyle={{ marginTop: 8, marginBottom: 8 }}
+              />
+            </PieChart>
+          </ChartContainer>
         </CardContent>
         <CardFooter className="flex-col gap-2 text-sm">
           <div className="flex items-start gap-2 font-medium leading-none">
             Most number of the students is{" "}
             <span className="underline italic">{mostStudents}</span>{" "}
-            <TrendingUp className="h-4 w-4 text-blue-700" /> {/* blue-700 */}
+            <TrendingUp className="h-4 w-4 text-blue-700" />
           </div>
           <div className="leading-none text-muted-foreground">
             Showing total students in the database
