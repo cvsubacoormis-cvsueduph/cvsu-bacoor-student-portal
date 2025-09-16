@@ -27,6 +27,7 @@ import { Role, UserSex } from "@prisma/client";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useUser } from "@clerk/nextjs";
 import { HashLoader } from "react-spinners";
+import AdminProfileSkeleton from "./skeleton/AdminProfileSkeleton";
 
 export default function AdminProfileComp() {
   const [admin, setAdmin] = useState<Admin | null>(null);
@@ -60,11 +61,7 @@ export default function AdminProfileComp() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <HashLoader color="#1976D2" size={150} />
-      </div>
-    );
+    return <AdminProfileSkeleton />;
   }
 
   if (error) {

@@ -25,6 +25,8 @@ import {
 import { Label } from "@/components/ui/label";
 import Swal from "sweetalert2";
 import UploadGradeNotice from "./Notices/upload-grade-notice";
+import { Skeleton } from "./ui/skeleton";
+import UploadGradesSkeleton from "./skeleton/UploadGradesSkeleton";
 
 interface UploadResult {
   studentNumber?: string;
@@ -54,6 +56,7 @@ export function UploadGrades() {
   const recordsPerPage = 10;
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -66,6 +69,8 @@ export function UploadGrades() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
+
+    setIsLoading(true);
 
     const validTypes = [
       "application/vnd.ms-excel",
@@ -98,6 +103,7 @@ export function UploadGrades() {
       });
     } finally {
       setIsLoadingPreview(false);
+      setIsLoading(false);
     }
   };
 
@@ -243,6 +249,10 @@ export function UploadGrades() {
     return `AY_${ayStart}_${ayEnd}`;
   });
 
+  if (isLoading) {
+    return <UploadGradesSkeleton />;
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -384,9 +394,27 @@ export function UploadGrades() {
       {isLoadingPreview && (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-              <span className="ml-3">Loading preview...</span>
+            <div className="space-y-3">
+              {/* Table Header Skeleton */}
+              <div className="grid grid-cols-6 gap-2 border-b pb-2">
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton key={i} className="h-6 w-full" />
+                ))}
+              </div>
+
+              {/* Table Rows Skeleton */}
+              <div className="space-y-2">
+                {[...Array(5)].map((_, rowIndex) => (
+                  <div
+                    key={rowIndex}
+                    className="grid grid-cols-6 gap-2 items-center"
+                  >
+                    {[...Array(6)].map((_, colIndex) => (
+                      <Skeleton key={colIndex} className="h-6 w-full" />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

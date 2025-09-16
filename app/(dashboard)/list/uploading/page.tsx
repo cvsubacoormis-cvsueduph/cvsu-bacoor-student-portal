@@ -4,6 +4,9 @@ import { UploadGrades } from "@/components/UploadGrades";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ManualGradeEntry from "@/components/ManualGradeEntry";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
+import { Suspense } from "react";
+import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
+import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
 
 export default function GradeUploader() {
   return (
@@ -22,10 +25,14 @@ export default function GradeUploader() {
               <TabsTrigger value="manual">Manual Entry</TabsTrigger>
             </TabsList>
             <TabsContent value="upload" className="mt-6">
-              <UploadGrades />
+              <Suspense fallback={<UploadGradesSkeleton />}>
+                <UploadGrades />
+              </Suspense>
             </TabsContent>
             <TabsContent value="manual" className="mt-6">
-              <ManualGradeEntry />
+              <Suspense fallback={<ManualGradeEntrySkeleton />}>
+                <ManualGradeEntry />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </div>

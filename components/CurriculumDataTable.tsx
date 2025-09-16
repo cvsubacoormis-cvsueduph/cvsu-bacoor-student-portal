@@ -57,6 +57,7 @@ import {
   getCurriculumChecklistForCourse,
   updateCurriculumChecklist,
 } from "@/actions/curriculum-actions";
+import { CurriculumSkeleton } from "./skeleton/CurriculumSkeleton";
 
 interface CurriculumChecklist {
   id: string;
@@ -248,6 +249,10 @@ export function CurriculumDataTable() {
       .toLowerCase()
       .replace(/\b\w/g, (l) => l.toUpperCase());
   };
+
+  if (loading) {
+    return <CurriculumSkeleton />;
+  }
 
   return (
     <div className="space-y-6 h-screen">
