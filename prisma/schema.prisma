@@ -37,7 +37,7 @@ model User {
   phone      String?
   address    String
   sex        UserSex
-  role       Role    @default(faculty)
+  role       Role
 
   createdAt DateTime @default(now())
 
