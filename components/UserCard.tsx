@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { SyncLoader } from "react-spinners";
+import UserCardSkeleton from "./skeleton/UserCardSkeleton";
 
 export default function UserCard({ type }: { type: string }) {
   const [total, setTotal] = useState<number | null>(null);
@@ -35,7 +36,7 @@ export default function UserCard({ type }: { type: string }) {
         </span>
       </div>
       <div className="flex">
-        {loading ? <SyncLoader color="#1976D2" size={10} /> : null}
+        {loading ? <UserCardSkeleton /> : null}
         <h1 className="text-2xl font-semibold my-4">
           {total !== null ? total : ""}
         </h1>
