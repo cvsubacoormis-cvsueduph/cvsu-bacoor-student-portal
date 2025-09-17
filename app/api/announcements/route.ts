@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       data: {
         title: announcementsData.title,
         description: announcementsData.description || "",
-        date: announcementsData.date,
+        dateTime: announcementsData.dateTime,
       },
     });
     return NextResponse.json(CreateAnnouncements, { status: 201 });
@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest) {
       data: {
         title: announcementData.title,
         description: announcementData.description,
-        date: announcementData.date,
+        dateTime: announcementData.dateTime,
       },
     });
 

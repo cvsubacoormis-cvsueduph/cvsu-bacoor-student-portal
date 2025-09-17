@@ -33,7 +33,7 @@ export default function CreateAnnouncements() {
     defaultValues: {
       title: "",
       description: "",
-      date: "",
+      dateTime: new Date(),
     },
   });
 

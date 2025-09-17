@@ -78,12 +78,19 @@ export default function AnnouncementsForm({
           />
           <FormField
             control={form.control}
-            name="date"
+            name="dateTime"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} className="mr-9" />
+                  <Input
+                    type="date"
+                    {...field}
+                    value={
+                      field.value ? field.value.toISOString().split("T")[0] : ""
+                    }
+                    className="mr-9"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
-
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
@@ -51,14 +50,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(result);
+
     const eventsData = result.data;
 
     const CreateEvent = await prisma.event.create({
       data: {
         title: eventsData.title,
         description: eventsData.description,
-        startTime: eventsData.startTime,
-        endTime: eventsData.endTime,
+        startTime: new Date(eventsData.startTime),
+        endTime: new Date(eventsData.endTime),
       },
     });
     return NextResponse.json(CreateEvent, { status: 201 });

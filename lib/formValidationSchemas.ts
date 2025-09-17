@@ -144,7 +144,7 @@ export type EventSchema = z.infer<typeof eventSchema>;
 export const announcementSchema = z.object({
   title: z.string().min(1, { message: "Title is required" }),
   description: z.string().optional(),
-  date: z.string().min(1, { message: "Date is required" }),
+  dateTime: z.date(),
 });
 
 export type AnnouncementSchema = z.infer<typeof announcementSchema>;
