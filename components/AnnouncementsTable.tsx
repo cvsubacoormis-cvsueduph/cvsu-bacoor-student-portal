@@ -85,7 +85,11 @@ export default function AnnouncementsTable() {
                   {announcement.description}
                 </TableCell>
                 <TableCell className="text-center">
-                  {announcement.date}
+                  {announcement.dateTime.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
                 </TableCell>
                 <TableCell className="text-right">
                   {(role === "admin" || role === "superuser") && (

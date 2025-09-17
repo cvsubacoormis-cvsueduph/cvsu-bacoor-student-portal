@@ -80,7 +80,7 @@ export default function UpdateAnnouncements({
             defaultValues={{
               title: announcement.title,
               description: announcement.description ?? "",
-              date: announcement.date,
+              dateTime: announcement.dateTime,
             }}
             onSubmit={onSubmit}
             submitButtonText="Update"

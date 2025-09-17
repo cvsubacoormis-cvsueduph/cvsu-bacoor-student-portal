@@ -74,8 +74,8 @@ export default function UpdateEvent({ event }: { event: Event }) {
             defaultValues={{
               title: event.title,
               description: event.description ?? "",
-              startTime: event.startTime,
-              endTime: event.endTime,
+              startTime: event.startTime.toISOString(),
+              endTime: event.endTime.toISOString(),
             }}
             onSubmit={onSubmit}
             submitButtonText="Update"

@@ -81,8 +81,12 @@ export default function EventsTable() {
                 <TableCell className="text-center">
                   {event.description}
                 </TableCell>
-                <TableCell className="text-center">{event.startTime}</TableCell>
-                <TableCell className="text-center">{event.endTime}</TableCell>
+                <TableCell className="text-center">
+                  {event.startTime.toLocaleTimeString()}
+                </TableCell>
+                <TableCell className="text-center">
+                  {event.endTime.toLocaleTimeString()}
+                </TableCell>
                 {role === "admin" && (
                   <TableCell className="text-right">
                     <div className="flex items-center gap-2 justify-center">
