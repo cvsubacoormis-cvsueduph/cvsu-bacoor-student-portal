@@ -48,7 +48,7 @@ const PRESETS: Preset[] = [
 ];
 
 export interface DateTimeRangePickerProps {
-  onUpdate?: (values: { range: DateTimeRange }) => void;
+  onSubmit?: (values: { range: DateTimeRange }) => void;
   initialDateFrom?: Date | string;
   initialDateTo?: Date | string;
   align?: "start" | "center" | "end";
@@ -58,14 +58,14 @@ export interface DateTimeRangePickerProps {
 
 const formatDateTime = (
   date: Date | undefined,
-  locale: Locale = enUS,
+  locale: Locale = enUS
 ): string => {
   if (!date || !isValid(date)) return "Select date";
   return format(date, "PPP p", { locale });
 };
 
 const getDateAdjustedForTimezone = (
-  dateInput: Date | string | undefined,
+  dateInput: Date | string | undefined
 ): Date | undefined => {
   if (!dateInput) return undefined;
   if (typeof dateInput === "string") {
@@ -78,7 +78,7 @@ const getDateAdjustedForTimezone = (
 export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
   initialDateFrom,
   initialDateTo,
-  onUpdate,
+  onSubmit,
   align = "center",
   locale = enUS,
   className,
@@ -148,7 +148,7 @@ export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
           throw new Error(`Unknown date range preset: ${presetName}`);
       }
     },
-    [],
+    []
   );
 
   const setPreset = (preset: string): void => {
@@ -238,24 +238,35 @@ export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
         <Button
           variant="outline"
           className={cn(
-            "w-full sm:w-[300px] justify-start text-left text-[11px] font-normal text-wrap",
-            className,
+            "w-full sm:w-[300px] md:w-[400px] justify-start text-left font-normal",
+            "text-xs sm:text-sm text-wrap min-h-[40px] px-3 py-2",
+            "hover:bg-accent hover:text-accent-foreground",
+            className
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {formatDateTime(range.from, locale)}
-          {range.to && (
-            <>
-              <ChevronRightIcon className="mx-2 h-4 w-4" />
-              {formatDateTime(range.to, locale)}
-            </>
-          )}
+          <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+          <span className="truncate">
+            {formatDateTime(range.from, locale)}
+            {range.to && (
+              <>
+                <ChevronRightIcon className="mx-1 sm:mx-2 h-3 w-3 sm:h-4 sm:w-4 inline" />
+                {formatDateTime(range.to, locale)}
+              </>
+            )}
+          </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align={align} sideOffset={4}>
-        <div className="flex flex-col lg:flex-row gap-4">
+      <PopoverContent
+        className={cn(
+          "w-auto p-0 max-w-[95vw] sm:max-w-none",
+          "max-h-[90vh] overflow-auto"
+        )}
+        align={align}
+        sideOffset={4}
+      >
+        <div className="flex flex-col lg:flex-row">
           {/* Calendar Section */}
-          <div className="space-y-4 p-4">
+          <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
             <div className="hidden lg:flex space-x-4">
               {/* Two calendars side by side for desktop */}
               <Calendar
@@ -284,7 +295,7 @@ export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
               />
             </div>
 
-            {/* Single calendar for mobile */}
+            {/* Single calendar for mobile and tablet */}
             <div className="lg:hidden">
               <Calendar
                 mode="range"
@@ -292,45 +303,50 @@ export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
                 onSelect={(newRange) =>
                   newRange && setRange(newRange as DateTimeRange)
                 }
-                className="border rounded-md"
+                className="border rounded-md w-full"
               />
             </div>
 
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 sm:gap-4">
               <DateTimeInput
                 value={range.from}
                 onChange={handleFromDateTimeChange}
                 label="Start"
+                className="flex-1"
               />
-              <ChevronRightIcon className="mx-2 h-4 w-4" />
+              <ChevronRightIcon className="mx-auto sm:mx-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
               <DateTimeInput
                 value={range.to}
                 onChange={handleToDateTimeChange}
                 label="End"
+                className="flex-1"
               />
             </div>
           </div>
 
           {/* Presets Section */}
-          <div className="lg:border-l lg:pl-4 space-y-2 p-4">
-            <h3 className="font-medium text-sm">Presets</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-1">
-              {PRESETS.map((preset) => (
-                <PresetButton
-                  key={preset.name}
-                  preset={preset.name}
-                  label={preset.label}
-                  isSelected={selectedPreset === preset.name}
-                />
-              ))}
+          <div className="border-t lg:border-t-0 lg:border-l">
+            <div className="p-3 sm:p-4 space-y-3">
+              <h3 className="font-medium text-sm">Presets</h3>
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1 lg:gap-2">
+                {PRESETS.map((preset) => (
+                  <PresetButton
+                    key={preset.name}
+                    preset={preset.name}
+                    label={preset.label}
+                    isSelected={selectedPreset === preset.name}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 p-3 sm:p-4 border-t">
           <Button
             variant="ghost"
+            className="w-full sm:w-auto"
             onClick={() => {
               setIsOpen(false);
               resetValues();
@@ -339,14 +355,15 @@ export const DateTimeRangePicker: React.FC<DateTimeRangePickerProps> = ({
             Cancel
           </Button>
           <Button
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white"
             onClick={() => {
               setIsOpen(false);
               if (!areRangesEqual(range, openedRangeRef.current)) {
-                onUpdate?.({ range });
+                onSubmit?.({ range });
               }
             }}
           >
-            Update
+            Submit
           </Button>
         </div>
       </PopoverContent>

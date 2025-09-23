@@ -37,7 +37,7 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({
         date.getHours(),
         date.getMinutes(),
         date.getSeconds(),
-        date.getMilliseconds(),
+        date.getMilliseconds()
       );
     }
 
@@ -53,7 +53,7 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({
       newTime.getHours(),
       newTime.getMinutes(),
       newTime.getSeconds(),
-      newTime.getMilliseconds(),
+      newTime.getMilliseconds()
     );
 
     setDate(updatedDate);
@@ -61,18 +61,24 @@ export const DateTimeInput: React.FC<DateTimeInputProps> = ({
   };
 
   return (
-    <div className={cn("flex flex-col space-y-1", className)}>
-      {label && <span className="text-xs text-muted-foreground">{label}</span>}
-      <div className="flex flex-col sm:flex-row gap-2">
+    <div className={cn("flex flex-col space-y-1.5", className)}>
+      {label && (
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+      )}
+      <div className="flex flex-col xs:flex-row gap-2">
         <DateInput
           value={date}
           onChange={handleDateChange}
           disabled={disabled}
+          className="flex-1 min-w-0"
         />
         <TimeInput
           value={date}
           onChange={handleTimeChange}
           disabled={disabled}
+          className="flex-1 min-w-0"
         />
       </div>
     </div>

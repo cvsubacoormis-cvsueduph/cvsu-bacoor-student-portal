@@ -13,6 +13,7 @@ import { DialogTitle } from "@radix-ui/react-dialog";
 import { Ellipsis } from "lucide-react";
 import { CalendarSkeleton } from "./skeleton/CalendarSkeleton";
 import { EventsSkeleton } from "./skeleton/EventsSkeleton";
+import { format } from "date-fns";
 
 type Event = {
   id: number;
@@ -20,6 +21,8 @@ type Event = {
   description?: string;
   startTime: string;
   endTime: string;
+  dateFrom: string;
+  dateTo: string;
   createdAt: string;
 };
 
@@ -64,14 +67,36 @@ export default function EventCalendar() {
         key={event.id}
       >
         <div className="flex items-center justify-between">
-          <h1 className="font-semibold text-gray-600">{event.title}</h1>
+          <h1 className="font-semibold text-gray-600">{event.title} </h1>
           <span className="text-gray-800 text-xs">
-            {event.startTime} - {event.endTime}
+            {event.startTime
+              ? format(new Date(event.startTime), "p")
+                  .replace("a.m.", "AM")
+                  .replace("p.m.", "PM")
+              : "—"}{" "}
+            -{" "}
+            {event.endTime
+              ? format(new Date(event.endTime), "p")
+                  .replace("a.m.", "AM")
+                  .replace("p.m.", "PM")
+              : "—"}
           </span>
         </div>
         {event.description && (
           <p className="mt-2 text-gray-800 text-sm">{event.description}</p>
         )}
+        <p className="mt-2 text-gray-500 text-xs">
+          <span className="text-gray-600 text-xs font-normal">
+            {event.dateFrom
+              ? event.dateTo
+                ? `(${format(new Date(event.dateFrom), "PPP")} - ${format(
+                    new Date(event.dateTo),
+                    "PPP"
+                  )})`
+                : `(${format(new Date(event.dateFrom), "PPP")}`
+              : "—"}
+          </span>
+        </p>
       </div>
     ));
   };
@@ -117,7 +142,17 @@ export default function EventCalendar() {
                         {event.title}
                       </h1>
                       <span className="text-gray-800 text-xs">
-                        {event.startTime} - {event.endTime}
+                        {event.startTime
+                          ? format(new Date(event.startTime), "p")
+                              .replace("a.m.", "AM")
+                              .replace("p.m.", "PM")
+                          : "—"}{" "}
+                        -{" "}
+                        {event.endTime
+                          ? format(new Date(event.endTime), "p")
+                              .replace("a.m.", "AM")
+                              .replace("p.m.", "PM")
+                          : "—"}
                       </span>
                     </div>
                     {event.description && (
@@ -125,6 +160,18 @@ export default function EventCalendar() {
                         {event.description}
                       </p>
                     )}
+                    <p className="mt-2 text-gray-500 text-xs">
+                      <span className="text-gray-600 text-xs font-normal">
+                        {event.dateFrom
+                          ? event.dateTo
+                            ? `(${format(new Date(event.dateFrom), "PPP")} - ${format(
+                                new Date(event.dateTo),
+                                "PPP"
+                              )})`
+                            : `(${format(new Date(event.dateFrom), "PPP")}`
+                          : "—"}
+                      </span>
+                    </p>
                   </div>
                 ))
               )}

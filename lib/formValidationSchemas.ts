@@ -133,10 +133,12 @@ export const updateStudentSchema = z.object({
 export type UpdateStudentSchema = z.infer<typeof updateStudentSchema>;
 
 export const eventSchema = z.object({
-  title: z.string().min(1, { message: "Title is required" }),
+  title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  startTime: z.string().min(1, { message: "Start time is required" }),
-  endTime: z.string().min(1, { message: "End time is required" }),
+  dateFrom: z.coerce.date(),
+  dateTo: z.coerce.date().optional(),
+  startTime: z.coerce.date(),
+  endTime: z.coerce.date(),
 });
 
 export type EventSchema = z.infer<typeof eventSchema>;

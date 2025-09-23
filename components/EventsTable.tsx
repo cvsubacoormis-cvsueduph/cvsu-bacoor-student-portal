@@ -26,6 +26,7 @@ import DeleteEvent from "./events/delete-event";
 import UpdateEvent from "./events/update-event";
 import { useUser } from "@clerk/nextjs";
 import EventsTableSkeleton from "./skeleton/EventsTableSkeleton";
+import { format } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -67,6 +68,7 @@ export default function EventsTable() {
             <TableRow className="text-left text-gray-500 text-sm">
               <TableHead className="text-left">Title</TableHead>
               <TableHead className="text-center">Description</TableHead>
+              <TableHead className="text-center">Date</TableHead>
               <TableHead className="text-center">Start Time</TableHead>
               <TableHead className="text-center">End Time</TableHead>
               {role === "admin" && (
@@ -82,10 +84,28 @@ export default function EventsTable() {
                   {event.description}
                 </TableCell>
                 <TableCell className="text-center">
-                  {event.startTime.toLocaleTimeString()}
+                  {event.dateFrom
+                    ? event.dateTo
+                      ? `${format(new Date(event.dateFrom), "PPP")} - ${format(
+                          new Date(event.dateTo),
+                          "PPP"
+                        )}`
+                      : format(new Date(event.dateFrom), "PPP")
+                    : "—"}
                 </TableCell>
                 <TableCell className="text-center">
-                  {event.endTime.toLocaleTimeString()}
+                  {event.startTime
+                    ? format(new Date(event.startTime), "p")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-center">
+                  {event.endTime
+                    ? format(new Date(event.endTime), "p")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
+                    : "—"}
                 </TableCell>
                 {role === "admin" && (
                   <TableCell className="text-right">

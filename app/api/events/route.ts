@@ -58,10 +58,13 @@ export async function POST(request: NextRequest) {
       data: {
         title: eventsData.title,
         description: eventsData.description,
-        startTime: new Date(eventsData.startTime),
-        endTime: new Date(eventsData.endTime),
+        dateFrom: eventsData.dateFrom,
+        dateTo: eventsData.dateTo,
+        startTime: eventsData.startTime,
+        endTime: eventsData.endTime,
       },
     });
+
     return NextResponse.json(CreateEvent, { status: 201 });
   } catch (error) {
     console.error("Error creating event:", error);
