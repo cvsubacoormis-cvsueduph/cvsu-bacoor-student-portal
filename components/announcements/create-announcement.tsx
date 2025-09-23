@@ -22,18 +22,23 @@ import { mutate } from "swr";
 import toast from "react-hot-toast";
 import AnnouncementsForm from "../forms/announcements-form";
 import { PlusCircleIcon } from "lucide-react";
+import { DateRange } from "react-day-picker";
 
 export default function CreateAnnouncements() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [DialogOpen, setDialogOpen] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const form = useForm<AnnouncementSchema>({
     resolver: zodResolver(announcementSchema),
     defaultValues: {
       title: "",
       description: "",
-      dateTime: new Date(),
+      dateFrom: new Date(),
+      dateTo: new Date(),
+      startTime: new Date(),
+      endTime: new Date(),
     },
   });
 
@@ -72,10 +77,10 @@ export default function CreateAnnouncements() {
   };
   return (
     <div className="sm:max-w-3xl lg:max-w-5xl">
-      <Dialog open={DialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={DialogOpen} onOpenChange={setDialogOpen} modal={false}>
         <DialogTrigger asChild>
           <Button className="bg-blue-700 hover:bg-blue-900">
-            <PlusCircleIcon className="mr-2 h-4 w-4" /> Create
+            <PlusCircleIcon className="mr-2 h-4 w-4" /> Create Announcements
           </Button>
         </DialogTrigger>
         <DialogContent className="space-y-6 px-6 py-4 lg:px-8 lg:py-6">
@@ -95,6 +100,8 @@ export default function CreateAnnouncements() {
             onSubmit={onSubmit}
             isSubmitting={isSubmitting}
             submitButtonText="Create Announcements"
+            selected={dateRange}
+            onSelect={setDateRange}
           />
         </DialogContent>
       </Dialog>

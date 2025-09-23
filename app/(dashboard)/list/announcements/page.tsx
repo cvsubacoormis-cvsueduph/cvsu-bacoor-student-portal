@@ -6,7 +6,6 @@ import { RedirectToSignIn, SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 export default function AnnouncementsLists() {
   const { user, isLoaded } = useUser();
 
-  // Ensure the user is loaded and fetch the role from public or private metadata
   const role = isLoaded ? user?.publicMetadata?.role : undefined;
 
   return (

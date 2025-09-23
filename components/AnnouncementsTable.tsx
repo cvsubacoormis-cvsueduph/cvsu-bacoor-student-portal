@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/pagination";
 import { useUser } from "@clerk/nextjs";
 import AnnouncementsTableSkeleton from "./skeleton/AnnouncementsTableSkeleton";
+import { format } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -70,6 +71,8 @@ export default function AnnouncementsTable() {
               <TableHead className="text-left">Title</TableHead>
               <TableHead className="text-center">Description</TableHead>
               <TableHead className="text-center">Date</TableHead>
+              <TableHead className="text-center">Start Time</TableHead>
+              <TableHead className="text-right">End Time</TableHead>
               {role === "admin" && (
                 <TableHead className="text-center">Actions</TableHead>
               )}
@@ -85,11 +88,28 @@ export default function AnnouncementsTable() {
                   {announcement.description}
                 </TableCell>
                 <TableCell className="text-center">
-                  {announcement.dateTime.toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
+                  {announcement.dateFrom
+                    ? announcement.dateTo
+                      ? `${format(new Date(announcement.dateFrom), "PPP")} - ${format(
+                          new Date(announcement.dateTo),
+                          "PPP"
+                        )}`
+                      : format(new Date(announcement.dateFrom), "PPP")
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-center">
+                  {announcement.startTime
+                    ? format(new Date(announcement.startTime), "p")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {announcement.endTime
+                    ? format(new Date(announcement.endTime), "p")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
+                    : "—"}
                 </TableCell>
                 <TableCell className="text-right">
                   {(role === "admin" || role === "superuser") && (

@@ -213,11 +213,17 @@ model Event {
 }
 
 model Announcement {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   title       String
   description String
-  dateTime    DateTime
-  createdAt   DateTime @default(now())
+  dateFrom    DateTime
+  dateTo      DateTime?
+  startTime   DateTime
+  endTime     DateTime
+  author      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 }
 
 model News {

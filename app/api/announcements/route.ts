@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
       data: {
         title: announcementsData.title,
         description: announcementsData.description || "",
-        dateTime: announcementsData.dateTime,
+        dateFrom: announcementsData.dateFrom,
+        dateTo: announcementsData.dateTo,
+        startTime: announcementsData.startTime,
+        endTime: announcementsData.endTime,
       },
     });
     return NextResponse.json(CreateAnnouncements, { status: 201 });
@@ -150,8 +153,11 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         title: announcementData.title,
-        description: announcementData.description,
-        dateTime: announcementData.dateTime,
+        description: announcementData.description || "",
+        dateFrom: announcementData.dateFrom,
+        dateTo: announcementData.dateTo,
+        startTime: announcementData.startTime,
+        endTime: announcementData.endTime,
       },
     });
 

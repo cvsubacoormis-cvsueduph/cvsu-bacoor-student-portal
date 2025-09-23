@@ -60,7 +60,7 @@ export default function UpdateAnnouncements({
   };
   return (
     <div className="sm:max-w-3xl lg:max-w-5xl">
-      <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={setDialogOpen} modal={false}>
         <DialogTrigger asChild>
           <Button className="bg-blue-700 hover:bg-blue-900">
             <PencilIcon />
@@ -80,7 +80,12 @@ export default function UpdateAnnouncements({
             defaultValues={{
               title: announcement.title,
               description: announcement.description ?? "",
-              dateTime: announcement.dateTime,
+              dateFrom: new Date(announcement.dateFrom),
+              dateTo: announcement.dateTo
+                ? new Date(announcement.dateTo)
+                : undefined,
+              startTime: new Date(announcement.startTime),
+              endTime: new Date(announcement.endTime),
             }}
             onSubmit={onSubmit}
             submitButtonText="Update"

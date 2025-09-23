@@ -30,12 +30,17 @@ import {
 import { CalendarIcon, ChevronDownIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { DateRange } from "react-day-picker";
 
 type AnnouncementsFormProps = {
   defaultValues: AnnouncementSchema;
   onSubmit: (data: AnnouncementSchema) => Promise<void>;
   submitButtonText: string;
   isSubmitting: boolean;
+  selected?: DateRange | undefined;
+  onSelect?: (date: DateRange | undefined) => void;
+  dateRange?: DateRange | undefined;
+  setDateRange?: (date: Date | undefined) => void;
 };
 
 export default function AnnouncementsForm({
@@ -43,6 +48,10 @@ export default function AnnouncementsForm({
   onSubmit,
   submitButtonText,
   isSubmitting,
+  selected,
+  onSelect,
+  dateRange,
+  setDateRange,
 }: AnnouncementsFormProps) {
   const form = useForm<AnnouncementSchema>({
     resolver: zodResolver(announcementSchema),
@@ -51,11 +60,8 @@ export default function AnnouncementsForm({
 
   return (
     <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="flex flex-col gap-2"
-      >
-        <div className="flex justify-between flex-wrap gap-2">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="gap-2">
+        <div className="gap-2">
           <FormField
             control={form.control}
             name="title"
@@ -79,7 +85,7 @@ export default function AnnouncementsForm({
                   <Textarea
                     placeholder="Enter Description"
                     {...field}
-                    className="resize-none ml-2"
+                    className=""
                   />
                 </FormControl>
                 <FormMessage />
@@ -88,43 +94,99 @@ export default function AnnouncementsForm({
           />
           <FormField
             control={form.control}
-            name="dateTime"
+            name="dateFrom"
             render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Date of birth</FormLabel>
+              <FormItem className="flex flex-col mt-2">
+                <FormLabel>Date Range</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
-                        variant={"outline"}
+                        variant="outline"
                         className={cn(
-                          "w-[240px] pl-3 text-left font-normal",
+                          "w-full pl-3 text-left font-normal",
                           !field.value && "text-muted-foreground"
                         )}
                       >
-                        {field.value ? (
-                          format(field.value, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
+                        {form.getValues("dateFrom")
+                          ? form.getValues("dateTo")
+                            ? `${format(form.getValues("dateFrom"), "PPP")} - ${format(
+                                form.getValues("dateTo") ?? new Date(),
+                                "PPP"
+                              )}`
+                            : format(form.getValues("dateFrom"), "PPP")
+                          : "Pick a date"}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01")
-                      }
-                      captionLayout="dropdown"
+                      mode="range"
+                      selected={{
+                        from: form.getValues("dateFrom"),
+                        to: form.getValues("dateTo"),
+                      }}
+                      onSelect={(range) => {
+                        form.setValue("dateFrom", range?.from || new Date());
+                        form.setValue("dateTo", range?.to || undefined);
+                      }}
+                      numberOfMonths={2}
+                      className="rounded-lg border shadow-sm"
                     />
                   </PopoverContent>
                 </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="startTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Start Time</FormLabel>
+                <FormControl>
+                  <Input
+                    type="time"
+                    placeholder="Enter End Time"
+                    value={field.value ? format(field.value, "HH:mm") : ""}
+                    className="w-full"
+                    onChange={(e) =>
+                      field.onChange(
+                        new Date(`1970-01-01T${e.target.value}:00`)
+                      )
+                    }
+                  />
+                </FormControl>
                 <FormDescription>
-                  Your date of birth is used to calculate your age.
+                  Please use 24-hour format (e.g., 14:30 for 2:30 PM).
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="endTime"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>End Time</FormLabel>
+                <FormControl>
+                  <Input
+                    type="time"
+                    placeholder="Enter End Time"
+                    value={field.value ? format(field.value, "HH:mm") : ""}
+                    className="w-full"
+                    onChange={(e) =>
+                      field.onChange(
+                        new Date(`1970-01-01T${e.target.value}:00`)
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormDescription>
+                  Please use 24-hour format (e.g., 14:30 for 2:30 PM).
                 </FormDescription>
                 <FormMessage />
               </FormItem>

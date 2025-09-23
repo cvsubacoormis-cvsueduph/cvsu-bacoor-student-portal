@@ -32,6 +32,8 @@ export default function CreateEvents() {
     defaultValues: {
       title: "",
       description: "",
+      dateFrom: new Date(),
+      dateTo: new Date(),
       startTime: new Date(),
       endTime: new Date(),
     },
@@ -72,7 +74,7 @@ export default function CreateEvents() {
     <div className="sm:max-w-3xl lg:max-w-5xl">
       <Dialog open={DialogOpen} onOpenChange={setDialogOpen} modal={false}>
         <DialogTrigger asChild>
-          <Button className="bg-blue-700 hover:bg-blue-900">
+          <Button className="bg-blue-600 hover:bg-blue-500">
             <PlusCircleIcon className="mr-2 h-4 w-4" /> Create Event
           </Button>
         </DialogTrigger>
