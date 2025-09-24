@@ -158,9 +158,12 @@ CREATE TABLE "Event" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
-    "startTime" TEXT NOT NULL,
-    "endTime" TEXT NOT NULL,
+    "dateFrom" TIMESTAMP(3) NOT NULL,
+    "dateTo" TIMESTAMP(3),
+    "startTime" TIMESTAMP(3) NOT NULL,
+    "endTime" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Event_pkey" PRIMARY KEY ("id")
 );
@@ -170,8 +173,13 @@ CREATE TABLE "Announcement" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "date" TEXT NOT NULL,
+    "dateFrom" TIMESTAMP(3) NOT NULL,
+    "dateTo" TIMESTAMP(3),
+    "startTime" TIMESTAMP(3) NOT NULL,
+    "endTime" TIMESTAMP(3) NOT NULL,
+    "author" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id")
 );

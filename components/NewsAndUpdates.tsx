@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, PlusCircle, Trash2 } from "lucide-react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export function NewsAndUpdates() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 2;
+  const itemsPerPage = 5;
   const totalPages = Math.ceil(newsItems.length / itemsPerPage);
 
   // Form state
@@ -144,7 +144,9 @@ export function NewsAndUpdates() {
           category: newAnnouncementCategory,
           important: newAnnouncementImportant,
           date: currentDate,
-          author: user?.firstName + " " + user?.lastName || "Admin User",
+          author: user
+            ? `${user.firstName?.charAt(0).toUpperCase()}${user.firstName?.slice(1).toLowerCase()} ${user.lastName?.charAt(0).toUpperCase()}${user.lastName?.slice(1).toLowerCase()}`
+            : "Admin User",
         }),
       });
 
@@ -159,7 +161,7 @@ export function NewsAndUpdates() {
           setNewsItems([...importantItems, newAnnouncement, ...regularItems]);
         }
 
-        toast.success("Announcement posted successfully");
+        toast.success("News posted successfully");
 
         setNewAnnouncementTitle("");
         setNewAnnouncementContent("");
@@ -168,15 +170,14 @@ export function NewsAndUpdates() {
         setIsPostModalOpen(false);
         setCurrentPage(1);
       } else {
-        toast.error("Failed to post announcement");
+        toast.error("Failed to post News");
       }
     } catch (error) {
-      toast.error("Error posting announcement");
+      toast.error("Error posting News");
       console.log(error);
     }
   };
 
-  // Handle saving edited announcement
   const handleSaveEdit = async () => {
     if (!selectedAnnouncement) return;
 
@@ -305,11 +306,10 @@ export function NewsAndUpdates() {
           </div>
           {role === "admin" && (
             <Button
-              className="bg-blue-700 hover:bg-blue-900"
-              size="sm"
+              className="bg-blue-600 hover:bg-blue-500"
               onClick={() => setIsPostModalOpen(true)}
             >
-              <Plus className="h-4 w-4" />
+              <PlusCircle className="h-4 w-4" /> Create News
             </Button>
           )}
         </CardHeader>
@@ -338,20 +338,18 @@ export function NewsAndUpdates() {
                   {(role === "admin" || role === "superuser") && (
                     <div className="flex space-x-2">
                       <Button
-                        size="icon"
-                        className="bg-blue-700 hover:bg-blue-900"
+                        className="bg-blue-600 hover:bg-blue-500"
                         onClick={() => handleEditClick(item)}
                       >
                         <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
+                        Edit
                       </Button>
                       <Button
-                        className="bg-red-700 hover:bg-red-900"
-                        size="icon"
+                        className="bg-red-600 hover:bg-red-500"
                         onClick={() => handleDeleteClick(item)}
                       >
                         <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
+                        Delete
                       </Button>
                     </div>
                   )}
@@ -372,7 +370,7 @@ export function NewsAndUpdates() {
                     )}
                   </div>
                   <Button
-                    className="h-8 bg-blue-700 hover:bg-blue-900 text-white"
+                    className="bg-blue-600 hover:bg-blue-500 text-white"
                     onClick={() => handleReadMore(item)}
                   >
                     Read More
@@ -401,20 +399,18 @@ export function NewsAndUpdates() {
                   {(role === "admin" || role === "superuser") && (
                     <div className="flex space-x-2">
                       <Button
-                        size="icon"
-                        className="bg-blue-700 hover:bg-blue-900"
+                        className="bg-blue-600 hover:bg-blue-500"
                         onClick={() => handleEditClick(item)}
                       >
                         <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
+                        Edit
                       </Button>
                       <Button
-                        className="bg-red-700 hover:bg-red-900"
-                        size="icon"
+                        className="bg-red-600 hover:bg-red-500"
                         onClick={() => handleDeleteClick(item)}
                       >
                         <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
+                        Delete
                       </Button>
                     </div>
                   )}
@@ -436,7 +432,7 @@ export function NewsAndUpdates() {
                   </div>
                   <Button
                     size="sm"
-                    className="h-8 bg-blue-700 hover:bg-blue-900 text-white"
+                    className=" bg-blue-600 hover:bg-blue-500 text-white"
                     onClick={() => handleReadMore(item)}
                   >
                     Read More
@@ -450,7 +446,7 @@ export function NewsAndUpdates() {
             {/* Show message when no announcements */}
             {currentItems.length === 0 && (
               <div className="py-8 text-center text-muted-foreground">
-                No announcements to display.
+                No News to display.
               </div>
             )}
             <div className="flex items-center justify-between pt-4">
@@ -528,7 +524,7 @@ export function NewsAndUpdates() {
                 id="content"
                 value={newAnnouncementContent}
                 onChange={(e) => setNewAnnouncementContent(e.target.value)}
-                placeholder="Announcement content"
+                placeholder="News content"
                 className="min-h-[100px]"
               />
             </div>
@@ -545,14 +541,14 @@ export function NewsAndUpdates() {
           </div>
           <DialogFooter>
             <Button
-              className="bg-red-700 hover:bg-red-900 text-white"
+              className="bg-red-600 hover:bg-red-500 text-white"
               onClick={() => setIsPostModalOpen(false)}
             >
               Cancel
             </Button>
             <Button
               onClick={handlePostAnnouncement}
-              className="bg-blue-700 hover:bg-blue-900"
+              className="bg-blue-600 hover:bg-blue-500"
             >
               Submit
             </Button>
