@@ -50,7 +50,7 @@ type Status =
   | "NOT_ANNOUNCED"
   | "TRANSFEREE"
   | "RETURNEE";
-type Role = "admin" | "student" | "superuser" | "faculty" | "registrar";
+type Role = "admin" | "student" | "superuser" | "faculty" | "registrar" | "csg";
 
 // Mirrors Prisma Student (subset + UI extras)
 type Student = {
