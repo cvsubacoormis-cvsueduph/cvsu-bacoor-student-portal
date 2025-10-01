@@ -258,4 +258,5 @@ enum Role {
   superuser
   faculty
   registrar
+  csg
 }
