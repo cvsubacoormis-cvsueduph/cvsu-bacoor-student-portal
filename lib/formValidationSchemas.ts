@@ -12,7 +12,7 @@ const baseStudentSchema = z.object({
       /^[a-zA-Z][a-zA-Z0-9]*$/,
       "Username must start with a letter and can contain letters and numbers"
     )
-    .min(1, "Username is required")
+    .min(8, "Username is required")
     .max(20, "Max 20 characters"),
   password: z
     .string()
