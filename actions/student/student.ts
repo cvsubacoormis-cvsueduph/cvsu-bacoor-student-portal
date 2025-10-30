@@ -118,8 +118,6 @@ export async function updateStudent(
   data: { id: string } & UpdateStudentSchema
 ) {
   try {
-    console.log("Incoming data:", data);
-
     // Validate the ENTIRE data object including id
     const validationResult = updateStudentSchema.safeParse(data);
 
@@ -134,12 +132,11 @@ export async function updateStudent(
 
     const { id, ...studentData } = validationResult.data;
 
-    console.log("Updating student with:", { id, studentData });
-
     const updatedStudent = await prisma.student.update({
       where: { id },
       data: {
         studentNumber: studentData.studentNumber,
+        username: studentData.username,
         firstName: studentData.firstName,
         lastName: studentData.lastName,
         middleInit: studentData.middleInit || null,

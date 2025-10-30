@@ -1,49 +1,171 @@
-import { WaitingApproval } from "@/components/WaitingForApproval";
-import React from "react";
-import { auth } from "@clerk/nextjs/server";
-import prisma from "@/lib/prisma";
-import { redirect } from "next/navigation";
+// app/pending-approval/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { SignOutButton } from "@clerk/nextjs";
+import { Button } from "@/components/ui/button";
+import {
+  RefreshCcw,
+  LogOut,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 
-export default async function PendingApprovalPage() {
-  const { userId } = await auth();
+export default function PendingApprovalPage() {
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  if (!userId) {
-    return redirect("/");
-  }
+  // Extract status from user metadata
+  const isApproved = user?.publicMetadata?.isApproved as boolean;
+  const role = user?.publicMetadata?.role as string;
 
-  const student = await prisma.student.findUnique({
-    where: {
-      id: userId,
-    },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      middleInit: true,
-      status: true,
-      isPasswordSet: true,
-      isApproved: true,
-    },
-  });
+  useEffect(() => {
+    if (isLoaded) {
+      if (!user) {
+        router.push("/sign-in");
+        return;
+      }
 
-  if (!student) {
-    return redirect("/");
-  }
+      // Auto-redirect if approved
+      if (isApproved && role) {
+        router.push(`/${role}`);
+      }
+    }
+  }, [isLoaded, user, router, isApproved, role]);
 
-  const user = {
-    id: student.id,
-    email: student?.email || "",
-    name: `${student.firstName} ${student.middleInit} ${student.lastName}`,
-    status: student.status,
-    hasPassword: student.isPasswordSet,
-    isApproved: student.isApproved,
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 3000);
   };
 
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA]">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <WaitingApproval user={user} />
+    <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] p-4">
+      <div className="text-center space-y-6 p-8 bg-white rounded-lg shadow-lg max-w-md w-full">
+        <div className="flex justify-center">
+          <Image src="/logos.png" alt="logo" width={150} height={150} />
+        </div>
+
+        {/* Status Display Section */}
+        <div className="space-y-4">
+          <h1 className="text-3xl font-bold text-gray-800">Account Status</h1>
+
+          {isApproved ? (
+            // Approved Status
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center justify-center space-x-2 text-green-700">
+                <CheckCircle className="h-6 w-6" />
+                <span className="text-lg font-semibold">Account Approved</span>
+              </div>
+              <p className="text-green-600 mt-2 text-sm">
+                Your account has been approved! Redirecting you to your
+                dashboard...
+              </p>
+            </div>
+          ) : (
+            // Pending Status
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center justify-center space-x-2 text-yellow-700">
+                <Clock className="h-6 w-6" />
+                <span className="text-lg font-semibold">Pending Approval</span>
+              </div>
+              <p className="text-yellow-600 mt-2 text-sm">
+                Your account is waiting for admin approval
+              </p>
+            </div>
+          )}
+
+          {/* Additional Info */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left">
+            <h3 className="font-semibold text-gray-800 mb-2">
+              Account Details:
+            </h3>
+            <div className="space-y-1 text-sm">
+              <p className="text-gray-600">
+                <span className="font-medium">Email:</span>{" "}
+                {user?.emailAddresses[0]?.emailAddress || "N/A"}
+              </p>
+              <p className="text-gray-600">
+                <span className="font-medium">Name:</span>{" "}
+                {user?.fullName || "N/A"}
+              </p>
+              <p className="text-gray-600">
+                <span className="font-medium">Role:</span>{" "}
+                {role ? role.toUpperCase() : "NOT ASSIGNED"}
+              </p>
+              <p className="text-gray-600">
+                <span className="font-medium">Status:</span>
+                <span
+                  className={`ml-2 font-semibold ${isApproved ? "text-green-600" : "text-yellow-600"}`}
+                >
+                  {isApproved ? "Approved" : "Pending"}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          {!isApproved && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-center space-x-2 text-blue-700 mb-2">
+                <AlertCircle className="h-5 w-5" />
+                <span className="font-medium">Next Steps</span>
+              </div>
+              <p className="text-blue-600 text-sm">
+                Please go to the MIS Coordinator office and present your recent
+                registration form to approve your account.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Loading Indicator for Pending Status */}
+        {!isApproved && (
+          <div className="pt-2">
+            <div className="animate-pulse flex space-x-2 justify-center">
+              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="pt-4 border-t space-y-3">
+          {!isApproved && (
+            <Button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <RefreshCcw
+                className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              {isRefreshing ? "Checking Status..." : "Refresh Status"}
+            </Button>
+          )}
+
+          <SignOutButton>
+            <Button variant="outline" className="w-full">
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </Button>
+          </SignOutButton>
+        </div>
+      </div>
     </div>
   );
 }

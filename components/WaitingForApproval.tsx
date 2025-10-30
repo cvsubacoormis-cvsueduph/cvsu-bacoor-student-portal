@@ -1,6 +1,8 @@
+// components/WaitingForApproval.tsx
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,9 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Clock, LogOut, Mail, CheckCircle, RefreshCcw } from "lucide-react";
 import { SignOutButton } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
@@ -30,21 +31,18 @@ export function WaitingApproval({ user }: { user: User }) {
   const refetchApprovalStatus = async () => {
     setLoading(true);
     setError("");
-
     try {
       const res = await fetch("/api/check-approval", {
-        headers: {
-          "x-user-id": user.id,
-        },
+        headers: { "x-user-id": user.id },
         cache: "no-store",
       });
-
       const data = await res.json();
-      if (data.isApproved) {
+      if (data?.isApproved) {
+        // Navigate to the student area once approved
         router.push("/student");
       } else {
         setError(
-          "Still pending approval. Please contact the the admin or check again later."
+          "Still pending approval. Please contact the admin or check again later."
         );
       }
     } catch (err) {
@@ -69,6 +67,7 @@ export function WaitingApproval({ user }: { user: User }) {
             Your account is pending admin approval
           </CardDescription>
         </CardHeader>
+
         <CardContent className="text-center space-y-6">
           <div className="space-y-4">
             <div className="flex items-center justify-center space-x-2 text-green-600">

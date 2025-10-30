@@ -64,7 +64,7 @@ export async function registerStudent(formData: CreateStudentSchema) {
       firstName: data.firstName.toUpperCase(),
       emailAddress: data.email ? [data.email] : [],
       lastName: data.lastName.toUpperCase(),
-      publicMetadata: { role: "student" },
+      publicMetadata: { role: "student", isApproved: false },
     });
 
     const student = await prisma.student.create({

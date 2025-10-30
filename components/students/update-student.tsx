@@ -54,6 +54,7 @@ export default function UpdateStudent({
     defaultValues: {
       id: student.id,
       studentNumber: student.studentNumber,
+      username: student.username,
       firstName: student.firstName,
       middleInit: student.middleInit || "",
       lastName: student.lastName,
@@ -121,7 +122,19 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               {/* First Name */}
               <FormField
                 control={form.control}
@@ -136,7 +149,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Middle Initial */}
               <FormField
                 control={form.control}
@@ -151,7 +163,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Last Name */}
               <FormField
                 control={form.control}
@@ -166,7 +177,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Email */}
               <FormField
                 control={form.control}
@@ -181,7 +191,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Phone */}
               <FormField
                 control={form.control}
@@ -196,7 +205,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Address */}
               <FormField
                 control={form.control}
@@ -211,7 +219,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Course */}
               <FormField
                 control={form.control}
@@ -239,7 +246,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Major */}
               <FormField
                 control={form.control}
@@ -269,7 +275,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Status */}
               <FormField
                 control={form.control}
@@ -292,7 +297,6 @@ export default function UpdateStudent({
                   </FormItem>
                 )}
               />
-
               {/* Sex */}
               <FormField
                 control={form.control}

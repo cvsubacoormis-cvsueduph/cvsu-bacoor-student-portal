@@ -9,15 +9,13 @@ import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
 
-// Rate limiter: 20 requests per 10 seconds
 const rateLimiter = new RateLimiterMemory({
-  points: 20, // Max requests
-  duration: 10, // Per 10 seconds
+  points: 20,
+  duration: 10,
 });
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Vercel automatically forwards the real client IP in `x-forwarded-for`
 const getClientIp = (request: NextRequest) => {
   const forwardedFor = request.headers.get("x-forwarded-for");
   return forwardedFor?.split(",")[0].trim() || "127.0.0.1"; // First IP in the chain
@@ -29,10 +27,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const ip = getClientIp(request);
-  console.log("Current IP:", ip); // Log the current IP
+  console.log("Current IP:", ip); 
   const clerk = await clerkClient();
 
-  // Rate limiting check
   try {
     await rateLimiter.consume(ip);
   } catch (rateLimiterRes) {
@@ -119,7 +116,7 @@ export async function POST(request: NextRequest) {
               emailAddress: [student.email ?? ""],
               password: `cvsubacoor${student.firstName}${student.studentNumber}`,
               skipPasswordChecks: true,
-              publicMetadata: { role: "student" },
+              publicMetadata: { role: "student", isApproved: true },
             });
 
             // Create student in Prisma
