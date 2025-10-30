@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, UseFormWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   CreateStudentSchema,
@@ -36,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Textarea } from "./ui/textarea";
 import Link from "next/link";
 import {
   CheckCircle,
@@ -49,7 +48,6 @@ import {
   User,
 } from "lucide-react";
 import { registerStudent } from "@/actions/student/registerStudent";
-import { create } from "node:domain";
 import { cn } from "@/lib/utils";
 import { Progress } from "./ui/progress";
 import { courseMap, formatMajor } from "@/lib/courses";
@@ -91,6 +89,26 @@ const steps = [
   },
 ];
 
+const coursesForcedNone: Courses[] = ["BSIT", "BSCS", "BSCRIM", "BSHM", "BSP"];
+
+const courseMajorMap: Record<Courses, Major[]> = {
+  BSIT: ["NONE"],
+  BSCS: ["NONE"],
+  BSCRIM: ["NONE"],
+  BSHM: ["NONE"],
+  BSP: ["NONE"],
+  BSED: ["NONE", "ENGLISH", "MATHEMATICS"],
+  BSBA: ["NONE", "MARKETING_MANAGEMENT", "HUMAN_RESOURCE_MANAGEMENT"],
+};
+
+const allAvailableMajors: Major[] = [
+  "NONE",
+  "HUMAN_RESOURCE_MANAGEMENT",
+  "MARKETING_MANAGEMENT",
+  "ENGLISH",
+  "MATHEMATICS",
+];
+
 export default function StudentSignup() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -107,7 +125,7 @@ export default function StudentSignup() {
       phone: "",
       address: "",
       sex: "" as UserSex,
-      course: "BSIT" as Courses,
+      course: "BSIT" as Courses, // Initial default set to one of the forced NONE courses
       major: "NONE" as Major,
       status: "REGULAR",
       password: "",
@@ -116,9 +134,23 @@ export default function StudentSignup() {
     mode: "onChange",
   });
 
-  const { watch } = form;
+  const { watch, setValue } = form;
+  const watchedCourse = watch("course");
+  const watchedMajor = watch("major");
 
-  const password = form.watch("password");
+  useEffect(() => {
+    if (coursesForcedNone.includes(watchedCourse)) {
+      if (watchedMajor !== "NONE") {
+        setValue("major", "NONE");
+      }
+    } else if (watchedCourse === "BSED" || watchedCourse === "BSBA") {
+      const validMajors = courseMajorMap[watchedCourse];
+      if (!validMajors.includes(watchedMajor as Major)) {
+        setValue("major", "NONE");
+      }
+    }
+  }, [watchedCourse, setValue, watchedMajor]);
+
   const validateStep = async (step: number): Promise<boolean> => {
     const fieldsToValidate: (keyof CreateStudentSchema)[] = [];
 
@@ -127,7 +159,8 @@ export default function StudentSignup() {
         fieldsToValidate.push("firstName", "lastName", "sex");
         break;
       case 2:
-        fieldsToValidate.push("course", "studentNumber");
+        // Ensure major is validated based on the potentially updated value
+        fieldsToValidate.push("course", "studentNumber", "major");
         break;
       case 3:
         fieldsToValidate.push("address", "email");
@@ -176,6 +209,9 @@ export default function StudentSignup() {
   }
 
   const progress = (currentStep / steps.length) * 100;
+  const getValidMajorsForCourse = (): Major[] => {
+    return courseMajorMap[watchedCourse] || ["NONE"];
+  };
 
   return (
     <div className="space-y-6">
@@ -199,7 +235,6 @@ export default function StudentSignup() {
         {steps.map((step) => {
           const Icon = step.icon;
           const isCompleted = currentStep > step.id;
-          const isCurrent = currentStep === step.id;
 
           return (
             <div key={step.id} className="flex flex-col items-center space-y-2">
@@ -340,15 +375,7 @@ export default function StudentSignup() {
                               <SelectValue placeholder="Select course" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[
-                                "BSIT",
-                                "BSCS",
-                                "BSBA",
-                                "BSHM",
-                                "BSP",
-                                "BSCRIM",
-                                "BSED",
-                              ].map((course) => (
+                              {Object.keys(courseMajorMap).map((course) => (
                                 <SelectItem key={course} value={course}>
                                   {course}
                                 </SelectItem>
@@ -370,26 +397,25 @@ export default function StudentSignup() {
                           <FormControl>
                             <Select
                               onValueChange={field.onChange}
-                              defaultValue={field.value}
+                              value={field.value}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select major" />
                               </SelectTrigger>
                               <SelectContent>
-                                {[
-                                  "NONE",
-                                  "HUMAN_RESOURCE_MANAGEMENT",
-                                  "MARKETING_MANAGEMENT",
-                                  "ENGLISH",
-                                  "MATHEMATICS",
-                                ].map((major) => (
+                                {getValidMajorsForCourse().map((major) => (
                                   <SelectItem key={major} value={major}>
-                                    {major.replace(/_/g, " ")}
+                                    {formatMajor(major)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </FormControl>
+                          <FormDescription>
+                            {coursesForcedNone.includes(watchedCourse)
+                              ? "Major is automatically set to NONE for this course."
+                              : "Select your major or NONE."}
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -493,7 +519,7 @@ export default function StudentSignup() {
                             <div className="relative">
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                {...form.register("password")}
+                                {...field}
                                 placeholder="Enter password"
                               />
                               <Button
@@ -528,8 +554,8 @@ export default function StudentSignup() {
                           <FormControl>
                             <div className="relative">
                               <Input
-                                type={showPassword ? "text" : "password"}
-                                {...form.register("confirmPassword")}
+                                type={showConfirmPassword ? "text" : "password"}
+                                {...field}
                                 placeholder="Confirm password"
                               />
                             </div>
@@ -587,7 +613,7 @@ export default function StudentSignup() {
         <Button
           variant="outline"
           onClick={prevStep}
-          disabled={currentStep === 1}
+          disabled={currentStep === 1 || loading}
           className="bg-white hover:bg-gray-100"
         >
           Previous
@@ -622,7 +648,7 @@ export default function StudentSignup() {
         Already have an account?{" "}
         <Link href="/sign-in">
           {" "}
-          <p className="no-underline font-semibold hover:underline text-blue-600">
+          <p className="no-underline font-medium hover:underline text-blue-600">
             Login
           </p>{" "}
         </Link>
