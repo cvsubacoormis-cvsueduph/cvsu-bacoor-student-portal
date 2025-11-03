@@ -33,7 +33,7 @@ export function courseClerkshipMap(courseClerksAbbreviation: string) {
       return "BON-ART C. BAGAINDOC";
       break;
     case "BSCS":
-      return "MICHAEL D. ANSUAS";
+      return "JHOANNA MARIE C. TUJON";
       break;
     case "BSHM":
       return "JOHN CARLO J. BENJAMIN";
@@ -48,7 +48,7 @@ export function courseClerkshipMap(courseClerksAbbreviation: string) {
       return " JIMWELL G. DACANAY";
       break;
     case "BSED":
-      return "MICHAEL D. ANSUAS";
+      return "JHOANNA MARIE C. TUJON";
       break;
     default:
       return "";

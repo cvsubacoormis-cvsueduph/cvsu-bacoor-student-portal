@@ -1,4 +1,4 @@
-import { curriculumChecklistData } from "@/prisma/curriculum";
+import { curriculumChecklistData } from "./curriculum";
 import { Major, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
