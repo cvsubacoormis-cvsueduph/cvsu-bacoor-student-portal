@@ -1,68 +1,113 @@
 import { z } from "zod";
 
-const baseStudentSchema = z.object({
-  studentNumber: z
-    .string()
-    .min(1, "Student number is required")
-    .max(15, "Max 15 characters")
-    .regex(/^[0-9]+$/, "Student number can only contain numbers"),
-  username: z
-    .string()
-    .regex(
-      /^[a-zA-Z][a-zA-Z0-9]*$/,
-      "Username must start with a letter and can contain letters and numbers"
-    )
-    .min(8, "Username is required")
-    .max(20, "Max 20 characters"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(20, "Max 20 characters"),
-  confirmPassword: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(20, "Max 20 characters"),
-  firstName: z
-    .string()
-    .min(1, "First name is required")
-    .max(20, "Max 30 characters")
-    .regex(/^[a-zA-Z]+$/, "First name can only contain letters"),
-  middleInit: z.string().max(10).optional(),
-  lastName: z
-    .string()
-    .min(1, "Last name is required")
-    .max(20, "Max 20 characters")
-    .regex(/^[a-zA-Z]+$/, "Last name can only contain letters"),
-  email: z.string().email("Invalid email format").optional(),
-  phone: z.string().min(1, "Phone number is required").max(18).optional(),
-  address: z.string().min(1, "Address is required").max(100),
-  sex: z.enum(["MALE", "FEMALE"], {
-    message: "Sex is required",
-  }),
-  course: z.enum(["BSIT", "BSCS", "BSBA", "BSHM", "BSP", "BSCRIM", "BSED"], {
-    message: "Course is required",
-  }),
-  major: z
-    .enum(
-      [
-        "HUMAN_RESOURCE_MANAGEMENT",
-        "MARKETING_MANAGEMENT",
-        "ENGLISH",
-        "MATHEMATICS",
-        "NONE",
-      ],
+const commonPasswords = [
+  "password",
+  "12345678",
+  "qwerty",
+  "qwertyuiop",
+  "abc123",
+  "admin",
+  "123123123",
+  "12345678",
+];
+
+const isPasswordStrong = (password: string) => {
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*()_+{}\[\]:;<>,.?~\\-]/.test(password);
+  return hasUppercase && hasLowercase && hasNumber && hasSpecialChar;
+};
+
+const baseStudentSchema = z
+  .object({
+    studentNumber: z
+      .string()
+      .min(1, "Student number is required")
+      .max(15, "Max 15 characters")
+      .regex(/^[0-9]+$/, "Student number can only contain numbers"),
+    username: z
+      .string()
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9]*$/,
+        "Username must start with a letter and can contain letters and numbers"
+      )
+      .min(8, "Username is required")
+      .max(20, "Max 20 characters"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(20, "Max 20 characters")
+      .refine((password) => {
+        if (commonPasswords.includes(password)) {
+          return false;
+        }
+        return true;
+      }, "Your password is too common. Please choose a stronger password.")
+      .refine((password) => isPasswordStrong(password), {
+        message:
+          "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+      }),
+    confirmPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(20, "Max 20 characters"),
+    firstName: z
+      .string()
+      .min(1, "First name is required")
+      .max(20, "Max 20 characters")
+      .regex(/^[a-zA-Z]+$/, "First name can only contain letters"),
+    middleInit: z.string().max(10).optional(),
+    lastName: z
+      .string()
+      .min(1, "Last name is required")
+      .max(20, "Max 20 characters")
+      .regex(/^[a-zA-Z]+$/, "Last name can only contain letters"),
+    email: z.string().email("Invalid email format").optional(),
+    phone: z.string().min(1, "Phone number is required").max(11).optional(),
+    address: z
+      .string()
+      .min(1, "Address is required")
+      .max(70, "Max 70 characters"),
+    sex: z.enum(["MALE", "FEMALE"], {
+      message: "Sex is required",
+    }),
+    course: z.enum(["BSIT", "BSCS", "BSBA", "BSHM", "BSP", "BSCRIM", "BSED"], {
+      message: "Course is required",
+    }),
+    major: z
+      .enum(
+        [
+          "HUMAN_RESOURCE_MANAGEMENT",
+          "MARKETING_MANAGEMENT",
+          "ENGLISH",
+          "MATHEMATICS",
+          "NONE",
+        ],
+        {
+          message: "Major is required when applicable",
+        }
+      )
+      .optional(),
+    status: z.enum(
+      ["REGULAR", "IRREGULAR", "NOT_ANNOUNCED", "TRANSFEREE", "RETURNEE"],
       {
-        message: "Major is required when applicable",
+        message: "Status is required",
       }
-    )
-    .optional(),
-  status: z.enum(
-    ["REGULAR", "IRREGULAR", "NOT_ANNOUNCED", "TRANSFEREE", "RETURNEE"],
+    ),
+  })
+  .refine(
+    (data) => {
+      if (data.course === "BSED" || data.course === "BSBA") {
+        return data.major !== "NONE";
+      }
+      return true;
+    },
     {
-      message: "Status is required",
+      message: "Major is required for BSED and BSBA courses",
+      path: ["major"],
     }
-  ),
-});
+  );
 
 export const createStudentSchema = baseStudentSchema.refine(
   (data) => data.password === data.confirmPassword,
@@ -92,7 +137,7 @@ export const updateStudentSchema = z.object({
   firstName: z
     .string()
     .min(1, "First name is required")
-    .max(20, "Max 30 characters")
+    .max(20, "Max 20 characters")
     .regex(/^[a-zA-Z]+$/, "First name can only contain letters"),
   middleInit: z.string().max(10).optional().or(z.literal("")),
   lastName: z

@@ -97,8 +97,8 @@ const courseMajorMap: Record<Courses, Major[]> = {
   BSCRIM: ["NONE"],
   BSHM: ["NONE"],
   BSP: ["NONE"],
-  BSED: ["NONE", "ENGLISH", "MATHEMATICS"],
-  BSBA: ["NONE", "MARKETING_MANAGEMENT", "HUMAN_RESOURCE_MANAGEMENT"],
+  BSED: ["ENGLISH", "MATHEMATICS"],
+  BSBA: ["MARKETING_MANAGEMENT", "HUMAN_RESOURCE_MANAGEMENT"],
 };
 
 const allAvailableMajors: Major[] = [
@@ -145,8 +145,11 @@ export default function StudentSignup() {
       }
     } else if (watchedCourse === "BSED" || watchedCourse === "BSBA") {
       const validMajors = courseMajorMap[watchedCourse];
-      if (!validMajors.includes(watchedMajor as Major)) {
-        setValue("major", "NONE");
+      if (
+        !validMajors.includes(watchedMajor as Major) ||
+        watchedMajor === "NONE"
+      ) {
+        setValue("major", validMajors[0]);
       }
     }
   }, [watchedCourse, setValue, watchedMajor]);
@@ -159,8 +162,11 @@ export default function StudentSignup() {
         fieldsToValidate.push("firstName", "lastName", "sex");
         break;
       case 2:
-        // Ensure major is validated based on the potentially updated value
-        fieldsToValidate.push("course", "studentNumber", "major");
+        fieldsToValidate.push("course", "studentNumber");
+
+        if (!coursesForcedNone.includes(watchedCourse)) {
+          fieldsToValidate.push("major");
+        }
         break;
       case 3:
         fieldsToValidate.push("address", "email");
@@ -393,7 +399,12 @@ export default function StudentSignup() {
                       name="major"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Major (Optional)</FormLabel>
+                          <FormLabel>
+                            Major{" "}
+                            {coursesForcedNone.includes(watchedCourse)
+                              ? "(Optional)"
+                              : "*"}
+                          </FormLabel>
                           <FormControl>
                             <Select
                               onValueChange={field.onChange}
@@ -414,7 +425,7 @@ export default function StudentSignup() {
                           <FormDescription>
                             {coursesForcedNone.includes(watchedCourse)
                               ? "Major is automatically set to NONE for this course."
-                              : "Select your major or NONE."}
+                              : "Select your major - this field is required"}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -554,7 +565,7 @@ export default function StudentSignup() {
                           <FormControl>
                             <div className="relative">
                               <Input
-                                type={showConfirmPassword ? "text" : "password"}
+                                type={showPassword ? "text" : "password"}
                                 {...field}
                                 placeholder="Confirm password"
                               />
