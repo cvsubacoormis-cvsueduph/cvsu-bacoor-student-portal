@@ -3,8 +3,14 @@
 import prisma from "@/lib/prisma";
 import { CurriculumItem } from "@/lib/types";
 import { Courses, Major, Semester, yearLevels } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { curriculumChecklistData } from "@/prisma/curriculum";
+
+export interface SeedLog {
+  type: "success" | "info" | "warning" | "error";
+  message: string;
+}
 export async function getCurriculumChecklist(
   course: string,
   major: string | null,
@@ -163,4 +169,86 @@ export async function deleteCurriculumChecklist(id: string) {
 
   revalidatePath("/curriculum");
   return { success: true, message: "Deleted successfully" };
+}
+
+export async function seedCurriculum(): Promise<SeedLog[]> {
+  const logs: SeedLog[] = [];
+
+  const { userId } = await auth();
+  if (!userId) {
+    logs.push({
+      type: "error",
+      message: "❌ Unauthorized. Please sign in first.",
+    });
+    return logs;
+  }
+
+  const user = await currentUser();
+  const isAdmin =
+    user?.publicMetadata?.role === "admin" ||
+    user?.privateMetadata?.role === "admin";
+
+  if (!isAdmin) {
+    logs.push({
+      type: "error",
+      message: "❌ Forbidden. Only admins can seed curriculum data.",
+    });
+    return logs;
+  }
+
+  try {
+    logs.push({
+      type: "info",
+      message: "🌱 Checking existing curriculum checklist records...",
+    });
+
+    const existing = await prisma.curriculumChecklist.count();
+    if (existing > 0) {
+      logs.push({
+        type: "warning",
+        message: `⚠️ ${existing} curriculum records already exist. Seeding skipped to avoid duplication.`,
+      });
+      return logs;
+    }
+
+    logs.push({
+      type: "info",
+      message: "🌱 Seeding Curriculum Checklist...",
+    });
+
+    for (const subject of curriculumChecklistData) {
+      await prisma.curriculumChecklist.create({
+        data: {
+          course: subject.course as Courses,
+          yearLevel: subject.yearLevel as yearLevels,
+          semester: subject.semester as Semester,
+          courseCode: subject.courseCode,
+          courseTitle: subject.courseTitle,
+          major: subject.major as Major,
+          creditLec: subject.creditLec,
+          creditLab: subject.creditLab,
+          preRequisite: subject.preRequisite,
+        },
+      });
+
+      logs.push({
+        type: "success",
+        message: `✅ Added ${subject.courseCode} (${subject.course})`,
+      });
+    }
+
+    logs.push({
+      type: "success",
+      message: "✅ Curriculum Checklist seeding complete.",
+    });
+  } catch (error: any) {
+    logs.push({
+      type: "error",
+      message: `❌ Seeding error: ${error.message}`,
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+
+  return logs;
 }

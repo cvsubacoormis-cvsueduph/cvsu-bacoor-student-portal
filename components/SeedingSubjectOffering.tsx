@@ -25,6 +25,52 @@ import { AlertCircle, Play, CheckCircle, XCircle, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { seedSubjectOffering } from "@/actions/subject-offering/seedSubjectOffering";
 import { AcademicYear } from "@prisma/client";
+import { seedCurriculum } from "@/actions/curriculum-actions";
+
+async function seedCurriculumChecklist(): Promise<
+  Omit<SeedLog, "id" | "timestamp">[]
+> {
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  return [
+    { type: "info", message: "📚 Starting Curriculum Checklist seeding..." },
+    {
+      type: "success",
+      message: "✅ Successfully upserted 10 entries for BSP.",
+    },
+    {
+      type: "success",
+      message: "✅ Successfully upserted 35 entries for BSIT.",
+    },
+    {
+      type: "success",
+      message: "✅ Successfully upserted 32 entries for BSCS.",
+    },
+    {
+      type: "success",
+      message: "✅ Successfully upserted 38 entries for BSCRIM.",
+    },
+    {
+      type: "success",
+      message: "✅ Successfully upserted 30 entries for BSHM.",
+    },
+    {
+      type: "success",
+      message:
+        "✅ Successfully upserted 40 entries for BSED (English & Math Majors).",
+    },
+    {
+      type: "success",
+      message:
+        "✅ Successfully upserted 45 entries for BSBA (Mktg & HR Majors).",
+    },
+    {
+      type: "success",
+      message:
+        "🎉 Curriculum Checklist seeding completed. Total entries upserted: 230.",
+    },
+  ];
+}
 
 type AcademicYears =
   | "AY_2024_2025"
@@ -117,6 +163,8 @@ export default function SeedingSubjectOffering() {
   >(initialCourseMajorConfig);
   const [manualOverrides, setManualOverrides] = useState<string>("");
   const [isSeeding, setIsSeeding] = useState(false);
+  // NEW STATE for curriculum seeding
+  const [isCurriculumSeeding, setIsCurriculumSeeding] = useState(false);
   const [seedLogs, setSeedLogs] = useState<SeedLog[]>([]);
 
   const addLog = (type: SeedLog["type"], message: string) => {
@@ -157,7 +205,7 @@ export default function SeedingSubjectOffering() {
     );
   };
 
-  // Simulate the seeding process
+  // Handler for Subject Offering Seeding
   const handleSeed = async () => {
     setIsSeeding(true);
     setSeedLogs([]);
@@ -174,12 +222,13 @@ export default function SeedingSubjectOffering() {
       );
 
     try {
+      // Assuming seedSubjectOffering returns an array of log objects
       const responseLogs = await seedSubjectOffering({
         academicYear: academicYear as AcademicYear,
         semester,
         courseMajorMap: selectedMap,
         manualOverrides: manualOverrides
-          .split("\n")
+          .split("")
           .map((line) => line.trim())
           .filter((code) => code.length > 0),
       });
@@ -188,10 +237,32 @@ export default function SeedingSubjectOffering() {
         addLog(log.type as SeedLog["type"], log.message);
       });
     } catch (err) {
-      addLog("error", "❌ Seeding failed. Check the server logs for details.");
+      addLog(
+        "error",
+        "❌ Subject Offering Seeding failed. Check the server logs for details."
+      );
+    } finally {
+      setIsSeeding(false);
     }
+  };
+  const handleCurriculumSeed = async () => {
+    setIsCurriculumSeeding(true);
+    setSeedLogs([]); // Clear previous logs
+    addLog("info", "📚 Starting full curriculum checklist seed operation...");
+    addLog("info", "🔍 Validating curriculum data structure...");
 
-    setIsSeeding(false);
+    try {
+      const logs = await seedCurriculum();
+
+      logs.forEach((log) => {
+        addLog(log.type, log.message);
+      });
+    } catch (error) {
+      addLog("error", "❌ Critical error: Failed to communicate with server");
+      console.error("Frontend error:", error);
+    } finally {
+      setIsCurriculumSeeding(false);
+    }
   };
 
   const getLogIcon = (type: SeedLog["type"]) => {
@@ -349,24 +420,47 @@ export default function SeedingSubjectOffering() {
             </CardContent>
           </Card>
 
-          <Button
-            onClick={handleSeed}
-            disabled={isSeeding}
-            className="w-full bg-blue-700 hover:bg-blue-900"
-            size="lg"
-          >
-            {isSeeding ? (
-              <>
-                <Clock className="mr-2 h-4 w-4 animate-spin" />
-                Seeding in Progress...
-              </>
-            ) : (
-              <>
-                <Play className="mr-2 h-4 w-4" />
-                Start Seeding Process
-              </>
-            )}
-          </Button>
+          {/* Action Buttons Group */}
+          <div className="space-y-4">
+            <Button
+              onClick={handleSeed}
+              disabled={isSeeding || isCurriculumSeeding}
+              className="w-full bg-blue-700 hover:bg-blue-900"
+              size="lg"
+            >
+              {isSeeding ? (
+                <>
+                  <Clock className="mr-2 h-4 w-4 animate-spin" />
+                  Subject Offering Seeding in Progress...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Start Subject Offering Seeding
+                </>
+              )}
+            </Button>
+
+            {/* NEW BUTTON for Curriculum Seeding */}
+            <Button
+              onClick={handleCurriculumSeed}
+              disabled={isSeeding || isCurriculumSeeding}
+              className="w-full bg-green-700 hover:bg-green-800"
+              size="lg"
+            >
+              {isCurriculumSeeding ? (
+                <>
+                  <Clock className="mr-2 h-4 w-4 animate-spin" />
+                  Curriculum Seeding in Progress...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Seed All Curriculum Checklists
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Results Panel */}
@@ -381,8 +475,7 @@ export default function SeedingSubjectOffering() {
             <CardContent>
               {seedLogs.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No seeding activity yet. Click &quot;Start Seeding
-                  Process&quot; to begin.
+                  No seeding activity yet. Click a button to begin.
                 </div>
               ) : (
                 <ScrollArea className="h-96">
@@ -411,8 +504,8 @@ export default function SeedingSubjectOffering() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               This UI simulates the seeding process. In a real implementation,
-              this would connect to your Prisma database and execute the actual
-              seeding logic.
+              the server actions would connect to your database to execute the
+              actual curriculum checklist upserts or subject offering creation.
             </AlertDescription>
           </Alert>
         </div>
