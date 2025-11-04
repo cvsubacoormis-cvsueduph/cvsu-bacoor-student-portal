@@ -58,6 +58,7 @@ import {
   updateCurriculumChecklist,
 } from "@/actions/curriculum-actions";
 import { CurriculumSkeleton } from "./skeleton/CurriculumSkeleton";
+import { useUser } from "@clerk/nextjs";
 
 interface CurriculumChecklist {
   id: string;
@@ -102,6 +103,10 @@ export function CurriculumDataTable() {
   const [editingItem, setEditingItem] = useState<CurriculumChecklist | null>(
     null
   );
+
+  const { user } = useUser();
+  const role = user?.publicMetadata?.role;
+  console.log(role);
 
   const [formData, setFormData] = useState<Omit<CurriculumChecklist, "id">>({
     course: "BSIT",
@@ -269,13 +274,15 @@ export function CurriculumDataTable() {
 
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button
-              onClick={resetForm}
-              className="bg-blue-700 hover:bg-blue-600"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Curriculum
-            </Button>
+            {role === "admin" && (
+              <Button
+                onClick={resetForm}
+                className="bg-blue-700 hover:bg-blue-600"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Curriculum
+              </Button>
+            )}
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -386,7 +393,9 @@ export function CurriculumDataTable() {
                   <TableHead>Semester</TableHead>
                   <TableHead>Credits</TableHead>
                   <TableHead>Pre-requisite</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {role === "admin" && (
+                    <TableHead className="text-right">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -423,45 +432,48 @@ export function CurriculumDataTable() {
                         </div>
                       </TableCell>
                       <TableCell>{item.preRequisite || "None"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(item)}
-                          >
-                            <Pencil className="h-4 w-4 text-blue-700" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Trash2 className="h-4 w-4 text-red-700" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Are you sure?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will
-                                  permanently delete the curriculum item &ldquo;
-                                  {item.courseCode} - {item.courseTitle}&quot;
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(item.id)}
-                                  className="bg-red-600 focus:ring-red-600 hover:bg-red-500"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
+                      {role === "admin" && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(item)}
+                            >
+                              <Pencil className="h-4 w-4 text-blue-700" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Trash2 className="h-4 w-4 text-red-700" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Are you sure?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will
+                                    permanently delete the curriculum item
+                                    &ldquo;
+                                    {item.courseCode} - {item.courseTitle}&quot;
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(item.id)}
+                                    className="bg-red-600 focus:ring-red-600 hover:bg-red-500"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

@@ -1,31 +1,31 @@
+// actions/admin/admin.ts
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { PrismaClient, Role } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
+import { Role } from "@prisma/client";
 
 export async function getUserProfile() {
   const { userId } = await auth();
 
   if (!userId) {
+    console.error("User ID is undefined");
     throw new Error("Unauthorized");
   }
 
-  // First check if the user is an Admin
   const admin = await prisma.admin.findUnique({
     where: { id: userId },
   });
+
+  console.log("Admin:", admin);
 
   if (admin) {
     return {
       ...admin,
       role: Role.admin,
-      birthday: admin.birthday, // already a String in your schema
     };
   }
 
-  // Then check if they are Faculty or Registrar in User table
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
@@ -37,7 +37,6 @@ export async function getUserProfile() {
     };
   }
 
-  // Then check if they are a Student
   const student = await prisma.student.findUnique({
     where: { id: userId },
   });

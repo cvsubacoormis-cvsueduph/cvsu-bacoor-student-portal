@@ -142,15 +142,6 @@ export default function AdminProfileComp() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="birthday">Birthday</Label>
-                <Input
-                  id="birthday"
-                  type="date"
-                  value={admin.birthday}
-                  disabled
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="sex">Sex</Label>
                 <Select value={admin.sex} disabled>
                   <SelectTrigger>
