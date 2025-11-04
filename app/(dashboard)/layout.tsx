@@ -22,7 +22,7 @@ export default async function DashboardLayout({
   const role = user?.publicMetadata?.role as string;
   const isApproved = user?.publicMetadata?.isApproved as boolean;
 
-  if (role === "admin") {
+  if (role === "admin" || "faculty" || "registrar") {
     return (
       <div className="h-screen flex">
         {/* LEFT */}

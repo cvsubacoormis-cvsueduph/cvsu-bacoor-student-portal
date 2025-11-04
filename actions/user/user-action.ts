@@ -26,8 +26,8 @@ export async function createUser(formData: {
     // Generate password based on role and firstName
     const password =
       formData.role === "faculty"
-        ? `cvsubacoorfaculty${formData.firstName}`
-        : `cvsubacooregistrar${formData.firstName}`;
+        ? `cvsubacoorfaculty${formData.firstName.toLowerCase()}`
+        : `cvsubacooregistrar${formData.firstName.toLowerCase()}`;
 
     // 1. First create the user in Clerk
     const clerkUser = await clerk.users.createUser({
@@ -41,7 +41,7 @@ export async function createUser(formData: {
     // 2. Then create the user in your database
     const user = await prisma.user.create({
       data: {
-        id: clerkUser.id, // Use Clerk's user ID
+        id: clerkUser.id,
         username: formData.username,
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -51,6 +51,7 @@ export async function createUser(formData: {
         address: formData.address,
         sex: formData.sex,
         role: formData.role,
+        isApproved: true,
       },
     });
 
@@ -58,6 +59,7 @@ export async function createUser(formData: {
     await clerk.users.updateUserMetadata(clerkUser.id, {
       publicMetadata: {
         role: formData.role,
+        isApproved: true,
       },
     });
 
@@ -66,7 +68,7 @@ export async function createUser(formData: {
     return {
       success: true,
       user,
-      generatedPassword: password, // Return the generated password (optional)
+      generatedPassword: password,
     };
   } catch (error: any) {
     console.error("Failed to create user:", error);

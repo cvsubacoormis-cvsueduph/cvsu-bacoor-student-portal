@@ -1,4 +1,3 @@
-// app/pending-approval/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -20,7 +19,6 @@ export default function PendingApprovalPage() {
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Extract status from user metadata
   const isApproved = user?.publicMetadata?.isApproved as boolean;
   const role = user?.publicMetadata?.role as string;
 
@@ -31,9 +29,13 @@ export default function PendingApprovalPage() {
         return;
       }
 
-      // Auto-redirect if approved
-      if (isApproved && role) {
-        router.push(`/${role}`);
+      console.log("isApproved:", isApproved, "role:", role); // Debug info
+
+      if (
+        isApproved &&
+        (role === "admin" || role === "faculty" || role === "registrar")
+      ) {
+        router.push("/admin");
       }
     }
   }, [isLoaded, user, router, isApproved, role]);
@@ -76,7 +78,6 @@ export default function PendingApprovalPage() {
               </p>
             </div>
           ) : (
-            // Pending Status
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-center justify-center space-x-2 text-yellow-700">
                 <Clock className="h-6 w-6" />

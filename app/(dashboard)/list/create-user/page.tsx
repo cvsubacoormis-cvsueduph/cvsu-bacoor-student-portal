@@ -96,14 +96,13 @@ export default function CreateUserPage() {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Form Validation Failed");
+      toast.error("Please fill in all required fields.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Call the server action
       const result = await createUser({
         username: formData.username,
         firstName: formData.firstName,
@@ -150,7 +149,6 @@ export default function CreateUserPage() {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
-  
 
   return (
     <>
