@@ -80,8 +80,6 @@ model CurriculumChecklist {
   creditLab       Int               @default(0)
   preRequisite    String?
   SubjectOffering SubjectOffering[]
-
-  @@unique([course, yearLevel, semester, courseCode, major], name: "course_yearLevel_semester_courseCode_major")
 }
 
 model SubjectOffering {
@@ -124,6 +122,7 @@ model Grade {
   semester      Semester
   academicTerm  AcademicTerm @relation(fields: [academicYear, semester], references: [academicYear, semester])
   createdAt     DateTime     @default(now())
+  uploadedBy    String
 
   subjectOfferingId String?
   subjectOffering   SubjectOffering? @relation(fields: [subjectOfferingId], references: [id])

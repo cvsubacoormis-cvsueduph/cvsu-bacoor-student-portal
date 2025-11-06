@@ -24,135 +24,19 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, Play, CheckCircle, XCircle, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { seedSubjectOffering } from "@/actions/subject-offering/seedSubjectOffering";
-import { AcademicYear } from "@prisma/client";
+import { AcademicYear, Semester } from "@prisma/client";
+import {
+  academicYears,
+  AcademicYears,
+  availableMajors,
+  CourseMajorConfig,
+  Courses,
+  initialCourseMajorConfig,
+  Major,
+  SeedLog,
+} from "@/lib/academicYears";
 import { seedCurriculum } from "@/actions/curriculum-actions";
-
-async function seedCurriculumChecklist(): Promise<
-  Omit<SeedLog, "id" | "timestamp">[]
-> {
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-
-  return [
-    { type: "info", message: "📚 Starting Curriculum Checklist seeding..." },
-    {
-      type: "success",
-      message: "✅ Successfully upserted 10 entries for BSP.",
-    },
-    {
-      type: "success",
-      message: "✅ Successfully upserted 35 entries for BSIT.",
-    },
-    {
-      type: "success",
-      message: "✅ Successfully upserted 32 entries for BSCS.",
-    },
-    {
-      type: "success",
-      message: "✅ Successfully upserted 38 entries for BSCRIM.",
-    },
-    {
-      type: "success",
-      message: "✅ Successfully upserted 30 entries for BSHM.",
-    },
-    {
-      type: "success",
-      message:
-        "✅ Successfully upserted 40 entries for BSED (English & Math Majors).",
-    },
-    {
-      type: "success",
-      message:
-        "✅ Successfully upserted 45 entries for BSBA (Mktg & HR Majors).",
-    },
-    {
-      type: "success",
-      message:
-        "🎉 Curriculum Checklist seeding completed. Total entries upserted: 230.",
-    },
-  ];
-}
-
-type AcademicYears =
-  | "AY_2024_2025"
-  | "AY_2025_2026"
-  | "AY_2026_2027"
-  | "AY_2027_2028"
-  | "AY_2028_2029"
-  | "AY_2029_2030"
-  | "AY_2030_2031"
-  | "AY_2031_2032"
-  | "AY_2032_2033"
-  | "AY_2033_2034"
-  | "AY_2034_2035"
-  | "AY_2035_2036"
-  | "AY_2036_2037"
-  | "AY_2037_2038"
-  | "AY_2038_2039"
-  | "AY_2039_2040";
-type Semester = "FIRST" | "SECOND" | "MIDYEAR";
-type Courses = "BSIT" | "BSCS" | "BSCRIM" | "BSP" | "BSHM" | "BSED" | "BSBA";
-type Major =
-  | "NONE"
-  | "ENGLISH"
-  | "MATHEMATICS"
-  | "MARKETING_MANAGEMENT"
-  | "HUMAN_RESOURCE_MANAGEMENT";
-
-interface CourseMajorConfig {
-  course: Courses;
-  majors: Major[];
-  enabled: boolean;
-}
-
-interface SeedLog {
-  id: string;
-  type: "success" | "info" | "warning" | "error";
-  message: string;
-  timestamp: Date;
-}
-
-const initialCourseMajorConfig: CourseMajorConfig[] = [
-  { course: "BSIT", majors: ["NONE"], enabled: true },
-  { course: "BSCS", majors: ["NONE"], enabled: true },
-  { course: "BSCRIM", majors: ["NONE"], enabled: true },
-  { course: "BSP", majors: ["NONE"], enabled: true },
-  { course: "BSHM", majors: ["NONE"], enabled: true },
-  { course: "BSED", majors: ["ENGLISH", "MATHEMATICS"], enabled: true },
-  {
-    course: "BSBA",
-    majors: ["MARKETING_MANAGEMENT", "HUMAN_RESOURCE_MANAGEMENT"],
-    enabled: true,
-  },
-];
-
-const academicYears: AcademicYears[] = [
-  "AY_2024_2025",
-  "AY_2025_2026",
-  "AY_2026_2027",
-  "AY_2027_2028",
-  "AY_2028_2029",
-  "AY_2029_2030",
-  "AY_2030_2031",
-  "AY_2031_2032",
-  "AY_2032_2033",
-  "AY_2033_2034",
-  "AY_2034_2035",
-  "AY_2035_2036",
-  "AY_2036_2037",
-  "AY_2037_2038",
-  "AY_2038_2039",
-  "AY_2039_2040",
-];
-
-const availableMajors: Record<Courses, Major[]> = {
-  BSIT: ["NONE"],
-  BSCS: ["NONE"],
-  BSCRIM: ["NONE"],
-  BSP: ["NONE"],
-  BSHM: ["NONE"],
-  BSED: ["NONE", "ENGLISH", "MATHEMATICS"],
-  BSBA: ["NONE", "MARKETING_MANAGEMENT", "HUMAN_RESOURCE_MANAGEMENT"],
-};
+import { toast } from "sonner";
 
 export default function SeedingSubjectOffering() {
   const [academicYear, setAcademicYear] =
@@ -163,7 +47,6 @@ export default function SeedingSubjectOffering() {
   >(initialCourseMajorConfig);
   const [manualOverrides, setManualOverrides] = useState<string>("");
   const [isSeeding, setIsSeeding] = useState(false);
-  // NEW STATE for curriculum seeding
   const [isCurriculumSeeding, setIsCurriculumSeeding] = useState(false);
   const [seedLogs, setSeedLogs] = useState<SeedLog[]>([]);
 
@@ -245,21 +128,38 @@ export default function SeedingSubjectOffering() {
       setIsSeeding(false);
     }
   };
+
   const handleCurriculumSeed = async () => {
     setIsCurriculumSeeding(true);
-    setSeedLogs([]); // Clear previous logs
-    addLog("info", "📚 Starting full curriculum checklist seed operation...");
-    addLog("info", "🔍 Validating curriculum data structure...");
 
     try {
       const logs = await seedCurriculum();
 
-      logs.forEach((log) => {
-        addLog(log.type, log.message);
+      // Use sonner to show a toast with detailed logs
+      const errorLogs = logs.filter((log) => log.type === "error");
+      const warningLogs = logs.filter((log) => log.type === "warning");
+      const successLogs = logs.filter((log) => log.type === "success");
+
+      if (errorLogs.length > 0) {
+        toast.error("Seeding Failed");
+      } else if (warningLogs.length > 0) {
+        toast.warning("Seeding Completed with Warnings");
+      } else {
+        toast.success("✅ Curriculum Seeding Complete", {
+          description:
+            "All curriculum checklists have been seeded successfully.",
+        });
+
+        toast.success("✅ Success Details");
+      }
+
+      console.log("Seeding logs:", logs);
+    } catch (error: any) {
+      console.error("Failed to seed curriculum:", error);
+
+      toast.error("Seeding Failed", {
+        description: `An unexpected error occurred: ${error.message}`,
       });
-    } catch (error) {
-      addLog("error", "❌ Critical error: Failed to communicate with server");
-      console.error("Frontend error:", error);
     } finally {
       setIsCurriculumSeeding(false);
     }
@@ -441,12 +341,11 @@ export default function SeedingSubjectOffering() {
               )}
             </Button>
 
-            {/* NEW BUTTON for Curriculum Seeding */}
             <Button
-              onClick={handleCurriculumSeed}
               disabled={isSeeding || isCurriculumSeeding}
               className="w-full bg-green-700 hover:bg-green-800"
               size="lg"
+              onClick={handleCurriculumSeed}
             >
               {isCurriculumSeeding ? (
                 <>

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Major } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
-
 
 const GRADE_HIERARCHY = [
   "1.00",
@@ -36,18 +35,15 @@ function normalizeGrade(value: any): string | null {
   return !isNaN(num) ? num.toFixed(2) : str;
 }
 
-// 🔹 Helper to sanitize strings from Excel (remove quotes, extra spaces, commas)
 function sanitizeString(value: any): string | null {
   if (!value) return null;
-  return String(value)
-    .replace(/['"]+/g, "") // remove quotes
-    .replace(/,/g, "") // remove stray commas
-    .replace(/\s+/g, " ") // collapse spaces
-    .trim();
+  return String(value).replace(/['"]+/g, "").replace(/,/g, "").trim();
 }
 
 export async function POST(req: Request) {
   const { userId } = await auth();
+  const user = await currentUser();
+
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -77,12 +73,10 @@ export async function POST(req: Request) {
         semester,
       } = entry;
 
-      // ✅ Normalize studentNumber (remove dashes if any)
       const normalizedStudentNumber = studentNumber
         ? String(studentNumber).replace(/-/g, "")
         : null;
 
-      // ✅ Sanitize text inputs
       const sanitizedFirstName = sanitizeString(firstName);
       const sanitizedLastName = sanitizeString(lastName);
       const sanitizedCourseCode = sanitizeString(courseCode);
@@ -268,7 +262,6 @@ export async function POST(req: Request) {
         }
       }
 
-      // ✅ Upsert grade
       await prisma.grade.upsert({
         where: {
           studentNumber_courseCode_academicYear_semester: {
@@ -293,6 +286,7 @@ export async function POST(req: Request) {
             connect: { academicYear_semester: { academicYear, semester } },
           },
           subjectOffering: { connect: { id: subjectOffering.id } },
+          uploadedBy: user?.fullName ?? "",
         },
         update: {
           courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
@@ -302,10 +296,10 @@ export async function POST(req: Request) {
           remarks: sanitizedRemarks,
           instructor: sanitizedInstructor,
           subjectOffering: { connect: { id: subjectOffering.id } },
+          uploadedBy: user?.fullName ?? "",
         },
       });
 
-      // ✅ Create log
       await prisma.gradeLog.create({
         data: {
           studentNumber: student.studentNumber,
@@ -322,7 +316,7 @@ export async function POST(req: Request) {
       results.push({
         studentNumber: student.studentNumber,
         courseCode: sanitizedCourseCode,
-        status: "✅ Grade uploaded",
+        status: "Grade uploaded",
         studentName: `${sanitizedFirstName ?? student.firstName} ${sanitizedLastName ?? student.lastName}`,
       });
     } catch (error) {
@@ -331,7 +325,7 @@ export async function POST(req: Request) {
         identifier:
           entry.studentNumber || `${entry.firstName} ${entry.lastName}`,
         courseCode: entry.courseCode,
-        status: "❌ Server error processing this record",
+        status: "Server error processing this record",
       });
     }
   }

@@ -152,7 +152,6 @@ export default function ManualGradeEntry() {
     }
   };
 
-  // Handle course selection by ID
   const handleCourseSelect = (id: string) => {
     const selectedCourse = courseOptions.find((course) => course.id === id);
     if (selectedCourse) {
@@ -269,7 +268,6 @@ export default function ManualGradeEntry() {
       });
 
       setSubmitStatus("success");
-      // Reset form
       setSelectedCourseId("");
       setCreditUnit("");
       setGrade("");

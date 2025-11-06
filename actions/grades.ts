@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { AcademicYear, Major, Semester } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export type StudentSearchResult = {
   studentNumber: string;
@@ -148,6 +148,8 @@ export async function getStudentDetails(
 }
 
 export async function addManualGrade(gradeData: GradeData): Promise<void> {
+  const user = await currentUser();
+
   // Validate required fields
   if (
     !gradeData.studentNumber ||
@@ -218,6 +220,7 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
           studentNumber: gradeData.studentNumber,
           courseCode: gradeData.courseCode.toUpperCase(),
           subjectOfferingId: subjectOffering.id,
+          uploadedBy: user?.fullName || "",
         },
         update: {
           ...baseData,
@@ -238,6 +241,7 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
           ...baseData,
           studentNumber: gradeData.studentNumber,
           courseCode: gradeData.courseCode.toUpperCase(),
+          uploadedBy: user?.fullName || "",
         },
         update: baseData,
       });
