@@ -144,6 +144,10 @@ model GradeLog {
 }
 
 enum AcademicYear {
+  AY_2019_2020
+  AY_2020_2021
+  AY_2021_2022
+  AY_2022_2023
   AY_2023_2024
   AY_2024_2025
   AY_2025_2026

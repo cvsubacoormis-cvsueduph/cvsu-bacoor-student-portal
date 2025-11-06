@@ -7,29 +7,41 @@ async function main() {
   console.log("🌱 Seeding Curriculum Checklist...");
 
   for (const subject of curriculumChecklistData) {
-    await prisma.curriculumChecklist.upsert({
+    const existing = await prisma.curriculumChecklist.findFirst({
       where: {
-        course_yearLevel_semester_courseCode_major: {
-          course: subject.course,
-          yearLevel: subject.yearLevel,
-          semester: subject.semester,
-          courseCode: subject.courseCode,
-          major: subject.major as Major,
-        },
-      },
-      update: {},
-      create: {
         course: subject.course,
         yearLevel: subject.yearLevel,
         semester: subject.semester,
         courseCode: subject.courseCode,
-        courseTitle: subject.courseTitle,
         major: subject.major as Major,
-        creditLec: subject.creditLec,
-        creditLab: subject.creditLab,
-        preRequisite: subject.preRequisite,
       },
     });
+
+    if (existing) {
+      await prisma.curriculumChecklist.update({
+        where: { id: existing.id },
+        data: {
+          courseTitle: subject.courseTitle,
+          creditLec: subject.creditLec,
+          creditLab: subject.creditLab,
+          preRequisite: subject.preRequisite,
+        },
+      });
+    } else {
+      await prisma.curriculumChecklist.create({
+        data: {
+          course: subject.course,
+          yearLevel: subject.yearLevel,
+          semester: subject.semester,
+          courseCode: subject.courseCode,
+          courseTitle: subject.courseTitle,
+          major: subject.major as Major,
+          creditLec: subject.creditLec,
+          creditLab: subject.creditLab,
+          preRequisite: subject.preRequisite,
+        },
+      });
+    }
   }
 
   console.log("✅ Done seeding Curriculum Checklist.");
