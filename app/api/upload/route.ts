@@ -8,7 +8,6 @@ import { RateLimiterMemory } from "rate-limiter-flexible";
 import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
-
 const rateLimiter = new RateLimiterMemory({
   points: 20,
   duration: 10,
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const ip = getClientIp(request);
-  console.log("Current IP:", ip); 
+  console.log("Current IP:", ip);
   const clerk = await clerkClient();
 
   try {
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest) {
               firstName: student.firstName.toUpperCase(),
               lastName: student.lastName.toUpperCase(),
               emailAddress: [student.email ?? ""],
-              password: `cvsubacoor${student.firstName}${student.studentNumber}`,
+              password: `cvsubacoor${student.firstName.replace(/ /g, "")}${student.studentNumber.replace(/ /g, "")}`,
               skipPasswordChecks: true,
               publicMetadata: { role: "student", isApproved: true },
             });
