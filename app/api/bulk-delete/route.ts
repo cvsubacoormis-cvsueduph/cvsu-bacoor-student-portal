@@ -12,7 +12,7 @@ export async function DELETE() {
   try {
     const students = await prisma.student.findMany();
     for (const student of students) {
-      await (await clerkClient()).users.deleteUser(student.username);
+      await (await clerkClient()).users.deleteUser(student.id);
     }
     const deleteStudents = await prisma.student.deleteMany();
 
