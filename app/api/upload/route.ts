@@ -9,9 +9,9 @@ import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
 const rateLimiter = new RateLimiterMemory({
-  points: 1000, 
-  duration: 10, 
-  blockDuration: 10, 
+  points: 1000,
+  duration: 10,
+  blockDuration: 10,
   keyPrefix: "rl",
 });
 
@@ -109,13 +109,18 @@ export async function POST(request: NextRequest) {
               .replace(/[^a-zA-Z0-9_-]/g, "")
               .replaceAll("-", "");
 
-            // Create Clerk user
+            const password = `cvsubacoor${student.firstName.trim().replace(/\s+/g, "")}${String(
+              student.studentNumber
+            )
+              .trim()
+              .replace(/\s+/g, "")}`;
+
             const user = await clerk.users.createUser({
               username,
               firstName: student.firstName.toUpperCase(),
               lastName: student.lastName.toUpperCase(),
               emailAddress: [student.email ?? ""],
-              password: `cvsubacoor${student.firstName.replace(/ /g, "")}${student.studentNumber.replace(/ /g, "")}`,
+              password: password,
               skipPasswordChecks: true,
               publicMetadata: { role: "student", isApproved: true },
             });
