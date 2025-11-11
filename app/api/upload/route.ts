@@ -9,8 +9,10 @@ import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
 const rateLimiter = new RateLimiterMemory({
-  points: 20,
-  duration: 10,
+  points: 1000, 
+  duration: 10, 
+  blockDuration: 10, 
+  keyPrefix: "rl",
 });
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -157,7 +159,7 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      await delay(10000); // Rate limit Clerk API calls
+      await delay(50); // Rate limit Clerk API calls
     }
 
     // Handle duplicates (export to XLSX if any)
