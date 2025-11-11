@@ -8,7 +8,7 @@ import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
 const rateLimiter = new RateLimiterMemory({
-  points: 20,
+  points: 10000,
   duration: 10,
 });
 
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      await delay(1000); // small delay between batches
+      await delay(50); 
     }
 
     // Export duplicates as Excel if found
