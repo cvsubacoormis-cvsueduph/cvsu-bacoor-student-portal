@@ -109,11 +109,7 @@ export async function POST(request: NextRequest) {
               .replace(/[^a-zA-Z0-9_-]/g, "")
               .replaceAll("-", "");
 
-            const password = `cvsubacoor${student.firstName.trim().replace(/\s+/g, "")}${String(
-              student.studentNumber
-            )
-              .trim()
-              .replace(/\s+/g, "")}`;
+            const password = `cvsubacoor${username}`;
 
             const user = await clerk.users.createUser({
               username,

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 export const runtime = "nodejs";
 
-
 export async function DELETE() {
   const { userId } = await auth();
   if (!userId) {
@@ -13,7 +12,7 @@ export async function DELETE() {
   try {
     const students = await prisma.student.findMany();
     for (const student of students) {
-      await (await clerkClient()).users.deleteUser(student.id);
+      await (await clerkClient()).users.deleteUser(student.username);
     }
     const deleteStudents = await prisma.student.deleteMany();
 
