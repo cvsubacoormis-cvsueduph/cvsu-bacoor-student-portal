@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import * as XLSX from "xlsx";
 import { Courses, Major, Status, UserSex } from "@prisma/client";
-import { clerkClient } from "@clerk/nextjs/server";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { auth } from "@clerk/nextjs/server";
 
@@ -27,7 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = getClientIp(request);
-  const clerk = await clerkClient();
 
   try {
     await rateLimiter.consume(ip);
@@ -71,11 +69,11 @@ export async function POST(request: NextRequest) {
 
     // Map spreadsheet columns
     const students = rows.map((row) => ({
-      id: row["id"],
+      id: String(row["id"] || "").trim(),
       studentNumber: String(row["studentNumber"] || "").trim(),
       firstName: String(row["firstName"] || "").trim(),
       lastName: String(row["lastName"] || "").trim(),
-      middleI: String(row["middleInit"] || "").trim(),
+      middleI: String(row["middleI"] || "").trim(),
       email: String(row["email"] || "").trim(),
       phone: String(row["phone"] || "").trim(),
       address: String(row["address"] || "").trim(),
@@ -103,7 +101,7 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    // Batch create 5 students at a time
+    // Batch insert (5 at a time)
     const batchSize = 5;
     for (let i = 0; i < studentsToCreate.length; i += batchSize) {
       if (signal.aborted) throw new Error("Upload cancelled by user");
@@ -117,21 +115,9 @@ export async function POST(request: NextRequest) {
 
             const username = `${student.studentNumber}a`.toLowerCase();
 
-            // Create Clerk user
-            const user = await clerk.users.createUser({
-              username,
-              firstName: student.firstName.toUpperCase(),
-              lastName: student.lastName.toUpperCase(),
-              emailAddress: [student.email],
-              password: `cvsubacoor${student.studentNumber}`,
-              skipPasswordChecks: true,
-              publicMetadata: { role: "student", isApproved: true },
-            });
-
-            // Create student record
             await prisma.student.create({
               data: {
-                id: student.id,
+                id: student.id, // ✅ Use exact ID from Excel
                 studentNumber: student.studentNumber,
                 username,
                 firstName: student.firstName,
@@ -150,15 +136,15 @@ export async function POST(request: NextRequest) {
               },
             });
           } catch (error) {
-            console.error(`Error creating ${student.studentNumber}:`, error);
+            console.error(`Error inserting ${student.studentNumber}:`, error);
           }
         })
       );
 
-      await delay(10000); // Clerk API pacing
+      await delay(1000); // small delay between batches
     }
 
-    // Return duplicate list as Excel if any
+    // Export duplicates as Excel if found
     if (duplicates.length > 0) {
       const worksheet = XLSX.utils.json_to_sheet(duplicates);
       const workbook = XLSX.utils.book_new();
@@ -180,7 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      message: `✅ Success! Created ${studentsToCreate.length}/${students.length} students.`,
+      message: `✅ Success! Imported ${studentsToCreate.length}/${students.length} students using provided IDs.`,
       duplicates,
     });
   } catch (error) {
