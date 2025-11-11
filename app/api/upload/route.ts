@@ -102,49 +102,107 @@ export async function POST(request: NextRequest) {
           try {
             if (signal.aborted) throw new Error("Upload cancelled by user");
 
-            const username = `${
-              student.studentNumber
-            }${student.firstName.toLowerCase()}`
-              .toLowerCase()
-              .replace(/[^a-zA-Z0-9_-]/g, "")
-              .replaceAll("-", "");
+            const username =
+              `${student.studentNumber}${student.firstName.toLowerCase()}`
+                .toLowerCase()
+                .replace(/[^a-zA-Z0-9_-]/g, "")
+                .replaceAll("-", "");
 
             const password = `cvsubacoor${username}`;
 
-            const user = await clerk.users.createUser({
-              username,
-              firstName: student.firstName.toUpperCase(),
-              lastName: student.lastName.toUpperCase(),
-              emailAddress: [student.email ?? ""],
-              password: password,
-              skipPasswordChecks: true,
-              publicMetadata: { role: "student", isApproved: true },
+            let user;
+
+            // Try to get the user by email or external ID if possible
+            // Clerk doesn't have a direct "getUserByExternalId" – you can search by email
+            let existingClerkUser = null;
+            if (student.email) {
+              const users = await clerk.users.getUserList({
+                query: student.email,
+              });
+              existingClerkUser = users.data[0]; // may be undefined
+            }
+
+            try {
+              // Try to create the user
+              user = await clerk.users.createUser({
+                username,
+                firstName: student.firstName.toUpperCase(),
+                lastName: student.lastName.toUpperCase(),
+                emailAddress: student.email ? [student.email] : [],
+                password: password,
+                skipPasswordChecks: true,
+                publicMetadata: { role: "student", isApproved: true },
+              });
+            } catch (clerkError: any) {
+              // If user already exists in Clerk
+              if (
+                clerkError.code === "USER_DUPLICATE_EMAIL" ||
+                clerkError.code === "USER_DUPLICATE_USERNAME"
+              ) {
+                if (student.email) {
+                  const users = await clerk.users.getUserList({
+                    query: student.email,
+                  });
+                  existingClerkUser = users.data[0];
+                }
+                // If we now have the user from Clerk, use that
+                if (existingClerkUser) {
+                  user = existingClerkUser;
+                } else {
+                  console.error(
+                    `Clerk user already exists for ${student.studentNumber} but could not be retrieved.`
+                  );
+                  return; // skip this student
+                }
+              } else {
+                console.error(
+                  `Clerk error for ${student.studentNumber}:`,
+                  clerkError
+                );
+                return; // skip on other Clerk errors
+              }
+            }
+
+            // Now check if the student exists in the database
+            const existingDbStudent = await prisma.student.findUnique({
+              where: { id: user.id }, // assuming Clerk user id is used as Prisma student id
             });
 
-            // Create student in Prisma
-            await prisma.student.create({
-              data: {
-                studentNumber: String(student.studentNumber).replaceAll(
-                  "-",
-                  ""
-                ),
-                username,
-                firstName: student.firstName,
-                lastName: student.lastName,
-                middleInit: student.middleInit ? student.middleInit[0] : "",
-                email: student.email ?? "",
-                phone: student.phone ? String(student.phone) : "N/A",
-                address: student.address.toUpperCase() ?? "N/A",
-                sex: String(student.sex).toUpperCase() as UserSex,
-                course: student.course.trim() as Courses,
-                major: student.major ? (student.major.trim() as Major) : null,
-                status: student.status.trim() as Status,
-                createdAt: new Date(),
-                isPasswordSet: true,
-                isApproved: true,
-                id: user.id,
-              },
-            });
+            if (!existingDbStudent) {
+              // Student exists in Clerk but NOT in DB → create it in DB
+              console.log(
+                `Creating missing DB record for existing Clerk user: ${student.studentNumber}`
+              );
+
+              await prisma.student.create({
+                data: {
+                  studentNumber: String(student.studentNumber).replaceAll(
+                    "-",
+                    ""
+                  ),
+                  username,
+                  firstName: student.firstName,
+                  lastName: student.lastName,
+                  middleInit: student.middleInit ? student.middleInit[0] : "",
+                  email: student.email ?? "",
+                  phone: student.phone ? String(student.phone) : "N/A",
+                  address: student.address.toUpperCase() ?? "N/A",
+                  sex: String(student.sex).toUpperCase() as UserSex,
+                  course: student.course.trim() as Courses,
+                  major: student.major ? (student.major.trim() as Major) : null,
+                  status: student.status.trim() as Status,
+                  createdAt: new Date(),
+                  isPasswordSet: true,
+                  isApproved: true,
+                  id: user.id, // use Clerk user id as Prisma id
+                },
+              });
+            } else {
+              // Student already exists both in Clerk and DB → skip
+              console.log(
+                `Student ${student.studentNumber} already exists in both Clerk and DB.`
+              );
+            }
           } catch (error) {
             if (
               error instanceof Error &&
@@ -153,7 +211,7 @@ export async function POST(request: NextRequest) {
               throw error;
             }
             console.error(
-              `Error creating student ${student.studentNumber}:`,
+              `Error processing student ${student.studentNumber}:`,
               error
             );
           }
