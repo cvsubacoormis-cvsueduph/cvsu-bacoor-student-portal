@@ -5,10 +5,10 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 const clerk = await clerkClient();
+
 export async function DELETE() {
   const { userId } = await auth();
 
-  // ✅ Optional security — make sure only admin can trigger this
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -28,6 +28,9 @@ export async function DELETE() {
       if (!data.length) break;
 
       for (const user of data) {
+        // 🚫 Skip current logged-in user
+        if (user.id === userId) continue;
+
         try {
           await clerk.users.deleteUser(user.id);
           totalDeleted++;
@@ -40,12 +43,12 @@ export async function DELETE() {
       if (offset >= totalCount) break;
     }
 
-    // 🧹 Clean up local DB too
+    // 🧹 Delete all students from Prisma DB
     const { count } = await prisma.student.deleteMany();
 
     return NextResponse.json(
       {
-        message: `✅ Deleted ${totalDeleted} Clerk users and ${count} students from database.`,
+        message: `✅ Deleted ${totalDeleted} Clerk users (excluding current user) and ${count} students from database.`,
       },
       { status: 200 }
     );
