@@ -10,11 +10,16 @@ import {
 } from "./ui/dialog";
 import { Ellipsis } from "lucide-react";
 import { AnnouncementsSkeleton } from "./skeleton/AnnouncementsSkeleton";
+import { format } from "date-fns";
 
 type Announcement = {
   id: number;
   title: string;
   description: string;
+  dateTo: string;
+  dateFrom: string;
+  startTime: string;
+  endTime: string;
   date: string;
   createdAt: string;
 };
@@ -64,6 +69,19 @@ export default function Announcements() {
                       <h1 className="font-semibold text-gray-800">
                         {item.title}
                       </h1>
+                      <span className="text-gray-800 text-xs">
+                        {item.startTime
+                          ? format(new Date(item.startTime), "p")
+                              .replace("a.m.", "AM")
+                              .replace("p.m.", "PM")
+                          : "—"}{" "}
+                        -{" "}
+                        {item.endTime
+                          ? format(new Date(item.endTime), "p")
+                              .replace("a.m.", "AM")
+                              .replace("p.m.", "PM")
+                          : "—"}
+                      </span>
                       <span className="text-gray-800 text-xs">{item.date}</span>
                     </div>
                     {item.description && (
@@ -71,6 +89,16 @@ export default function Announcements() {
                         {item.description}
                       </p>
                     )}
+                    <span className="text-gray-600 text-xs font-normal">
+                      {item.dateFrom
+                        ? item.dateTo
+                          ? `(${format(new Date(item.dateFrom), "PPP")} - ${format(
+                              new Date(item.dateTo),
+                              "PPP"
+                            )})`
+                          : `(${format(new Date(item.dateFrom), "PPP")}`
+                        : "—"}
+                    </span>
                   </div>
                 ))
               ) : (
@@ -93,11 +121,36 @@ export default function Announcements() {
             <div key={item.id} className="bg-gray-100 rounded-md p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="font-medium text-gray-800">{item.title}</h2>
-                <span className="text-xs text-gray-800 bg-white rounded-md px-1 py-1">
-                  {item.date}
-                </span>
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-gray-800 text-xs">
+                    {item.startTime
+                      ? format(new Date(item.startTime), "p")
+                          .replace("a.m.", "AM")
+                          .replace("p.m.", "PM")
+                      : "—"}{" "}
+                    -{" "}
+                    {item.endTime
+                      ? format(new Date(item.endTime), "p")
+                          .replace("a.m.", "AM")
+                          .replace("p.m.", "PM")
+                      : "—"}
+                  </span>
+                  <span className="text-xs text-gray-800 bg-white rounded-md px-1 py-1">
+                    {item.date}
+                  </span>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+              <span className="text-gray-600 text-xs font-normal">
+                {item.dateFrom
+                  ? item.dateTo
+                    ? `(${format(new Date(item.dateFrom), "PPP")} - ${format(
+                        new Date(item.dateTo),
+                        "PPP"
+                      )})`
+                    : `(${format(new Date(item.dateFrom), "PPP")}`
+                  : "—"}
+              </span>
             </div>
           ))
         ) : (
