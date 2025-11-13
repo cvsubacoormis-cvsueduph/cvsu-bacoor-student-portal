@@ -13,6 +13,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { HashLoader } from "react-spinners";
 
 export default function PendingApprovalPage() {
   const { user, isLoaded } = useUser();
@@ -49,7 +50,7 @@ export default function PendingApprovalPage() {
   if (!isLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA]">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <HashLoader color="#1976D2" size={150} />
       </div>
     );
   }
@@ -63,7 +64,7 @@ export default function PendingApprovalPage() {
 
         {/* Status Display Section */}
         <div className="space-y-4">
-          <h1 className="text-3xl font-bold text-gray-800">Account Status</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Account Status</h1>
 
           {isApproved ? (
             // Approved Status
@@ -133,13 +134,10 @@ export default function PendingApprovalPage() {
           )}
         </div>
 
-        {/* Loading Indicator for Pending Status */}
         {!isApproved && (
-          <div className="pt-2">
-            <div className="animate-pulse flex space-x-2 justify-center">
-              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+          <div className="flex items-center justify-center">
+            <div className="max-w-sm mx-auto">
+              <HashLoader className="h-10 w-10" color="#1976D2" />
             </div>
           </div>
         )}

@@ -22,23 +22,32 @@ export function StudentCard() {
         );
         const data = await response.json();
 
-        const mapCondition = (code: number): string => {
-          const rainyCodes = [
-            1063, 1072, 1150, 1153, 1180, 1183, 1186, 1189, 1192, 1195, 1240,
-            1243, 1246,
-          ];
-          const cloudyCodes = [1003, 1006, 1009, 1030, 1135, 1147];
-          const sunnyCodes = [1000];
+        const mapCondition = (text: string): string => {
+          const lower = text.toLowerCase();
 
-          if (rainyCodes.includes(code)) return "rainy";
-          if (cloudyCodes.includes(code)) return "cloudy";
-          if (sunnyCodes.includes(code)) return "sunny";
-          return "cloudy"; // default
+          if (
+            lower.includes("rain") ||
+            lower.includes("drizzle") ||
+            lower.includes("shower")
+          ) {
+            return "rainy";
+          }
+          if (
+            lower.includes("cloud") ||
+            lower.includes("overcast") ||
+            lower.includes("mist")
+          ) {
+            return "cloudy";
+          }
+          if (lower.includes("sun") || lower.includes("clear")) {
+            return "sunny";
+          }
+          return "cloudy";
         };
 
         setWeatherData({
           temperature: Math.round(data.current.temp_c),
-          condition: mapCondition(data.current.condition.code),
+          condition: mapCondition(data.current.condition.text),
           description: data.current.condition.text,
         });
       } catch (error) {

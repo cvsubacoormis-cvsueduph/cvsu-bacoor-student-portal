@@ -359,18 +359,19 @@ export function NewsAndUpdates() {
                     ? `${item.description.substring(0, 200)}...`
                     : item.description}
                 </p>
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="text-xs text-muted-foreground break-words">
                     Posted by: {item.author}
                     {item.updatedAt && (
-                      <span className="ml-2">
+                      <span className="ml-1 block sm:inline">
                         (Edited: {new Date(item.updatedAt).toLocaleDateString()}
                         )
                       </span>
                     )}
                   </div>
                   <Button
-                    className="bg-blue-600 hover:bg-blue-500 text-white"
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-500 text-white w-full sm:w-auto"
                     onClick={() => handleReadMore(item)}
                   >
                     Read More
@@ -420,11 +421,11 @@ export function NewsAndUpdates() {
                     ? `${item.description.substring(0, 200)}...`
                     : item.description}
                 </p>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="text-xs text-muted-foreground break-words">
                     Posted by: {item.author}
                     {item.updatedAt && (
-                      <span className="ml-2">
+                      <span className="ml-1 block sm:inline">
                         (Edited: {new Date(item.updatedAt).toLocaleDateString()}
                         )
                       </span>
@@ -432,7 +433,7 @@ export function NewsAndUpdates() {
                   </div>
                   <Button
                     size="sm"
-                    className=" bg-blue-600 hover:bg-blue-500 text-white"
+                    className="bg-blue-600 hover:bg-blue-500 text-white w-full sm:w-auto"
                     onClick={() => handleReadMore(item)}
                   >
                     Read More
