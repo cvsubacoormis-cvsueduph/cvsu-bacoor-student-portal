@@ -23,13 +23,15 @@ export async function createUser(formData: {
   }
   const clerk = await clerkClient();
   try {
-    // Generate password based on role and firstName
+    const cleanedFirstName = formData.firstName
+      .toLowerCase()
+      .replace(/\s+/g, "");
+
     const password =
       formData.role === "faculty"
-        ? `cvsubacoorfaculty${formData.firstName.toLowerCase()}`
-        : `cvsubacooregistrar${formData.firstName.toLowerCase()}`;
+        ? `cvsubacoorfaculty${cleanedFirstName}`
+        : `cvsubacooregistrar${cleanedFirstName}`;
 
-    // 1. First create the user in Clerk
     const clerkUser = await clerk.users.createUser({
       username: formData.username,
       firstName: formData.firstName,
@@ -38,7 +40,6 @@ export async function createUser(formData: {
       password: password,
     });
 
-    // 2. Then create the user in your database
     const user = await prisma.user.create({
       data: {
         id: clerkUser.id,
