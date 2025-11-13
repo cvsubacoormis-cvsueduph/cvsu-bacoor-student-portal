@@ -61,7 +61,7 @@ export async function getStudentGradesWithReExam(studentId?: string) {
   });
 
   const student = await prisma.student.findUnique({
-    where: { id: studentId || userId }, // Allow optional param only for admin
+    where: { id: studentId || userId },
     select: {
       studentNumber: true,
       firstName: true,

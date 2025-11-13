@@ -38,16 +38,16 @@ export function CurriculumChecklist() {
     async function loadCurriculum() {
       try {
         const student = await getStudentGradesWithReExam();
-        console.log(student.student.grades);
+
+        const grades = student?.student?.grades || [];
+
         const curriculum = await getCurriculumChecklist(
           student.student.course,
           student.student.major
         );
 
-        // Group grades by course code to track retakes
-        const gradesByCourse: Record<string, typeof student.student.grades> =
-          {};
-        student.student.grades.forEach((grade: any) => {
+        const gradesByCourse: Record<string, typeof grades> = {};
+        grades.forEach((grade: any) => {
           if (!gradesByCourse[grade.courseCode]) {
             gradesByCourse[grade.courseCode] = [];
           }
