@@ -90,7 +90,7 @@ export default function PortalGuide() {
               <li>
                 Visit the portal login page at{" "}
                 <span className="font-medium">
-                  cvsu-bacoor-studentportal.edu.ph
+                  studentportal.cvsu-bacoor.com
                 </span>
               </li>
               <li>
@@ -104,13 +104,10 @@ export default function PortalGuide() {
                 </span>{" "}
                 link.
               </li>
+              <li>Create up a new secure password in the registration form.</li>
               <li>
-                Wait for the confirmation email to be sent to your email
-                address.
-              </li>
-              <li>
-                Change up a new secure password in the profile at the top right
-                of the page after login.
+                Go to the MIS Coordinator and submit the registration form to
+                approve your account.
               </li>
             </ol>
           </div>
@@ -154,6 +151,10 @@ export default function PortalGuide() {
                 of your academic checklists.
               </li>
               <li>
+                <span className="font-medium">News:</span> Latest news and
+                updates.
+              </li>
+              <li>
                 <span className="font-medium">Enrolled Subjects:</span> Not yet
                 available.
               </li>
@@ -166,8 +167,8 @@ export default function PortalGuide() {
                 information.
               </li>
               <li>
-                <span className="font-medium">Print Grades:</span> Print your
-                grades.
+                <span className="font-medium">Download Grades in PDF:</span>{" "}
+                Download your grades based on academic year.
               </li>
             </ul>
           </div>
