@@ -88,8 +88,7 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    // Batch processing (5 at a time)
-    const batchSize = 5;
+    const batchSize = 25;
     for (let i = 0; i < studentsToCreate.length; i += batchSize) {
       if (signal.aborted) throw new Error("Upload cancelled by user");
 
@@ -157,7 +156,7 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      await delay(10000); // Rate limit Clerk API calls
+      await delay(50); // Rate limit Clerk API calls
     }
 
     // Handle duplicates (export to XLSX if any)

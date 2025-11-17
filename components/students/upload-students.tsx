@@ -38,6 +38,7 @@ import { useState } from "react";
 import type { Student } from "@prisma/client";
 import { UploadCloudIcon, FileSpreadsheetIcon, EyeIcon } from "lucide-react";
 import type { CreateStudentSchema } from "@/lib/formValidationSchemas";
+import axios from "axios";
 
 export default function UploadStudents() {
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +49,7 @@ export default function UploadStudents() {
   const [duplicateStudents, setDuplicateStudents] = useState<
     CreateStudentSchema[]
   >([]);
+  const [progress, setProgress] = useState(0);
 
   function resetUploadState() {
     setFile(null);
@@ -75,44 +77,53 @@ export default function UploadStudents() {
     }
   }
 
-  function saveData() {
-    if (file) {
-      setLoading(true);
-      const formData = new FormData();
-      formData.append("file", file);
+  async function saveData() {
+    if (!file) return;
 
-      fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      }).then(async (res) => {
-        const data = await res.json();
-        setLoading(false);
-        if (res.ok) {
-          setDialogOpen(false);
-          toast.success("Data saved successfully");
-          resetUploadState();
+    setLoading(true);
+    setProgress(0);
 
-          console.log("Response Data:", data);
-          if (data.duplicates && data.duplicates.length > 0) {
-            console.log("Duplicates found:", data.duplicates);
-            setDuplicateStudents(data.duplicates);
-            setAlertDialogOpen(true);
-          }
-          mutate("/api/students");
-        } else {
-          console.error(data.message);
-          toast.error("Failed to save data");
-          resetUploadState();
-        }
+    const formData = new FormData();
+    formData.append("file", file);
 
-        if (res.status === 200 && data.duplicates.length > 0) {
-          const blob = await res.blob();
-          const link = document.createElement("a");
-          link.href = URL.createObjectURL(blob);
-          link.download = "duplicates.xlsx";
-          link.click();
-        }
+    try {
+      const res = await axios.post("/api/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+
+        // ⭐ UPLOAD PROGRESS HERE
+        onUploadProgress: (p) => {
+          const percent = Math.round((p.loaded * 100) / (p.total || 1));
+          setProgress(percent);
+        },
       });
+
+      const data = res.data;
+
+      setLoading(false);
+      setDialogOpen(false);
+      toast.success("Data saved successfully");
+      resetUploadState();
+
+      if (data.duplicates && data.duplicates.length > 0) {
+        setDuplicateStudents(data.duplicates);
+        setAlertDialogOpen(true);
+      }
+
+      mutate("/api/students");
+
+      // Auto download file if duplicates exist
+      if (data.duplicates?.length > 0) {
+        const blob = new Blob([data.file], { type: data.fileType });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "duplicates.xlsx";
+        link.click();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to save data");
+      resetUploadState();
+      setLoading(false);
     }
   }
 
@@ -242,13 +253,17 @@ export default function UploadStudents() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-medium">
-                        Saving data...
+                        Uploading file...
                       </Label>
-                      <Badge variant="outline">Processing</Badge>
+                      <Badge variant="outline">{progress}%</Badge>
                     </div>
-                    <Progress value={100} className="animate-pulse" />
+
+                    <Progress value={progress} />
+
                     <p className="text-sm text-muted-foreground text-center">
-                      Please wait while we process your file...
+                      {progress < 100
+                        ? `Uploading... ${progress}%`
+                        : "Processing uploaded file..."}
                     </p>
                   </div>
                 </CardContent>
