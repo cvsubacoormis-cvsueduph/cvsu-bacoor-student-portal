@@ -17,7 +17,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getClientIp = (request: NextRequest) => {
   const forwardedFor = request.headers.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0].trim() || "127.0.0.1"; // First IP in the chain
+  return forwardedFor?.split(",")[0].trim() || "127.0.0.1";
 };
 
 export async function POST(request: NextRequest) {
