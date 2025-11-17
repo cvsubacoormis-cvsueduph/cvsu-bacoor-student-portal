@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
                 address: student.address.toUpperCase() ?? "N/A",
                 sex: String(student.sex).toUpperCase() as UserSex,
                 course: student.course.trim() as Courses,
-                major: student.major ? (student.major.trim() as Major) : null,
+                major: student.major ? (student.major.trim() as Major) : "NONE",
                 status: student.status.trim() as Status,
                 createdAt: new Date(),
                 isPasswordSet: true,
