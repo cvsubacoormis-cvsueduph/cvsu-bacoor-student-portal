@@ -277,9 +277,9 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">First Semester</SelectItem>
-                  <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR">Mid year</SelectItem>
+                  <SelectItem value="FIRST">1st Semester</SelectItem>
+                  <SelectItem value="SECOND">2nd Semester</SelectItem>
+                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
