@@ -154,7 +154,7 @@ export function UploadGrades() {
   };
 
   const handleUpload = async () => {
-    if (!file || !academicYear || !semester || !previewData) return;
+    if (!file || !academicYear || !semester) return;
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -174,18 +174,14 @@ export function UploadGrades() {
     }, 100);
 
     try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("academicYear", academicYear);
+      formData.append("semester", semester);
+
       const res = await fetch("/api/upload-grades", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          previewData.map((item: any) => ({
-            ...item,
-            academicYear,
-            semester,
-          }))
-        ),
+        body: formData,
         signal: controller.signal,
       });
 
