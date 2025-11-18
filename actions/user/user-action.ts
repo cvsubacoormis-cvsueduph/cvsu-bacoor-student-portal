@@ -30,7 +30,7 @@ export async function createUser(formData: {
     const password =
       formData.role === "faculty"
         ? `cvsubacoorfaculty${cleanedFirstName}`
-        : `cvsubacooregistrar${cleanedFirstName}`;
+        : `cvsubacoorregistrar${cleanedFirstName}`;
 
     const clerkUser = await clerk.users.createUser({
       username: formData.username,
