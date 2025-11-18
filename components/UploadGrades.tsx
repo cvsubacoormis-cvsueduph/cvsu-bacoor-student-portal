@@ -241,8 +241,8 @@ export function UploadGrades() {
     currentPage * recordsPerPage
   );
 
-  const startYear = 2024;
-  const numberOfYears = 6; // generate next 5 academic years
+  const startYear = 2019;
+  const numberOfYears = 6;
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
     const ayEnd = ayStart + 1;
@@ -281,9 +281,9 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">FIRST</SelectItem>
-                  <SelectItem value="SECOND">SECOND</SelectItem>
-                  <SelectItem value="MIDYEAR">MIDYEAR</SelectItem>
+                  <SelectItem value="FIRST">1st Semester</SelectItem>
+                  <SelectItem value="SECOND">2nd Semester</SelectItem>
+                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
