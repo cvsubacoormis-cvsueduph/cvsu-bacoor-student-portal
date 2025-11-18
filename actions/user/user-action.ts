@@ -56,7 +56,6 @@ export async function createUser(formData: {
       },
     });
 
-    // 3. Assign role metadata in Clerk
     await clerk.users.updateUserMetadata(clerkUser.id, {
       publicMetadata: {
         role: formData.role,
