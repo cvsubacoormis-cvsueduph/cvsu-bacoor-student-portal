@@ -154,7 +154,7 @@ export function UploadGrades() {
   };
 
   const handleUpload = async () => {
-    if (!file || !academicYear || !semester) return;
+    if (!file || !academicYear || !semester || !previewData) return;
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -174,14 +174,18 @@ export function UploadGrades() {
     }, 100);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("academicYear", academicYear);
-      formData.append("semester", semester);
-
       const res = await fetch("/api/upload-grades", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          previewData.map((item: any) => ({
+            ...item,
+            academicYear,
+            semester,
+          }))
+        ),
         signal: controller.signal,
       });
 
@@ -277,9 +281,9 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">1st Semester</SelectItem>
-                  <SelectItem value="SECOND">2nd Semester</SelectItem>
-                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
+                  <SelectItem value="FIRST">FIRST</SelectItem>
+                  <SelectItem value="SECOND">SECOND</SelectItem>
+                  <SelectItem value="MIDYEAR">MIDYEAR</SelectItem>
                 </SelectContent>
               </Select>
             </div>
