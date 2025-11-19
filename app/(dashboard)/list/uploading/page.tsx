@@ -1,12 +1,12 @@
 "use client";
 
-import { UploadGrades } from "@/components/UploadGrades";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ManualGradeEntry from "@/components/ManualGradeEntry";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Suspense } from "react";
 import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
 import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
+import { UploadGrades } from "@/components/UploadGrades";
 
 export default function GradeUploader() {
   return (

@@ -55,6 +55,7 @@ export type Grade = {
   instructor: string;
   academicYear: string;
   semester: string;
+  uploadedBy?: string;
 };
 
 export type PreviewGradesProps = {
@@ -314,6 +315,7 @@ export function PreviewGrades({
                   <TableHead className="text-sm">Re Exam</TableHead>
                   <TableHead className="text-sm">Remarks</TableHead>
                   <TableHead className="text-sm">Instructor</TableHead>
+                  <TableHead className="text-sm">Uploaded by</TableHead>
                   {role !== "faculty" && (
                     <TableHead className="text-sm">Edit</TableHead>
                   )}
@@ -437,6 +439,7 @@ export function PreviewGrades({
                         grade.instructor
                       )}
                     </TableCell>
+                    <TableCell>{grade.uploadedBy || "System"}</TableCell>
                     <TableCell>
                       {role !== "faculty" && (
                         <Button

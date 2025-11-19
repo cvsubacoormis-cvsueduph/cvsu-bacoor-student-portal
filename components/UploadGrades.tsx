@@ -72,18 +72,6 @@ export function UploadGrades() {
 
     setIsLoading(true);
 
-    // ✅ File size limit (50MB)
-    if (selectedFile.size > 50 * 1024 * 1024) {
-      Swal.fire({
-        icon: "error",
-        title: "File too large",
-        text: "Please select a file smaller than 50MB",
-      });
-      e.target.value = "";
-      setIsLoading(false);
-      return;
-    }
-
     const validTypes = [
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -91,13 +79,8 @@ export function UploadGrades() {
     ];
 
     if (!validTypes.includes(selectedFile.type)) {
-      Swal.fire({
-        icon: "error",
-        title: "Invalid file type",
-        text: "Please select a valid Excel file (.xls or .xlsx)",
-      });
+      alert("Please select a valid Excel file (.xls or .xlsx)");
       e.target.value = "";
-      setIsLoading(false);
       return;
     }
 
@@ -128,16 +111,6 @@ export function UploadGrades() {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files?.[0];
     if (!droppedFile) return;
-
-    // ✅ File size limit (50MB)
-    if (droppedFile.size > 50 * 1024 * 1024) {
-      Swal.fire({
-        icon: "error",
-        title: "File too large",
-        text: "Please select a file smaller than 50MB",
-      });
-      return;
-    }
 
     const validTypes = [
       "application/vnd.ms-excel",
@@ -190,11 +163,6 @@ export function UploadGrades() {
     const controller = new AbortController();
     setAbortController(controller);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("academicYear", academicYear);
-    formData.append("semester", semester);
-
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => {
         if (prev >= 95) {
@@ -208,7 +176,16 @@ export function UploadGrades() {
     try {
       const res = await fetch("/api/upload-grades", {
         method: "POST",
-        body: formData, // ✅ Send raw file as FormData
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          previewData.map((item: any) => ({
+            ...item,
+            academicYear,
+            semester,
+          }))
+        ),
         signal: controller.signal,
       });
 
@@ -264,8 +241,8 @@ export function UploadGrades() {
     currentPage * recordsPerPage
   );
 
-  const startYear = 2019;
-  const numberOfYears = 6;
+  const startYear = 2024;
+  const numberOfYears = 6; // generate next 5 academic years
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
     const ayEnd = ayStart + 1;
@@ -314,8 +291,10 @@ export function UploadGrades() {
         </CardContent>
       </Card>
 
+      {/* Data Format Warning */}
       <UploadGradeNotice />
 
+      {/* File Upload Section */}
       <div
         className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
           file
@@ -379,7 +358,7 @@ export function UploadGrades() {
             <p className="text-lg font-medium">Upload your Excel file here</p>
             <p className="text-sm text-gray-500">or click to browse</p>
             <p className="text-xs text-gray-400 mt-2">
-              Supports .xlsx and .xls files (Max 50MB)
+              Supports .xlsx and .xls files
             </p>
           </div>
         )}
@@ -416,11 +395,14 @@ export function UploadGrades() {
         <Card className="mt-6">
           <CardContent className="pt-6">
             <div className="space-y-3">
+              {/* Table Header Skeleton */}
               <div className="grid grid-cols-6 gap-2 border-b pb-2">
                 {[...Array(6)].map((_, i) => (
                   <Skeleton key={i} className="h-6 w-full" />
                 ))}
               </div>
+
+              {/* Table Rows Skeleton */}
               <div className="space-y-2">
                 {[...Array(5)].map((_, rowIndex) => (
                   <div
