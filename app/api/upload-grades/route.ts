@@ -58,7 +58,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  // Extract unique student numbers and course codes
   const uniqueStudentNumbers = [
     ...new Set(
       grades
