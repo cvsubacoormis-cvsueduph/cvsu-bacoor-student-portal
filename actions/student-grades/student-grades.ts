@@ -16,8 +16,13 @@ export async function getGrades(year?: AcademicYear, semester?: Semester) {
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
 
-  if (role !== "student") {
-    throw new Error("Forbidden: Only students can access their own grades");
+  if (
+    role !== "student" &&
+    role !== "admin" &&
+    role !== "faculty" &&
+    role !== "registrar"
+  ) {
+    throw new Error("Forbidden: Only students and admins can access this page");
   }
 
   await checkRateLimit({
