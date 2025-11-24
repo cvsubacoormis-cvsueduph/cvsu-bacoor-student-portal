@@ -58,7 +58,6 @@ export default function Grades({
   semester,
   handleFilterSubmit,
 }: GradesProps) {
-  // --- helpers ---
   const getFinalGradeToUse = (grade: Grade): number | null => {
     const originalGrade = parseFloat(grade.grade);
     const reExamGrade = grade.reExam !== null ? parseFloat(grade.reExam) : null;
@@ -77,8 +76,8 @@ export default function Grades({
 
   const filteredGrades = grades.filter((g) => {
     return (
-      (!year || g.academicYear === year) &&
-      (!semester || g.semester === semester)
+      (!year || year === "all" || g.academicYear === year) &&
+      (!semester || semester === "all" || g.semester === semester)
     );
   });
 
@@ -127,11 +126,12 @@ export default function Grades({
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Academic Year
               </label>
-              <Select name="year" defaultValue={year}>
+              <Select name="year" defaultValue={year || "all"}>
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
                   {availableYears.map((yr) => (
                     <SelectItem key={yr} value={yr}>
                       {yr.replace("_", "-")}
@@ -145,11 +145,12 @@ export default function Grades({
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Semester
               </label>
-              <Select name="semester" defaultValue={semester}>
+              <Select name="semester" defaultValue={semester || "all"}>
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
                   {availableSemesters.map((sem) => (
                     <SelectItem key={sem} value={sem}>
                       {sem === "FIRST"
@@ -241,7 +242,7 @@ export default function Grades({
                           <Badge
                             variant={
                               grade.remarks === "PASSED"
-                                ? "default" // or "success" if you have it, usually default is black/primary
+                                ? "default"
                                 : "destructive"
                             }
                             className={
@@ -273,7 +274,6 @@ export default function Grades({
             </div>
           )}
 
-          {/* Summary Cards for Mobile/Desktop */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
               <p className="text-sm text-muted-foreground">Subjects Enrolled</p>
