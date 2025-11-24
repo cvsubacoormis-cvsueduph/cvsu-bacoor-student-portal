@@ -105,10 +105,10 @@ export default function Grades({
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <CardTitle className="text-2xl font-bold text-primary">
+              <CardTitle className="text-md font-bold text-primary">
                 Student Grades
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 View and manage your academic performance
               </CardDescription>
             </div>
