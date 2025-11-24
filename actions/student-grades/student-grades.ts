@@ -7,15 +7,22 @@ import { AcademicYear, Semester } from "@prisma/client";
 
 const clerk = await clerkClient();
 
-export async function getGrades(year?: string, semester?: string) {
+export async function getGrades(year?: AcademicYear, semester?: Semester) {
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
   }
 
+  const user = await clerk.users.getUser(userId);
+  const role = user.publicMetadata?.role;
+
+  if (role !== "student") {
+    throw new Error("Forbidden: Only students can access their own grades");
+  }
+
   await checkRateLimit({
     action: "getGrades",
-    limit: 7,
+    limit: 10,
     windowSeconds: 60,
   });
 
@@ -24,8 +31,8 @@ export async function getGrades(year?: string, semester?: string) {
     include: {
       grades: {
         where: {
-          academicYear: year as AcademicYear,
-          semester: semester as Semester,
+          academicYear: year,
+          semester: semester,
         },
         orderBy: [{ courseCode: "asc" }],
       },

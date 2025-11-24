@@ -81,7 +81,6 @@ export default function Grades({
     );
   });
 
-  // Totals
   const totalSubjectsEnrolled = filteredGrades.length;
   const totalCreditsEnrolled = filteredGrades.reduce((acc, cur) => {
     const finalGrade = getFinalGradeToUse(cur);
