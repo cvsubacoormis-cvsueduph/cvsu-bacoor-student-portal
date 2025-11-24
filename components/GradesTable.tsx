@@ -18,6 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import GenerateCOG from "@/components/GenerateCOG";
 
 interface Grade {
@@ -92,146 +100,197 @@ export default function Grades({
       : "N/A";
 
   return (
-    <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-      <h1 className="text-lg font-semibold mb-4">
-        Grades <p className="text-xs text-gray-500">List of grades</p>
-      </h1>
+    <div className="p-4 w-full">
+      <Card className="w-full shadow-md">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <CardTitle className="text-2xl font-bold text-primary">
+                Student Grades
+              </CardTitle>
+              <CardDescription>
+                View and manage your academic performance
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <GenerateCOG />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Filters */}
+          <form
+            onSubmit={handleFilterSubmit}
+            className="mb-6 bg-muted/30 p-4 rounded-lg border flex flex-col sm:flex-row gap-4 items-end sm:items-center"
+          >
+            <div className="grid gap-2 w-full sm:w-auto">
+              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Academic Year
+              </label>
+              <Select name="year" defaultValue={year}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((yr) => (
+                    <SelectItem key={yr} value={yr}>
+                      {yr.replace("_", "-")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Filters */}
-      <form
-        onSubmit={handleFilterSubmit}
-        className="mb-4 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center"
-      >
-        <Select name="year" defaultValue={year}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select Academic Year" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableYears.map((yr) => (
-              <SelectItem key={yr} value={yr}>
-                {yr.replace("_", "-")}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <div className="grid gap-2 w-full sm:w-auto">
+              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Semester
+              </label>
+              <Select name="semester" defaultValue={semester}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Select Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSemesters.map((sem) => (
+                    <SelectItem key={sem} value={sem}>
+                      {sem === "FIRST"
+                        ? "First Semester"
+                        : sem === "SECOND"
+                          ? "Second Semester"
+                          : "Midyear"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <Select name="semester" defaultValue={semester}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select Semester" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableSemesters.map((sem) => (
-              <SelectItem key={sem} value={sem}>
-                {sem === "FIRST"
-                  ? "First Semester"
-                  : sem === "SECOND"
-                    ? "Second Semester"
-                    : "Midyear"}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Button type="submit" className="w-full sm:w-auto mt-auto">
+              Apply Filters
+            </Button>
+          </form>
 
-        <Button type="submit" className="bg-blue-700 hover:bg-blue-900">
-          Filter
-        </Button>
-        <GenerateCOG />
-      </form>
+          {/* Grades Table */}
+          {filteredGrades.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p className="text-lg font-medium">No grades found</p>
+              <p className="text-sm">
+                Try adjusting the filters or check back later.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="font-bold">Course Code</TableHead>
+                    <TableHead className="font-bold">Title</TableHead>
+                    <TableHead className="text-center font-bold">
+                      Units
+                    </TableHead>
+                    <TableHead className="text-center font-bold">
+                      Grade
+                    </TableHead>
+                    <TableHead className="text-center font-bold">
+                      Re-Exam
+                    </TableHead>
+                    <TableHead className="text-center font-bold">
+                      Remarks
+                    </TableHead>
+                    <TableHead className="font-bold">Instructor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredGrades.map((grade) => {
+                    const displayGrade = ["INC", "DRP"].includes(grade.grade)
+                      ? grade.grade
+                      : !isNaN(parseFloat(grade.grade))
+                        ? parseFloat(grade.grade).toFixed(2)
+                        : "";
 
-      {/* Grades Table */}
-      {filteredGrades.length === 0 ? (
-        <p className="text-center font-semibold">You have no grades here.</p>
-      ) : (
-        <div className="overflow-y-auto">
-          <Table>
-            <TableCaption>List of your Grades</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-center">Course Code</TableHead>
-                <TableHead className="text-center">Credit Unit</TableHead>
-                <TableHead className="text-center">Course Title</TableHead>
-                <TableHead className="text-center">Final Grade</TableHead>
-                <TableHead className="text-center">Re-Exam</TableHead>
-                <TableHead className="text-center">Remarks</TableHead>
-                <TableHead className="text-center">Instructor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredGrades.map((grade) => {
-                const displayGrade = ["INC", "DRP"].includes(grade.grade)
-                  ? grade.grade
-                  : !isNaN(parseFloat(grade.grade))
-                    ? parseFloat(grade.grade).toFixed(2)
-                    : "";
+                    const isFailing = [
+                      "INC",
+                      "DRP",
+                      "FAILED",
+                      "4.00",
+                      "5.00",
+                    ].includes(grade.grade);
 
-                return (
-                  <TableRow key={grade.id}>
-                    <TableCell className="text-center font-semibold">
-                      {grade.courseCode}
+                    return (
+                      <TableRow key={grade.id} className="hover:bg-muted/5">
+                        <TableCell className="font-medium">
+                          {grade.courseCode}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={grade.courseTitle}>
+                          {grade.courseTitle}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {grade.creditUnit}
+                        </TableCell>
+                        <TableCell
+                          className={`text-center font-bold ${isFailing ? "text-destructive" : "text-primary"
+                            }`}
+                        >
+                          {displayGrade}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {grade.reExam !== null &&
+                            !isNaN(parseFloat(grade.reExam))
+                            ? parseFloat(grade.reExam).toFixed(2)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge
+                            variant={
+                              grade.remarks === "PASSED"
+                                ? "default" // or "success" if you have it, usually default is black/primary
+                                : "destructive"
+                            }
+                            className={
+                              grade.remarks === "PASSED" ? "bg-green-600 hover:bg-green-700" : ""
+                            }
+                          >
+                            {grade.remarks}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {grade.instructor}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                <TableFooter className="bg-muted/50 font-medium">
+                  <TableRow>
+                    <TableCell colSpan={2}>Totals</TableCell>
+                    <TableCell className="text-center">
+                      {totalCreditsEnrolled}
                     </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {grade.creditUnit}
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {grade.courseTitle}
-                    </TableCell>
-                    <TableCell
-                      className={`text-center font-semibold ${
-                        ["INC", "DRP", "FAILED", "4.00", "5.00"].includes(
-                          grade.grade
-                        )
-                          ? "text-red-500 font-bold"
-                          : ""
-                      }`}
-                    >
-                      {displayGrade}
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {grade.reExam !== null && !isNaN(parseFloat(grade.reExam))
-                        ? parseFloat(grade.reExam).toFixed(2)
-                        : ""}
-                    </TableCell>
-                    <TableCell
-                      className={`text-center font-semibold ${
-                        grade.remarks !== "PASSED" ? "text-red-500" : ""
-                      }`}
-                    >
-                      {grade.remarks}
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {grade.instructor}
+                    <TableCell colSpan={4} className="text-right">
+                      GPA: <span className="text-lg font-bold">{gpa}</span>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="bg-gray-200">
-                <TableHead className="text-xs p-4 text-center">
-                  Total Subjects Enrolled:{" "}
-                  <span className="font-bold">{totalSubjectsEnrolled}</span>
-                </TableHead>
-                <TableHead className="text-xs p-2 text-center">
-                  Total Credit Units Enrolled:{" "}
-                  <span className="font-bold">{totalCreditsEnrolled}</span>
-                </TableHead>
-                <TableHead className="text-xs p-4 text-center">
-                  Total Credits Earned:{" "}
-                  <span className="font-bold">
-                    {totalCreditsEarned.toFixed(2)}
-                  </span>
-                </TableHead>
-                <TableHead />
-                <TableHead />
-                <TableHead />
-                <TableHead className="text-xs p-4 text-center">
-                  Grade Point Average: <span className="font-bold">{gpa}</span>
-                </TableHead>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      )}
+                </TableFooter>
+              </Table>
+            </div>
+          )}
+
+          {/* Summary Cards for Mobile/Desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+            <div className="bg-muted/30 p-4 rounded-lg border text-center">
+              <p className="text-sm text-muted-foreground">Subjects Enrolled</p>
+              <p className="text-2xl font-bold">{totalSubjectsEnrolled}</p>
+            </div>
+            <div className="bg-muted/30 p-4 rounded-lg border text-center">
+              <p className="text-sm text-muted-foreground">Credits Earned</p>
+              <p className="text-2xl font-bold">{totalCreditsEarned.toFixed(2)}</p>
+            </div>
+            <div className="bg-muted/30 p-4 rounded-lg border text-center">
+              <p className="text-sm text-muted-foreground">GPA</p>
+              <p className="text-2xl font-bold text-primary">{gpa}</p>
+            </div>
+          </div>
+
+        </CardContent>
+      </Card>
     </div>
   );
 }
