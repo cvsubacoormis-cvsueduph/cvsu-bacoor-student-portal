@@ -252,7 +252,7 @@ export default function Grades({
                             {grade.remarks}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="text-sm">
                           {grade.instructor}
                         </TableCell>
                       </TableRow>
