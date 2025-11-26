@@ -3,6 +3,7 @@ import { columns, Grades } from "./columns";
 import { DataTable } from "./data-table";
 import prisma from "@/lib/prisma";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
+
 async function getData(): Promise<Grades[]> {
   const students = await prisma.student.findMany({
     select: {

@@ -83,22 +83,24 @@ export function PreviewGrades({
   const { user } = useUser();
   const role = user?.publicMetadata?.role as string;
 
-  // Fetch academic terms on component mount.
+  // Fetch academic terms when dialog opens.
   useEffect(() => {
-    async function fetchAcademicTerms() {
-      try {
-        const res = await fetch("/api/academic-terms");
-        if (!res.ok) {
-          throw new Error("Failed to fetch academic terms");
+    if (isDialogOpen && academicTerms.length === 0) {
+      async function fetchAcademicTerms() {
+        try {
+          const res = await fetch("/api/academic-terms");
+          if (!res.ok) {
+            throw new Error("Failed to fetch academic terms");
+          }
+          const data = await res.json();
+          setAcademicTerms(data);
+        } catch (err) {
+          console.log(err);
         }
-        const data = await res.json();
-        setAcademicTerms(data);
-      } catch (err) {
-        console.log(err);
       }
+      fetchAcademicTerms();
     }
-    fetchAcademicTerms();
-  }, []);
+  }, [isDialogOpen, academicTerms.length]);
 
   // Extract unique academic years for the first Select.
   const uniqueAcademicYears = Array.from(
@@ -108,8 +110,8 @@ export function PreviewGrades({
   // Filter semester options based on the selected academic year.
   const semesterOptions = academicYear
     ? academicTerms
-        .filter((term) => term.academicYear === academicYear)
-        .map((term) => term.semester)
+      .filter((term) => term.academicYear === academicYear)
+      .map((term) => term.semester)
     : [];
 
   // Fetch student grades when both academicYear and semester are selected.
