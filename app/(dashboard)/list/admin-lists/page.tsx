@@ -1,5 +1,4 @@
 import AdminListsTable from "@/components/AdminListsTable";
-import SearchStudent from "@/components/students/search-students";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import React from "react";
 

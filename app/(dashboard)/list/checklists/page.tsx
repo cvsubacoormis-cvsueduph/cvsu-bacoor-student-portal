@@ -1,5 +1,3 @@
-"use client";
-
 import { CurriculumChecklist } from "@/components/ChecklistsTable";
 import { CurriculumChecklistSkeleton } from "@/components/skeleton/CurriculumChecklistSkeleton";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";

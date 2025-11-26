@@ -1,5 +1,3 @@
-"use client";
-
 import AdminProfileComp from "@/components/AdminProfile";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 
