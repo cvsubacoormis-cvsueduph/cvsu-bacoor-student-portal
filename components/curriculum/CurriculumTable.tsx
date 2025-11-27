@@ -32,6 +32,7 @@ import { CurriculumChecklist, CurriculumFormData } from "./types";
 import { formatLabel } from "./constants";
 import { CurriculumFormDialog } from "./CurriculumFormDialog";
 import { useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 interface CurriculumTableProps {
     data: CurriculumChecklist[];
@@ -42,8 +43,6 @@ interface CurriculumTableProps {
     startIndex: number;
     endIndex: number;
     isAdmin: boolean;
-    onPageChange: (page: number) => void;
-    onItemsPerPageChange: (value: string) => void;
     onUpdate: (id: string, data: CurriculumFormData) => Promise<boolean>;
     onDelete: (id: string) => Promise<boolean>;
 }
@@ -57,12 +56,26 @@ export function CurriculumTable({
     startIndex,
     endIndex,
     isAdmin,
-    onPageChange,
-    onItemsPerPageChange,
     onUpdate,
     onDelete,
 }: CurriculumTableProps) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [editingItem, setEditingItem] = useState<CurriculumChecklist | null>(null);
+
+    const handlePageChange = (page: number) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("page", page.toString());
+        router.push(`${pathname}?${params.toString()}`);
+    };
+
+    const handleItemsPerPageChange = (value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("limit", value);
+        params.set("page", "1");
+        router.push(`${pathname}?${params.toString()}`);
+    };
 
     const handleEditClick = (item: CurriculumChecklist) => {
         setEditingItem(item);
@@ -86,7 +99,7 @@ export function CurriculumTable({
                     <span className="text-sm text-muted-foreground">Show</span>
                     <Select
                         value={itemsPerPage.toString()}
-                        onValueChange={onItemsPerPageChange}
+                        onValueChange={handleItemsPerPageChange}
                     >
                         <SelectTrigger className="w-20">
                             <SelectValue />
@@ -221,7 +234,7 @@ export function CurriculumTable({
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => onPageChange(currentPage - 1)}
+                            onClick={() => handlePageChange(currentPage - 1)}
                             disabled={currentPage === 1}
                         >
                             <ChevronLeft className="h-4 w-4" />
@@ -246,7 +259,7 @@ export function CurriculumTable({
                                         key={pageNumber}
                                         variant={currentPage === pageNumber ? "default" : "outline"}
                                         size="sm"
-                                        onClick={() => onPageChange(pageNumber)}
+                                        onClick={() => handlePageChange(pageNumber)}
                                         className={
                                             currentPage === pageNumber
                                                 ? "w-10 bg-blue-700 text-white hover:bg-blue-600 hover:text-white"
@@ -262,7 +275,7 @@ export function CurriculumTable({
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => onPageChange(currentPage + 1)}
+                            onClick={() => handlePageChange(currentPage + 1)}
                             disabled={currentPage === totalPages}
                         >
                             Next
