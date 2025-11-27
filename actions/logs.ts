@@ -18,17 +18,41 @@ export type FailedLog = {
     isResolved: boolean;
 };
 
-export async function getFailedLogs(): Promise<FailedLog[]> {
+export type GetLogsFilters = {
+    search?: string;
+    academicYear?: string;
+    semester?: string;
+};
+
+export async function getFailedLogs(filters?: GetLogsFilters): Promise<FailedLog[]> {
     const { userId } = await auth();
     if (!userId) {
         throw new Error("Unauthorized");
     }
 
+    const where: any = {
+        action: { in: ["FAILED", "WARNING"] },
+        isResolved: false,
+    };
+
+    if (filters?.academicYear && filters.academicYear !== "ALL") {
+        where.academicYear = filters.academicYear;
+    }
+
+    if (filters?.semester && filters.semester !== "ALL") {
+        where.semester = filters.semester;
+    }
+
+    if (filters?.search) {
+        where.OR = [
+            { studentNumber: { contains: filters.search, mode: "insensitive" } },
+            { courseCode: { contains: filters.search, mode: "insensitive" } },
+            { instructor: { contains: filters.search, mode: "insensitive" } },
+        ];
+    }
+
     const logs = await prisma.gradeLog.findMany({
-        where: {
-            action: { in: ["FAILED", "WARNING"] },
-            isResolved: false,
-        },
+        where,
         orderBy: {
             performedAt: "desc",
         },

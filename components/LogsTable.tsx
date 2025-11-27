@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FailedLog, resolveGradeLog } from "@/actions/logs";
 import {
     Table,
@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -35,6 +35,14 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import { GradeData } from "@/actions/grades";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { useDebounce } from "use-debounce";
 
 const formSchema = z.object({
     studentNumber: z.string().min(1, "Student number is required"),
@@ -79,6 +87,39 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
     const [selectedLog, setSelectedLog] = useState<FailedLog | null>(null);
     const [isOpen, setIsOpen] = useState(false);
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
+    const [search, setSearch] = useState(searchParams.get("search") || "");
+    const [debouncedSearch] = useDebounce(search, 500);
+    const [academicYear, setAcademicYear] = useState(
+        searchParams.get("academicYear") || "ALL"
+    );
+    const [semester, setSemester] = useState(searchParams.get("semester") || "ALL");
+
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams);
+        if (debouncedSearch) {
+            params.set("search", debouncedSearch);
+        } else {
+            params.delete("search");
+        }
+        if (academicYear && academicYear !== "ALL") {
+            params.set("academicYear", academicYear);
+        } else {
+            params.delete("academicYear");
+        }
+        if (semester && semester !== "ALL") {
+            params.set("semester", semester);
+        } else {
+            params.delete("semester");
+        }
+        router.replace(`${pathname}?${params.toString()}`);
+    }, [debouncedSearch, academicYear, semester, pathname, router, searchParams]);
+
+    useEffect(() => {
+        setLogs(initialLogs);
+    }, [initialLogs]);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -136,6 +177,44 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
 
     return (
         <div className="space-y-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <Input
+                    placeholder="Search logs..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="max-w-sm"
+                />
+                <div className="flex gap-2">
+                    <Select
+                        value={academicYear}
+                        onValueChange={setAcademicYear}
+                    >
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Academic Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Years</SelectItem>
+                            <SelectItem value="AY_2023_2024">AY 2023-2024</SelectItem>
+                            <SelectItem value="AY_2024_2025">AY 2024-2025</SelectItem>
+                            {/* Add more years as needed or map from enum */}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={semester}
+                        onValueChange={setSemester}
+                    >
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Semester" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ALL">All Semesters</SelectItem>
+                            <SelectItem value="FIRST">First Semester</SelectItem>
+                            <SelectItem value="SECOND">Second Semester</SelectItem>
+                            <SelectItem value="MIDYEAR">Midyear</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
             <div className="rounded-md border">
                 <Table>
                     <TableHeader>
