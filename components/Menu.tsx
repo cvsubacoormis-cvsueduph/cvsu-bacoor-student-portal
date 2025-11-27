@@ -128,12 +128,12 @@ export default async function Menu() {
           href: "/list/create-admin",
           visible: ["superuser"],
         },
-        // {
-        //   icon: "/result.png",
-        //   label: "Print Grades",
-        //   href: "/list/printgrades",
-        //   visible: ["student"],
-        // },
+        {
+          icon: "/result.png",
+          label: "Logs",
+          href: "/list/logs",
+          visible: ["admin", "superuser", "faculty", "registrar"],
+        },
         {
           icon: "/profile.png",
           label: "Create User",

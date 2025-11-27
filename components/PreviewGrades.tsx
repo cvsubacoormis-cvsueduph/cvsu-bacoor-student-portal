@@ -33,7 +33,6 @@ import {
 import { SyncLoader } from "react-spinners";
 import { Input } from "./ui/input";
 import toast from "react-hot-toast";
-import { useUser } from "@clerk/nextjs";
 
 type AcademicTerm = {
   id: string;
@@ -62,12 +61,14 @@ export type PreviewGradesProps = {
   studentNumber: string;
   firstName: string;
   lastName: string;
+  role?: string;
 };
 
 export function PreviewGrades({
   studentNumber,
   firstName,
   lastName,
+  role,
 }: PreviewGradesProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
@@ -80,8 +81,6 @@ export function PreviewGrades({
   );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
-  const { user } = useUser();
-  const role = user?.publicMetadata?.role as string;
 
   // Fetch academic terms when dialog opens.
   useEffect(() => {
