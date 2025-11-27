@@ -253,6 +253,8 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
       data: {
         studentNumber: gradeData.studentNumber,
         courseCode: gradeData.courseCode.toUpperCase(),
+        courseTitle: gradeData.courseTitle.toUpperCase(),
+        creditUnit: Number(gradeData.creditUnit),
         grade: gradeData.grade,
         remarks: gradeData.remarks,
         instructor: gradeData.instructor,
