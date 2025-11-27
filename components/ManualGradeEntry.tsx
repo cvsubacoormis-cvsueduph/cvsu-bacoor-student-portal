@@ -265,6 +265,7 @@ export default function ManualGradeEntry() {
         ...gradeData,
         academicYear: gradeData.academicYear as AcademicYear,
         semester: gradeData.semester as Semester,
+        isResolved: false
       });
 
       setSubmitStatus("success");
@@ -722,8 +723,8 @@ export default function ManualGradeEntry() {
                       >
                         {selectedCourseId
                           ? courseOptions.find(
-                              (course) => course.id === selectedCourseId
-                            )?.code
+                            (course) => course.id === selectedCourseId
+                          )?.code
                           : "Select course code..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -797,8 +798,8 @@ export default function ManualGradeEntry() {
                     >
                       {selectedCourseId
                         ? courseOptions.find(
-                            (course) => course.id === selectedCourseId
-                          )?.title
+                          (course) => course.id === selectedCourseId
+                        )?.title
                         : "Select course title..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>

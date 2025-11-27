@@ -141,6 +141,7 @@ model GradeLog {
   semester      Semester
   action        String
   performedAt   DateTime     @default(now())
+  isResolved    Boolean      @default(false)
 }
 
 enum AcademicYear {

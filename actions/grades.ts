@@ -46,6 +46,7 @@ export type GradeData = {
   reExam?: string;
   remarks?: string;
   instructor: string;
+  isResolved: boolean;
 };
 
 export async function searchStudent(
@@ -64,27 +65,27 @@ export async function searchStudent(
     where:
       searchType === "studentNumber"
         ? {
-            studentNumber: {
-              contains: query,
-              mode: "insensitive",
-            },
-          }
-        : {
-            OR: [
-              {
-                firstName: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                lastName: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-            ],
+          studentNumber: {
+            contains: query,
+            mode: "insensitive",
           },
+        }
+        : {
+          OR: [
+            {
+              firstName: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              lastName: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+          ],
+        },
     select: {
       studentNumber: true,
       firstName: true,
