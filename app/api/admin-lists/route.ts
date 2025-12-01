@@ -17,7 +17,6 @@ export async function GET() {
     const admins = await prisma.admin.findMany();
     return NextResponse.json(admins, { status: 200 });
   } catch (error) {
-    console.log("Error fetching admins:", error);
     return NextResponse.json(
       { message: "Failed to fetch admins" },
       { status: 500 }
@@ -63,7 +62,6 @@ export async function DELETE(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.log("Error deleting student:", error);
     return NextResponse.json(
       { message: "An unexpected error occurred" },
       { status: 500 }

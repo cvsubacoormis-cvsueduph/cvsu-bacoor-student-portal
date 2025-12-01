@@ -34,7 +34,6 @@ export async function GET(req: NextRequest) {
       currentPage: page,
     });
   } catch (error) {
-    console.log("Error fetching announcements:", error);
     return NextResponse.json(
       { message: "An unexpected error occurred" },
       { status: 500 }

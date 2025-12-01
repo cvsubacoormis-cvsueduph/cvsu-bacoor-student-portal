@@ -17,8 +17,6 @@ export async function getUserProfile() {
     where: { id: userId },
   });
 
-  console.log("Admin:", admin);
-
   if (admin) {
     return {
       ...admin,

@@ -70,7 +70,6 @@ export default function UpdateStudent({
 
   async function onSubmit(values: UpdateStudentSchema) {
     try {
-      console.log("Submitting values:", values);
       const result = await updateStudent({
         ...values,
         id: student.id,

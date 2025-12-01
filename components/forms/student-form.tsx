@@ -53,7 +53,6 @@ export default function StudentForm() {
   });
 
   function onSubmit(values: z.infer<typeof createStudentSchema>) {
-    console.log(values);
   }
 
   return (

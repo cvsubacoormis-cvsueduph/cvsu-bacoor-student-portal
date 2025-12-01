@@ -51,7 +51,6 @@ export function StudentCard() {
           description: data.current.condition.text,
         });
       } catch (error) {
-        console.log("Error fetching weather data:", error);
       } finally {
         setIsLoading(false);
       }

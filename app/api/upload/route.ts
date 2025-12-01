@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const ip = getClientIp(request);
-  console.log("Current IP:", ip);
   const clerk = await clerkClient();
 
   try {
@@ -99,9 +98,8 @@ export async function POST(request: NextRequest) {
           try {
             if (signal.aborted) throw new Error("Upload cancelled by user");
 
-            const username = `${
-              student.studentNumber
-            }${student.firstName.toLowerCase()}`
+            const username = `${student.studentNumber
+              }${student.firstName.toLowerCase()}`
               .toLowerCase()
               .replace(/[^a-zA-Z0-9_-]/g, "")
               .replaceAll("-", "");

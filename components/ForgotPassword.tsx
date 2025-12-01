@@ -107,7 +107,6 @@ export default function ForgotPasswordDialog() {
       startResendCountdown();
       setError("");
     } catch (err: any) {
-      console.log("error", err.errors?.[0]?.longMessage || "An error occurred");
       setError(err.errors?.[0]?.longMessage || "Failed to send reset code");
     } finally {
       setIsLoading(false);
@@ -209,15 +208,13 @@ export default function ForgotPasswordDialog() {
           {steps.map((step, index) => (
             <div key={step} className="flex items-center">
               <div
-                className={`h-2 w-2 rounded-full ${
-                  index <= currentIndex ? "bg-blue-700" : "bg-muted"
-                }`}
+                className={`h-2 w-2 rounded-full ${index <= currentIndex ? "bg-blue-700" : "bg-muted"
+                  }`}
               />
               {index < steps.length - 1 && (
                 <div
-                  className={`h-0.5 w-8 ${
-                    index < currentIndex ? "bg-blue-700" : "bg-muted"
-                  }`}
+                  className={`h-0.5 w-8 ${index < currentIndex ? "bg-blue-700" : "bg-muted"
+                    }`}
                 />
               )}
             </div>

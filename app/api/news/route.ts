@@ -17,7 +17,6 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(news);
   } catch (error) {
-    console.log("Error fetching news:", error);
     return NextResponse.json(
       { message: "An unexpected error occurred" },
       { status: 500 }
@@ -43,7 +42,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(news);
   } catch (error) {
-    console.log("Error creating news:", error);
     return NextResponse.json(
       { message: "An unexpected error occurred" },
       { status: 500 }
@@ -59,8 +57,6 @@ export async function PATCH(request: Request) {
   // Validate request body
   const { title, category, description, important, author, id } =
     await request.json();
-
-  console.log({ title, category, description, important, author, id });
 
   if (!id) {
     return NextResponse.json(
@@ -89,11 +85,8 @@ export async function PATCH(request: Request) {
         important: important,
       },
     });
-
-    console.log("News updated successfully", news);
     return NextResponse.json(news);
   } catch (error) {
-    console.log("Error updating news:", error);
     return NextResponse.json(
       { message: "An unexpected error occurred" },
       { status: 500 }
@@ -127,7 +120,6 @@ export async function DELETE(request: Request) {
     await prisma.news.delete({
       where: { id },
     });
-
     console.log("News deleted successfully");
     return NextResponse.json({ message: "News deleted successfully" });
   } catch (error) {

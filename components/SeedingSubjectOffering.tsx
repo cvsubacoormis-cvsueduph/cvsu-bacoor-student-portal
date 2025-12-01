@@ -153,7 +153,6 @@ export default function SeedingSubjectOffering() {
         toast.success("✅ Success Details");
       }
 
-      console.log("Seeding logs:", logs);
     } catch (error: any) {
       console.error("Failed to seed curriculum:", error);
 

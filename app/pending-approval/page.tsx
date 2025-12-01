@@ -30,8 +30,6 @@ export default function PendingApprovalPage() {
         return;
       }
 
-      console.log("isApproved:", isApproved, "role:", role); // Debug info
-
       if (
         isApproved &&
         (role === "admin" || role === "faculty" || role === "registrar")

@@ -50,8 +50,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(result);
-
     const eventsData = result.data;
 
     const CreateEvent = await prisma.event.create({
