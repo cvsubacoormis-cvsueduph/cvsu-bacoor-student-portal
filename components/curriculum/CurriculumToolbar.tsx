@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CurriculumFormData } from "./types";
 import { CurriculumFormDialog } from "./CurriculumFormDialog";
+import { useEffect, useState } from "react";
 
 interface CurriculumToolbarProps {
     searchTerm: string;
@@ -17,14 +18,30 @@ export function CurriculumToolbar({
     isAdmin,
     onCreate,
 }: CurriculumToolbarProps) {
+    const [value, setValue] = useState(searchTerm);
+
+    useEffect(() => {
+        setValue(searchTerm);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (value !== searchTerm) {
+                onSearchChange(value);
+            }
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
+    }, [value, onSearchChange, searchTerm]);
+
     return (
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
             <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                     placeholder="Search curriculum..."
-                    value={searchTerm}
-                    onChange={(e) => onSearchChange(e.target.value)}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
                     className="pl-10"
                 />
             </div>

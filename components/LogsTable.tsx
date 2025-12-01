@@ -129,7 +129,7 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
             grade: "",
             remarks: "",
             instructor: "",
-            courseTitle: "UNKNOWN", // Default, user might need to fill this if missing
+            courseTitle: "",
             creditUnit: 0,
         },
     });
@@ -144,8 +144,8 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
             instructor: log.instructor,
             academicYear: log.academicYear as any,
             semester: log.semester as any,
-            courseTitle: "UNKNOWN", // We don't have this in the log, user must supply
-            creditUnit: 0,
+            courseTitle: log.courseTitle,
+            creditUnit: log.creditUnit,
         });
         setIsOpen(true);
     };
@@ -222,6 +222,7 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                             <TableHead>Date</TableHead>
                             <TableHead>Student Number</TableHead>
                             <TableHead>Course Code</TableHead>
+                            <TableHead>Course Title</TableHead>
                             <TableHead>Grade</TableHead>
                             <TableHead>Remarks</TableHead>
                             <TableHead>Error</TableHead>
@@ -231,7 +232,7 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                     <TableBody>
                         {logs.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center">
+                                <TableCell colSpan={8} className="text-center">
                                     No failed logs found.
                                 </TableCell>
                             </TableRow>
@@ -243,6 +244,7 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     </TableCell>
                                     <TableCell>{log.studentNumber}</TableCell>
                                     <TableCell>{log.courseCode}</TableCell>
+                                    <TableCell>{log.courseTitle}</TableCell>
                                     <TableCell>{log.grade}</TableCell>
                                     <TableCell>{log.remarks}</TableCell>
                                     <TableCell className="text-red-500 font-medium">
@@ -309,9 +311,28 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Grade</FormLabel>
-                                            <FormControl>
-                                                <Input {...field} />
-                                            </FormControl>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select grade" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="1.00">1.00</SelectItem>
+                                                    <SelectItem value="1.25">1.25</SelectItem>
+                                                    <SelectItem value="1.50">1.50</SelectItem>
+                                                    <SelectItem value="1.75">1.75</SelectItem>
+                                                    <SelectItem value="2.00">2.00</SelectItem>
+                                                    <SelectItem value="2.25">2.25</SelectItem>
+                                                    <SelectItem value="2.50">2.50</SelectItem>
+                                                    <SelectItem value="2.75">2.75</SelectItem>
+                                                    <SelectItem value="3.00">3.00</SelectItem>
+                                                    <SelectItem value="4.00">4.00</SelectItem>
+                                                    <SelectItem value="5.00">5.00</SelectItem>
+                                                    <SelectItem value="INC">INC</SelectItem>
+                                                    <SelectItem value="DRP">DRP</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -322,9 +343,19 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Remarks</FormLabel>
-                                            <FormControl>
-                                                <Input {...field} />
-                                            </FormControl>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select remarks" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="PASSED">PASSED</SelectItem>
+                                                    <SelectItem value="FAILED">FAILED</SelectItem>
+                                                    <SelectItem value="LACK OF REQ.">LACK OF REQ.</SelectItem>
+                                                    <SelectItem value="DROPPED">DROPPED</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -350,9 +381,21 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Credit Unit</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" {...field} />
-                                            </FormControl>
+                                            <Select onValueChange={(value) => field.onChange(parseFloat(value))} value={field.value?.toString()}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select credit unit" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="1">1</SelectItem>
+                                                    <SelectItem value="2">2</SelectItem>
+                                                    <SelectItem value="3">3</SelectItem>
+                                                    <SelectItem value="4">4</SelectItem>
+                                                    <SelectItem value="5">5</SelectItem>
+                                                    <SelectItem value="6">6</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                             <FormMessage />
                                         </FormItem>
                                     )}

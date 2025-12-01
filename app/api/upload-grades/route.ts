@@ -200,6 +200,8 @@ export async function POST(req: Request) {
           logsToCreate.push({
             studentNumber: resolvedStudentNumber || "",
             courseCode: sanitizedCourseCode || "",
+            courseTitle: sanitizedCourseTitle || "",
+            creditUnit: Number(creditUnit) || 0,
             grade: String(grade) || "",
             remarks: "Multiple students found — student number required",
             instructor: sanitizedInstructor,
@@ -217,6 +219,8 @@ export async function POST(req: Request) {
           logsToCreate.push({
             studentNumber: normalizedStudentNumber || "",
             courseCode: sanitizedCourseCode || "",
+            courseTitle: sanitizedCourseTitle || "",
+            creditUnit: Number(creditUnit) || 0,
             grade: String(grade) || "",
             remarks: "Student not found",
             instructor: sanitizedInstructor,
@@ -240,8 +244,10 @@ export async function POST(req: Request) {
           status: "⚠️ Student number does not match name — please verify",
         });
         logsToCreate.push({
-          studentNumber: normalizedStudentNumber,
-          courseCode: sanitizedCourseCode,
+          studentNumber: normalizedStudentNumber || "",
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
           grade: String(grade) || "",
           remarks: "Student number does not match name",
           instructor: sanitizedInstructor,
@@ -262,6 +268,8 @@ export async function POST(req: Request) {
         logsToCreate.push({
           studentNumber: resolvedStudentNumber || "",
           courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
           grade: String(grade) || "",
           remarks: "Missing required fields",
           instructor: sanitizedInstructor,
@@ -281,8 +289,10 @@ export async function POST(req: Request) {
           status: "❌ Invalid grade value",
         });
         logsToCreate.push({
-          studentNumber: resolvedStudentNumber,
-          courseCode: sanitizedCourseCode,
+          studentNumber: resolvedStudentNumber || "",
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
           grade: String(grade) || "",
           remarks: "Invalid grade value",
           instructor: sanitizedInstructor,
@@ -308,7 +318,9 @@ export async function POST(req: Request) {
         });
         logsToCreate.push({
           studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
           grade: standardizedGrade,
           remarks: "Subject not in curriculum",
           instructor: sanitizedInstructor,
@@ -328,7 +340,9 @@ export async function POST(req: Request) {
         });
         logsToCreate.push({
           studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
           grade: standardizedGrade,
           remarks: "Subject not offered in selected term",
           instructor: sanitizedInstructor,
@@ -389,9 +403,11 @@ export async function POST(req: Request) {
 
       // Step 8: Log only changes
       logsToCreate.push({
-        studentNumber: resolvedStudentNumber,
-        courseCode: sanitizedCourseCode,
+        studentNumber: resolvedStudentNumber || "",
         grade: standardizedGrade,
+        courseCode: sanitizedCourseCode || "",
+        courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
+        creditUnit: Number(creditUnit),
         remarks: sanitizedRemarks,
         instructor: sanitizedInstructor,
         academicYear,
@@ -415,6 +431,8 @@ export async function POST(req: Request) {
       logsToCreate.push({
         studentNumber: entry.studentNumber || "",
         courseCode: entry.courseCode || "",
+        courseTitle: entry.courseTitle || "",
+        creditUnit: Number(entry.creditUnit),
         grade: String(entry.grade) || "",
         remarks: "Server error",
         instructor: entry.instructor || "",

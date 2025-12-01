@@ -8,6 +8,8 @@ export type FailedLog = {
     id: string;
     studentNumber: string;
     courseCode: string;
+    courseTitle: string;
+    creditUnit: number;
     grade: string;
     remarks: string | null;
     instructor: string;
@@ -186,6 +188,8 @@ export async function resolveGradeLog(
             data: {
                 studentNumber: gradeData.studentNumber,
                 courseCode: gradeData.courseCode.toUpperCase(),
+                courseTitle: gradeData.courseTitle.toUpperCase(),
+                creditUnit: Number(gradeData.creditUnit),
                 grade: gradeData.grade,
                 remarks: gradeData.remarks,
                 instructor: gradeData.instructor,

@@ -72,14 +72,16 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
   const [purpose, setPurpose] = useState("");
 
   useEffect(() => {
-    const fetchOptions = async () => {
-      const options = await getAvailableAcademicOptions();
-      setAcademicOptions(
-        options as { academicYear: string; semester: string }[]
-      );
-    };
-    fetchOptions();
-  }, []);
+    if (isDialogOpen && academicOptions.length === 0) {
+      const fetchOptions = async () => {
+        const options = await getAvailableAcademicOptions();
+        setAcademicOptions(
+          options as { academicYear: string; semester: string }[]
+        );
+      };
+      fetchOptions();
+    }
+  }, [isDialogOpen, academicOptions.length]);
 
   const getFinalGradeToUse = (grade: Grade): number | null => {
     if (["INC", "DRP"].includes(grade.grade)) {
@@ -186,9 +188,8 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
-    const fullName = `${student.firstName}, ${student.middleInit || ""} ${
-      student.lastName
-    }`;
+    const fullName = `${student.firstName}, ${student.middleInit || ""} ${student.lastName
+      }`;
     const studentNo = student.studentNumber;
     const course = student.course;
     const major = student.major !== "NONE" ? student.major : "";

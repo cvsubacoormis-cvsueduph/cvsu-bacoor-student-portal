@@ -134,6 +134,8 @@ model GradeLog {
   id            String       @id @default(cuid())
   studentNumber String
   courseCode    String
+  courseTitle   String
+  creditUnit    Int
   grade         String
   remarks       String?
   instructor    String

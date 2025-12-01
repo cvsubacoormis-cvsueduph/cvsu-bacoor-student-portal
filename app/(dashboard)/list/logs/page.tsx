@@ -25,11 +25,18 @@ export default async function LogsPage(props: {
     const logs = await getFailedLogs(filters);
 
     return (
-        <div className="p-4 space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">Failed Upload Logs</h1>
+        <div className="flex-1 m-4 mt-0">
+            <div className="bg-white p-4 rounded-md mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div className="mb-8">
+                        <h1 className="text-lg font-semibold">Failed Upload Logs</h1>
+                        <p className="text-xs text-gray-500 font-semibold">
+                            Lists of Failed Upload Logs
+                        </p>
+                    </div>
+                </div>
+                <LogsTable initialLogs={logs} />
             </div>
-            <LogsTable initialLogs={logs} />
         </div>
     );
 }
