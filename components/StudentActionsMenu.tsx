@@ -74,7 +74,7 @@ export function StudentActionsMenu({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+              <AlertDialogAction className="bg-blue-700 text-white hover:bg-blue-500"
                 onClick={() =>
                   startTransition(async () => {
                     await approveStudent(studentId);
@@ -107,7 +107,7 @@ export function StudentActionsMenu({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+              <AlertDialogAction className="bg-red-700 text-white hover:bg-red-500"
                 onClick={() =>
                   startTransition(async () => {
                     await rejectStudent(studentId);
