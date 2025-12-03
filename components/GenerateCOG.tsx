@@ -29,6 +29,8 @@ import {
   formatMajor,
 } from "@/lib/courses";
 import toast from "react-hot-toast";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { AlertCircleIcon, CheckCircle2Icon, PopcornIcon } from "lucide-react";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
@@ -187,9 +189,8 @@ export default function GenerateCOG() {
     doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
-    const fullName = `${student.firstName}, ${student.middleInit || ""} ${
-      student.lastName
-    }`;
+    const fullName = `${student.firstName}, ${student.middleInit || ""} ${student.lastName
+      }`;
     const studentNo = student.studentNumber;
     const course = student.course;
     const major = student.major !== "NONE" ? student.major : "";
@@ -493,10 +494,33 @@ export default function GenerateCOG() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Note: Year level selection is for year standing only. The grades
-              shown are based on the selected academic year and semester.
-            </p>
+            <div className="grid w-full max-w-xl items-start gap-4">
+              <Alert>
+                <CheckCircle2Icon />
+                <AlertTitle>Success! Your changes have been saved</AlertTitle>
+                <AlertDescription>
+                  This is an alert with icon, title and description.
+                </AlertDescription>
+              </Alert>
+              <Alert>
+                <PopcornIcon />
+                <AlertTitle>
+                  This Alert has a title and an icon. No description.
+                </AlertTitle>
+              </Alert>
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>Unable to process your payment.</AlertTitle>
+                <AlertDescription>
+                  <p>Please verify your billing information and try again.</p>
+                  <ul className="list-inside list-disc text-sm">
+                    <li>Check your card details</li>
+                    <li>Ensure sufficient funds</li>
+                    <li>Verify billing address</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            </div>
           </div>
           <div>
             <label className="text-sm">Purpose</label>
