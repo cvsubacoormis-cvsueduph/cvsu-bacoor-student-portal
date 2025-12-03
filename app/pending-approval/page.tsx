@@ -36,6 +36,10 @@ export default function PendingApprovalPage() {
       ) {
         router.push("/admin");
       }
+
+      if (isApproved && role === "student") {
+        router.push("/student");
+      }
     }
   }, [isLoaded, user, router, isApproved, role]);
 

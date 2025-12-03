@@ -51,11 +51,7 @@ export default async function DashboardLayout({
     select: { isApproved: true },
   });
 
-  if (!student?.isApproved) {
-    const clerk = await clerkClient();
-    await clerk.users.updateUserMetadata(userId, {
-      publicMetadata: { isApproved: false },
-    });
+  if (student && student.isApproved === false) {
     redirect("/pending-approval");
   }
 
