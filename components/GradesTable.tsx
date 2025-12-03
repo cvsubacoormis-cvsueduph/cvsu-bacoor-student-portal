@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import GenerateCOG from "@/components/GenerateCOG";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { TriangleAlert } from "lucide-react";
 
 interface Grade {
   id: string;
@@ -116,7 +118,15 @@ export default function Grades({
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters */}
+          <Alert variant="destructive" className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Warning</AlertTitle>
+            <AlertDescription>
+              Any attempt to modify or tamper with the grades displayed on this
+              portal is strictly prohibited. Unauthorized changes may result in
+              severe disciplinary actions or other consequences.
+            </AlertDescription>
+          </Alert>
           <form
             onSubmit={handleFilterSubmit}
             className="mb-6 bg-muted/30 p-4 rounded-lg border flex flex-col sm:flex-row gap-4 items-end sm:items-center"
