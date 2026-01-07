@@ -269,7 +269,7 @@ model CourseAccessSchedule {
 
   createdAt DateTime @default(now())
 
-  @@index([course, accessDate])
+  @@unique([course, accessDate])
 }
 
 enum UserSex {
