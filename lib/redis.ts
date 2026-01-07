@@ -5,7 +5,7 @@ export const redis = new Redis({
     port: Number(process.env.REDIS_PORT),
     password: process.env.REDIS_PASSWORD,
     lazyConnect: true,
-    maxRetriesPerRequest: 1,
+    maxRetriesPerRequest: 10,
     enableOfflineQueue: true,
 });
 
