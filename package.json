@@ -43,6 +43,7 @@
     "date-fns": "^3.6.0",
     "formidable": "^3.5.4",
     "html2canvas": "^1.4.1",
+    "ioredis": "^5.9.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.479.0",

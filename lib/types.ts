@@ -78,15 +78,15 @@ export interface CurriculumItem {
 export interface Subject extends CurriculumItem {
   grade: string;
   completion:
-    | "Completed"
-    | "Enrolled"
-    | "Failed"
-    | "Not Taken"
-    | "Dropped"
-    | "Con. Failure"
-    | "Unsatisfactory"
-    | "Satisfactory"
-    | "Lack of Req.";
+  | "Completed"
+  | "Enrolled"
+  | "Failed"
+  | "Not Taken"
+  | "Dropped"
+  | "Con. Failure"
+  | "Unsatisfactory"
+  | "Satisfactory"
+  | "Lack of Req.";
   remarks: string;
   retaken?: string;
   retakeCount: number;
@@ -138,3 +138,11 @@ export interface StudentGrade {
   isRetaken: boolean;
   retakenAYSem?: string;
 }
+
+export type Schedule = {
+  id: string;
+  course: string;
+  accessDate: string;
+  startTime: string;
+  endTime: string;
+};

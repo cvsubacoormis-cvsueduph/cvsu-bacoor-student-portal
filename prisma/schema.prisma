@@ -256,6 +256,22 @@ model RateLimit {
   @@index([userId, action, timestamp])
 }
 
+model CourseAccessSchedule {
+  id String @id @default(cuid())
+
+  course     Courses
+  accessDate DateTime // DATE ONLY (YYYY-MM-DD)
+  startTime  String // "07:00"
+  endTime    String // "10:00"
+
+  timezone String  @default("Asia/Manila")
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([course, accessDate])
+}
+
 enum UserSex {
   MALE
   FEMALE

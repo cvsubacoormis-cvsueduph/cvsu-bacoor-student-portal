@@ -140,16 +140,16 @@ export default async function Menu() {
           href: "/list/create-user",
           visible: ["admin"],
         },
-        // {
-        //   icon: "/logout.png",
-        //   label: "Logout",
-        //   href: "/logout",
-        //   visible: ["admin", "teacher", "student", "parent"],
-        // },
         {
           icon: "/subject.png",
           label: "Seed a Subject Offering",
           href: "/list/subject-offering",
+          visible: ["admin"],
+        },
+        {
+          icon: "/subject.png",
+          label: "Schedule",
+          href: "/list/schedule",
           visible: ["admin"],
         },
       ],
