@@ -1,6 +1,7 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { routeAccessMap } from "./lib/settings";
+import { redis } from "./lib/redis";
 
 export default clerkMiddleware(async (auth, req) => {
   const { sessionClaims } = await auth();
@@ -35,6 +36,30 @@ export default clerkMiddleware(async (auth, req) => {
         return NextResponse.redirect(new URL(`/${role}`, req.url));
       }
       break;
+    }
+  }
+
+  // -------------------------------
+  // New: Course schedule enforcement
+  // -------------------------------
+  if (role === "student") {
+    const course = (sessionClaims?.metadata as { course?: string })?.course;
+    if (course) {
+      const todayKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const redisKey = `course-access:${course}:${todayKey}`;
+      const scheduleStr = await redis.get(redisKey);
+
+      if (scheduleStr) {
+        const schedule = JSON.parse(scheduleStr);
+        const now = new Date();
+        const start = new Date(`${schedule.accessDate}T${schedule.startTime}`);
+        const end = new Date(`${schedule.accessDate}T${schedule.endTime}`);
+
+        if (now < start || now > end) {
+          // Redirect or show a friendly page
+          return NextResponse.redirect(new URL("/outside-access", req.url));
+        }
+      }
     }
   }
 
