@@ -12,6 +12,7 @@ export default clerkMiddleware(async (auth, req) => {
     pathname === "/sign-in" ||
     pathname === "/sign-up" ||
     pathname === "/pending-approval"
+    || pathname === "/access-closed"
   ) {
     return NextResponse.next();
   }

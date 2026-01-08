@@ -28,7 +28,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <NavBar />
           {children}
           <Toaster position="top-right" />
-          <SpeedInsights />
         </div>
       </div>
     );
@@ -107,7 +106,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <NavBar />
         {children}
         <Toaster position="top-right" />
-        <SpeedInsights />
       </div>
     </div>
   );
