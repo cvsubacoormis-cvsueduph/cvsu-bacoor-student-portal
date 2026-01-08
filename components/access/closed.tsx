@@ -10,12 +10,14 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { SignOutButton } from "@clerk/nextjs";
+import Image from "next/image";
 
 export default function AccessClosedComp() {
     return (
         <div className="flex items-center justify-center min-h-[60vh] p-4">
             <Card className="w-full max-w-md text-center shadow-lg">
                 <CardHeader className="flex flex-col items-center space-y-4 pb-2">
+                    <Image src="/logos.png" alt="Logo" width={200} height={200} />
                     <div className="p-4 bg-blue-700 rounded-full">
                         <Lock className="h-10 w-10 text-white" />
                     </div>
@@ -34,7 +36,7 @@ export default function AccessClosedComp() {
                 <CardFooter className="flex justify-center pt-2">
                     <Button asChild className="w-full sm:w-auto min-w-[140px] bg-blue-700 hover:bg-blue-600">
                         <SignOutButton>
-                            Logout
+                            Log out
                         </SignOutButton>
                     </Button>
                 </CardFooter>
