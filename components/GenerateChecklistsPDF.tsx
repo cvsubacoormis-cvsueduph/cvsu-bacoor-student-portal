@@ -71,6 +71,29 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
     }
   };
 
+  const formatAySem = (academicYear?: string, semester?: string) => {
+    if (!academicYear) return "-";
+
+    // Format AY: AY_2024_2025 -> AY-24-25
+    let formattedAy = academicYear;
+    if (academicYear.startsWith("AY_")) {
+      const parts = academicYear.split("_");
+      if (parts.length === 3) {
+        const start = parts[1].slice(-2);
+        const end = parts[2].slice(-2);
+        formattedAy = `AY-${start}-${end}`;
+      }
+    }
+
+    // Format Semester
+    let formattedSem = "";
+    if (semester === "FIRST") formattedSem = "1st Sem";
+    else if (semester === "SECOND") formattedSem = "2nd Sem";
+    else if (semester === "MIDYEAR") formattedSem = "Midyear";
+
+    return semester ? `${formattedAy} ${formattedSem}` : formattedAy;
+  };
+
   const generateChecklistPDF = async () => {
     if (!buttonRef.current || !studentData || !checklistData.length) return;
 
@@ -208,7 +231,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           attemptsText = allAttempts
             .map(
               (attempt) =>
-                `${attempt.academicYear} (${attempt.grade || "-"}) ${attempt.attemptNumber > 1
+                `${formatAySem(attempt.academicYear, attempt.semester)} (${attempt.grade || "-"}) ${attempt.attemptNumber > 1
                   ? `(Attempt ${attempt.attemptNumber})`
                   : ""
                 }`
