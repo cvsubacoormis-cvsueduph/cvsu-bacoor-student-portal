@@ -173,7 +173,7 @@ export default function Grades({
               </Select>
             </div>
 
-            <Button type="submit" className="w-full sm:w-auto mt-auto bg-blue-700 hover:bg-blue-900">
+            <Button type="submit" className="w-full sm:w-auto mt-auto bg-blue-700 hover:bg-blue-600">
               Apply Filters
             </Button>
           </form>

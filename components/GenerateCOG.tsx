@@ -433,7 +433,7 @@ export default function GenerateCOG() {
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-700 hover:bg-blue-900">Generate COG</Button>
+        <Button className="bg-blue-700 hover:bg-blue-600">Generate COG</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -494,9 +494,9 @@ export default function GenerateCOG() {
                 ))}
               </SelectContent>
             </Select>
-            <div className="grid w-full max-w-xl items-start gap-4">
-              <Alert variant="default">
-                <AlertCircleIcon />
+            <div className="grid w-full max-w-xl items-start gap-4 mt-2">
+              <Alert className="border-orange-500 text-orange-700 bg-orange-50">
+                <AlertCircleIcon className="h-4 w-4 !text-orange-700" />
                 <AlertTitle>Note on Year Level</AlertTitle>
                 <AlertDescription>
                   <p>
