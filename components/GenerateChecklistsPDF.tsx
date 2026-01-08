@@ -87,9 +87,9 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
 
     // Format Semester
     let formattedSem = "";
-    if (semester === "FIRST") formattedSem = "1st Sem";
-    else if (semester === "SECOND") formattedSem = "2nd Sem";
-    else if (semester === "MIDYEAR") formattedSem = "Midyear";
+    if (semester === "FIRST") formattedSem = "1";
+    else if (semester === "SECOND") formattedSem = "2";
+    else if (semester === "MIDYEAR") formattedSem = "M";
 
     return semester ? `${formattedAy} ${formattedSem}` : formattedAy;
   };
