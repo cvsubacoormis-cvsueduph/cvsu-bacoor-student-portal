@@ -1,9 +1,11 @@
 "use server";
+
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { clerkClient } from "@clerk/nextjs/server";
 
 const clerk = await clerkClient();
+
 export async function approveStudent(studentId: string) {
   const { userId, sessionClaims } = await auth();
   const role = (sessionClaims?.metadata as { role?: string }) || undefined;
@@ -30,12 +32,9 @@ export async function rejectStudent(studentId: string) {
     throw new Error("Unauthorized");
   }
 
-  await prisma.student.update({
+  await prisma.student.delete({
     where: { id: studentId },
-    data: { isApproved: false },
   });
 
-  clerk.users.updateUser(studentId, {
-    publicMetadata: { role: "student", isApproved: false },
-  });
+  clerk.users.deleteUser(studentId);
 }
