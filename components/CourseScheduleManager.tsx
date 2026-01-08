@@ -12,24 +12,31 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
 import { Schedule } from "@/lib/types";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 const courses = ["BSIT", "BSCS", "BSCRIM", "BSP", "BSHM", "BSED", "BSBA"];
 
 export default function CourseScheduleManager() {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [course, setCourse] = useState<string>(courses[0]);
-    const [date, setDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+
+    // Use DateRange for selection
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({
+        from: new Date(),
+        to: new Date(),
+    });
+
     const [startTime, setStartTime] = useState<string>("07:00");
     const [endTime, setEndTime] = useState<string>("10:00");
     const [loading, setLoading] = useState(false);
 
     const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
-
     const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
 
     async function fetchSchedules() {
@@ -50,16 +57,26 @@ export default function CourseScheduleManager() {
     }, []);
 
     async function handleSave() {
-        if (!course || !date || !startTime || !endTime) {
-            toast.error("All fields are required");
+        if (!course || !dateRange?.from || !startTime || !endTime) {
+            toast.error("Course, Date Range (From), Start Time, and End Time are required");
             return;
         }
+
         setLoading(true);
         try {
+            // If "to" is missing, use "from" (single day)
+            const endDate = dateRange.to || dateRange.from;
+
             const res = await fetch("/api/schedules", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ course, accessDate: date, startTime, endTime }),
+                body: JSON.stringify({
+                    course,
+                    startDate: format(dateRange.from, "yyyy-MM-dd"),
+                    endDate: format(endDate, "yyyy-MM-dd"),
+                    startTime,
+                    endTime,
+                }),
             });
             const data = await res.json();
             if (!res.ok) toast.error(data.error || "Failed to save schedule");
@@ -84,7 +101,8 @@ export default function CourseScheduleManager() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     course: editingSchedule.course,
-                    accessDate: editingSchedule.accessDate,
+                    accessDate: editingSchedule.accessDate, // Identifier
+                    newTaskDate: dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined, // Potential Move
                     startTime,
                     endTime,
                     isActive: true,
@@ -142,7 +160,7 @@ export default function CourseScheduleManager() {
             <div className="flex flex-wrap gap-4 items-end">
                 <div>
                     <label className="block mb-1 font-medium">Course</label>
-                    <Select value={course} onValueChange={setCourse}>
+                    <Select value={course} onValueChange={setCourse} disabled={!!editingSchedule}>
                         <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select course" />
                         </SelectTrigger>
@@ -157,27 +175,44 @@ export default function CourseScheduleManager() {
                 </div>
 
                 <div className="flex flex-col">
-                    <label className="block mb-1 font-medium">Date</label>
+                    <label className="block mb-1 font-medium">
+                        {editingSchedule ? "Date (Single)" : "Date Range"}
+                    </label>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button
                                 variant={"outline"}
-                                className="w-[240px] justify-start text-left font-normal"
+                                className="w-[300px] justify-start text-left font-normal"
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(new Date(date), "PPP") : <span>Pick a date</span>}
+                                {dateRange?.from ? (
+                                    dateRange.to ? (
+                                        <>
+                                            {format(dateRange.from, "LLL dd, y")} -{" "}
+                                            {format(dateRange.to, "LLL dd, y")}
+                                        </>
+                                    ) : (
+                                        format(dateRange.from, "LLL dd, y")
+                                    )
+                                ) : (
+                                    <span>Pick a date</span>
+                                )}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                             <Calendar
-                                mode="single"
-                                selected={date ? new Date(date) : undefined}
-                                onSelect={(d) => setDate(d ? format(d, "yyyy-MM-dd") : "")}
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={2}
                                 captionLayout="dropdown"
                             />
                         </PopoverContent>
                     </Popover>
                 </div>
+
 
                 <div>
                     <label className="block mb-1 font-medium">Start Time</label>
@@ -189,66 +224,106 @@ export default function CourseScheduleManager() {
                     <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                 </div>
 
-                <Button className="bg-blue-700 hover:bg-blue-600" onClick={editingSchedule ? handleEdit : handleSave} disabled={loading}>
-                    {loading ? "Saving..." : editingSchedule ? "Update Schedule" : "Save Schedule"}
-                </Button>
+                <div>
+                    <label className="block mb-1 font-medium opacity-0">Action</label>
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            setStartTime("00:00");
+                            setEndTime("23:59");
+                        }}
+                        title="Set to 24 Hours (00:00 - 23:59)"
+                    >
+                        24H / Full Day
+                    </Button>
+                </div>
+
+
+                <div className="flex gap-2">
+                    <Button
+                        className="bg-blue-700 hover:bg-blue-600"
+                        onClick={editingSchedule ? handleEdit : handleSave}
+                        disabled={loading}
+                    >
+                        {loading ? "Saving..." : editingSchedule ? "Update Schedule" : "Save Schedule"}
+                    </Button>
+                    {editingSchedule && (
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setEditingSchedule(null);
+                                setDateRange({ from: new Date(), to: new Date() });
+                                setStartTime("07:00");
+                                setEndTime("10:00");
+                            }}
+                        >
+                            Cancel Edit
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* Existing Schedules */}
             <div className="mt-6">
                 <h2 className="text-xl font-semibold mb-2">Existing Schedules</h2>
-                <div className="overflow-x-auto border rounded">
-                    <table className="min-w-full table-auto">
-                        <thead className="bg-gray-100">
-                            <tr>
-                                <th className="px-4 py-2 text-left">Course</th>
-                                <th className="px-4 py-2 text-left">Date</th>
-                                <th className="px-4 py-2 text-left">Start Time</th>
-                                <th className="px-4 py-2 text-left">End Time</th>
-                                <th className="px-4 py-2 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Course</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Start Time</TableHead>
+                                <TableHead>End Time</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {schedules.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="text-center py-4">
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center h-24">
                                         No schedules yet
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             ) : (
                                 schedules.map((s) => (
-                                    <tr key={s.id} className="border-t">
-                                        <td className="px-4 py-2">{s.course}</td>
-                                        <td className="px-4 py-2">{s.accessDate.split("T")[0]}</td>
-                                        <td className="px-4 py-2">{s.startTime}</td>
-                                        <td className="px-4 py-2">{s.endTime}</td>
-                                        <td className="px-4 py-2 flex gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setEditingSchedule(s);
-                                                    setCourse(s.course);
-                                                    setDate(s.accessDate.split("T")[0]);
-                                                    setStartTime(s.startTime);
-                                                    setEndTime(s.endTime);
-                                                }}
-                                            >
-                                                Edit
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="destructive"
-                                                onClick={() => handleDelete(s)}
-                                            >
-                                                Delete
-                                            </Button>
-                                        </td>
-                                    </tr>
+                                    <TableRow key={s.id}>
+                                        <TableCell className="font-medium">{s.course}</TableCell>
+                                        <TableCell>{s.accessDate.split("T")[0]}</TableCell>
+                                        <TableCell>{s.startTime}</TableCell>
+                                        <TableCell>{s.endTime}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setEditingSchedule(s);
+                                                        setCourse(s.course);
+                                                        // Set range to single day
+                                                        setDateRange({
+                                                            from: new Date(s.accessDate),
+                                                            to: new Date(s.accessDate),
+                                                        });
+                                                        setStartTime(s.startTime);
+                                                        setEndTime(s.endTime);
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    onClick={() => handleDelete(s)}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             </div>
             <Dialog open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>

@@ -36,7 +36,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!isApproved) redirect("/pending-approval");
 
-  // Fetch student info
   const student = await prisma.student.findUnique({
     where: { id: userId },
     select: { isApproved: true, course: true },
@@ -44,11 +43,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!student || !student.isApproved) redirect("/pending-approval");
 
-  // ✅ SERVER-SIDE UTC NOW
   const nowUTC = new Date();
-
-  // Cache key based on course + date
-  const dateKey = nowUTC.toISOString().split("T")[0]; // YYYY-MM-DD UTC
+  const manilaDate = new Date(nowUTC.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+  const dateKey = manilaDate.toISOString().split("T")[0];
   const cacheKey = `course-access:${student.course}:${dateKey}`;
 
   let accessSchedule = null;
@@ -65,18 +62,40 @@ export default async function DashboardLayout({ children }: { children: React.Re
     accessSchedule = schedule;
   }
 
-  if (!accessSchedule) redirect("/access-closed");
 
-  // ✅ Compare UTC server time with schedule
-  const [startHour, startMinute] = accessSchedule.startTime.split(":").map(Number);
-  const [endHour, endMinute] = accessSchedule.endTime.split(":").map(Number);
+  if (accessSchedule) {
 
-  const startMinutes = startHour * 60 + startMinute;
-  const endMinutes = endHour * 60 + endMinute + 5; // optional grace period
+    const [startHour, startMinute] = accessSchedule.startTime.split(":").map(Number);
+    const [endHour, endMinute] = accessSchedule.endTime.split(":").map(Number);
 
-  const currentMinutes = nowUTC.getUTCHours() * 60 + nowUTC.getUTCMinutes();
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute + 5;
+    const MANILA_OFFSET = 8 * 60; // 8 hours in minutes
+    const currentTotalMinutesUTC = nowUTC.getUTCHours() * 60 + nowUTC.getUTCMinutes();
+    let currentMinutes = currentTotalMinutesUTC + MANILA_OFFSET;
 
-  if (currentMinutes < startMinutes || currentMinutes > endMinutes) redirect("/access-closed");
+    const manilaDate = new Date(nowUTC.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+    const currentManilaMinutes = manilaDate.getHours() * 60 + manilaDate.getMinutes();
+
+    if (currentManilaMinutes < startMinutes || currentManilaMinutes > endMinutes) redirect("/access-closed");
+  } else {
+    // No schedule for today. Check if we are in "Restricted Mode".
+    const restrictionCacheKey = `course-restriction:${student.course}`;
+    let isRestricted = await redis.get(restrictionCacheKey);
+
+    if (!isRestricted) {
+      const count = await prisma.courseAccessSchedule.count({
+        where: { course: student.course, isActive: true },
+      });
+      isRestricted = count > 0 ? "TRUE" : "FALSE";
+      await redis.set(restrictionCacheKey, isRestricted, "EX", 60); // Cache for 1 min
+    }
+
+    if (isRestricted === "TRUE") {
+      redirect("/access-closed");
+    }
+    // Else: Open Access
+  }
 
   return (
     <div className="h-screen flex">
