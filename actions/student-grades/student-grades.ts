@@ -81,6 +81,8 @@ export async function getStudentGradesWithReExam(studentId?: string) {
       middleInit: true,
       course: true,
       major: true,
+      address: true,
+      phone: true,
       grades: {
         orderBy: [
           { academicYear: "asc" },

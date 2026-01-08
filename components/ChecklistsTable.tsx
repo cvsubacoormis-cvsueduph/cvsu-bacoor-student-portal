@@ -63,6 +63,7 @@ export function CurriculumChecklist() {
       <ChecklistHeader
         selectedYear={selectedYear}
         onYearChange={setSelectedYear}
+        data={data}
       />
 
       <ProgressSummary data={data} />
@@ -104,9 +105,11 @@ function ErrorState() {
 function ChecklistHeader({
   selectedYear,
   onYearChange,
+  data,
 }: {
   selectedYear: string;
   onYearChange: (val: string) => void;
+  data: CurriculumData;
 }) {
   return (
     <div className="print:border-b print:border-gray-300 print:pb-4">
@@ -124,7 +127,7 @@ function ChecklistHeader({
               <SelectItem value="Fourth Year">Fourth Year</SelectItem>
             </SelectContent>
           </Select>
-          <GenerateChecklistPDF />
+          <GenerateChecklistPDF data={data} />
         </div>
       </div>
     </div>

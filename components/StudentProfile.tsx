@@ -31,51 +31,12 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Grade } from "@/lib/types";
+import { Grade, Student } from "@/lib/types";
 import { useUser } from "@clerk/nextjs";
 import { courseMap, formatMajor } from "@/lib/courses";
 import { StudentCardSkeleton } from "./skeleton/StudentCardSkeleton";
 import { humanizeMajor, humanizeSex, humanizeStatus } from "@/lib/student-utils";
 import { useStudentPagination } from "@/hooks/use-student-pagination";
-
-type UserSex = "MALE" | "FEMALE";
-type Courses = "BSIT" | "BSCS" | "BSCRIM" | "BSP" | "BSHM" | "BSED" | "BSBA";
-type Major =
-  | "HUMAN_RESOURCE_MANAGEMENT"
-  | "MARKETING_MANAGEMENT"
-  | "ENGLISH"
-  | "MATHEMATICS"
-  | "NONE";
-type Status =
-  | "REGULAR"
-  | "IRREGULAR"
-  | "NOT_ANNOUNCED"
-  | "TRANSFEREE"
-  | "RETURNEE";
-type Role = "admin" | "student" | "superuser" | "faculty" | "registrar" | "csg";
-
-// Mirrors Prisma Student (subset + UI extras)
-type Student = {
-  id: string;
-  studentNumber: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  middleInit?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  address: string;
-  sex: UserSex;
-  course: Courses;
-  major?: Major | null;
-  status: Status;
-  role: Role;
-  createdAt: Date;
-  grades: Grade[];
-  isPasswordSet: boolean;
-  isApproved: boolean;
-  avatarUrl?: string;
-};
 
 export default function StudentProfile({ data }: { data: Student }) {
   const { user } = useUser();
@@ -116,14 +77,13 @@ export default function StudentProfile({ data }: { data: Student }) {
           userImageUrl={user?.imageUrl}
         />
 
-        <CardContent className="grid gap-6 lg:grid-cols-5">
-          <div className="space-y-6 lg:col-span-3">
-            <AcademicOverview student={data} />
+        <CardContent className="grid gap-6 lg:grid-cols-3">
+          <div className="order-2 space-y-6 lg:order-1 lg:col-span-2">
             <GradesSection grades={data.grades} />
           </div>
 
-          <div className="space-y-6 lg:col-span-2">
-            <ContactInformation student={data} />
+          <div className="order-1 space-y-6 lg:order-2">
+            <PersonalDetails student={data} />
           </div>
         </CardContent>
       </Card>
@@ -144,79 +104,61 @@ function ProfileHeader({
 }) {
   return (
     <CardHeader className="pb-4 sm:pb-5 md:pb-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3 sm:gap-4">
-          <Avatar className="size-16 sm:size-20 md:size-24">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="flex items-start gap-4">
+          <Avatar className="size-20 border-2 border-background shadow-sm sm:size-24 md:size-28">
             <AvatarImage
               src={userImageUrl || ""}
               alt={`${displayName} profile photo`}
             />
-            <AvatarFallback className="bg-blue-600 text-white">
+            <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-xl font-medium text-white">
               {initials}
             </AvatarFallback>
           </Avatar>
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+
+          <div className="space-y-2.5 pt-1">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 {displayName}
               </h1>
-              <Badge variant="secondary" className="gap-1">
-                <IdCard className="size-3.5" />
-                <span className="tabular-nums">{student.studentNumber}</span>
-              </Badge>
-              <Badge variant="secondary" className="gap-1">
-                <User2 className="size-3.5" />
-                {student.username}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="gap-1.5 px-2.5 py-0.5 font-normal text-muted-foreground">
+                  <IdCard className="size-3.5" />
+                  <span className="tabular-nums">{student.studentNumber}</span>
+                </Badge>
+                {student.isApproved && (
+                  <Badge variant="default" className="gap-1.5 bg-blue-600 hover:bg-blue-700">
+                    <CheckCheck className="size-3.5" />
+                    Verified Student
+                  </Badge>
+                )}
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className="gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300"
-                aria-label={`Status: ${humanizeStatus(student.status)}`}
-              >
-                <BadgeCheck className="size-3.5" />
-                {humanizeStatus(student.status)}
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                <Shield className="size-3.5" />
-                {student.role.charAt(0).toUpperCase() + student.role.slice(1)}
-              </Badge>
-              {student.isApproved ? (
-                <Badge className="gap-1 bg-blue-600 hover:bg-blue-700 text-white">
-                  <CheckCheck className="size-3.5" />
-                  Verified
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="size-4 text-primary/70" />
+                <span className="font-medium text-foreground">{student.course}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <BadgeCheck className="size-4 text-primary/70" />
+                <span>{formatMajor(humanizeMajor(student.major))}</span>
+              </div>
+              <div className="">
+                <Badge
+                  variant="outline"
+                  className={`gap-1.5 ${student.status === "REGULAR"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+                    : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-400"
+                    }`}
+                >
+                  {humanizeStatus(student.status)}
                 </Badge>
-              ) : (
-                <Badge className="gap-1 bg-blue-700 hover:bg-blue-500 text-white">
-                  <CircleAlert className="size-3.5" />
-                  Not verified
-                </Badge>
-              )}
-              {student.isPasswordSet ? (
-                <Badge variant="secondary" className="gap-1">
-                  <CheckCircle2 className="size-3.5" />
-                  Password set
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1">
-                  <CircleAlert className="size-3.5" />
-                  Password pending
-                </Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <GraduationCap className="size-4 text-blue-600" />
-                {courseMap(student.course)}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <BadgeCheck className="size-4 text-blue-600" />
-                {formatMajor(humanizeMajor(student.major))}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarClock className="size-4 text-blue-600" />
-                Joined {student.createdAt.toLocaleDateString()}
-              </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CalendarClock className="size-4 text-primary/70" />
+                <span>Joined {student.createdAt.toLocaleDateString()}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -225,34 +167,7 @@ function ProfileHeader({
   );
 }
 
-function AcademicOverview({ student }: { student: Student }) {
-  return (
-    <div className="rounded-lg border p-4 sm:p-5">
-      <h3 className="mb-3 text-base sm:text-lg font-medium">
-        Academic overview
-      </h3>
-      <dl className="grid grid-cols-2 gap-4 text-sm sm:text-base md:grid-cols-3">
-        <OverviewItem label="Sex" value={humanizeSex(student.sex)} />
-        <OverviewItem
-          label="Created"
-          value={student.createdAt.toLocaleDateString()}
-        />
-        <OverviewItem label="Course" value={student.course} />
-        <OverviewItem label="Major" value={humanizeMajor(student.major)} />
-        <OverviewItem label="Status" value={humanizeStatus(student.status)} />
-      </dl>
-    </div>
-  );
-}
 
-function OverviewItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="mt-1 font-medium">{value}</dd>
-    </div>
-  );
-}
 
 function GradesSection({ grades }: { grades: Grade[] }) {
   const {
@@ -464,28 +379,47 @@ function PaginationControls({
   );
 }
 
-function ContactInformation({ student }: { student: Student }) {
+function PersonalDetails({ student }: { student: Student }) {
   return (
-    <div className="rounded-lg border p-4 sm:p-5">
-      <h3 className="mb-3 font-medium text-base sm:text-lg">Contact</h3>
-      <ul className="space-y-3 text-sm sm:text-base">
-        <ContactItem
-          icon={<Mail className="mt-0.5 size-4 text-blue-600" />}
-          label="Email"
-          value={student.email}
-          isEmail
-        />
-        <ContactItem
-          icon={<Phone className="mt-0.5 size-4 text-blue-600" />}
-          label="Phone"
-          value={student.phone}
-        />
-        <ContactItem
-          icon={<MapPin className="mt-0.5 size-4 text-blue-600" />}
-          label="Address"
-          value={student.address}
-        />
-      </ul>
+    <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+      <div className="p-6">
+        <h3 className="flex items-center gap-2 font-semibold leading-none tracking-tight">
+          <User2 className="size-4 text-blue-600" />
+          Personal Account
+        </h3>
+        <p className="mt-1.5 text-sm text-muted-foreground">Manage your personal information.</p>
+      </div>
+      <Separator />
+      <div className="p-6">
+        <ul className="space-y-4 text-sm">
+          <ContactItem
+            icon={<User2 className="mt-0.5 size-4 text-muted-foreground" />}
+            label="Username"
+            value={student.username}
+          />
+          <ContactItem
+            icon={<Shield className="mt-0.5 size-4 text-muted-foreground" />}
+            label="Sex"
+            value={humanizeSex(student.sex)}
+          />
+          <ContactItem
+            icon={<Mail className="mt-0.5 size-4 text-muted-foreground" />}
+            label="Email"
+            value={student.email}
+            isEmail
+          />
+          <ContactItem
+            icon={<Phone className="mt-0.5 size-4 text-muted-foreground" />}
+            label="Phone"
+            value={student.phone}
+          />
+          <ContactItem
+            icon={<MapPin className="mt-0.5 size-4 text-muted-foreground" />}
+            label="Address"
+            value={student.address}
+          />
+        </ul>
+      </div>
     </div>
   );
 }

@@ -146,3 +146,25 @@ export type Schedule = {
   startTime: string;
   endTime: string;
 };
+
+export type Student = {
+  id: string;
+  studentNumber: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  middleInit?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address: string;
+  sex: UserSex;
+  course: Courses;
+  major?: Major | null;
+  status: Status;
+  role: Role;
+  createdAt: Date;
+  grades: Grade[];
+  isPasswordSet: boolean;
+  isApproved: boolean;
+  avatarUrl?: string;
+};

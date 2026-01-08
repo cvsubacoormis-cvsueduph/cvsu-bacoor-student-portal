@@ -1,13 +1,11 @@
 "use client";
 
 import { jsPDF } from "jspdf";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Button } from "./ui/button";
-import { getCurriculumChecklist } from "@/actions/curriculum-actions";
 import { CurriculumItem, GradeAttempt } from "@/lib/types";
-import { getStudentData } from "@/actions/getStudentData";
-import toast from "react-hot-toast";
 import { DownloadIcon } from "lucide-react";
+import { CurriculumData } from "@/hooks/use-curriculum-data";
 
 type CourseRowProps = {
   code: string;
@@ -25,154 +23,20 @@ type CourseRowProps = {
   allAttempts?: GradeAttempt[];
 };
 
-const GenerateChecklistPDF = () => {
+const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [checklistData, setChecklistData] = useState<CurriculumItem[]>([]);
-  const [studentData, setStudentData] = useState<{
-    fullName: string;
-    studentNumber: string;
-    address: string;
-    phone: string;
-    course: string;
-    major: string | null;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [rateLimited, setRateLimited] = useState(false);
 
-  function getBetterGrade(
-    grade?: string | null,
-    reExam?: string | null
-  ): string {
-    const parse = (g: string | null | undefined) => {
-      const n = parseFloat(g || "");
-      return isNaN(n) ? null : n;
-    };
+  const studentData = {
+    fullName: data.studentInfo.fullName,
+    studentNumber: data.studentInfo.studentNumber,
+    address: data.studentInfo.address || "",
+    phone: data.studentInfo.phone || "",
+    course: data.studentInfo.course,
+    major: data.studentInfo.major,
+  };
 
-    const isNonNumeric = (g: string | null | undefined) =>
-      g && isNaN(parseFloat(g));
-
-    const gradeNum = parse(grade);
-    const reExamNum = parse(reExam);
-
-    // Case 1: Both numeric
-    if (gradeNum !== null && reExamNum !== null) {
-      return gradeNum <= reExamNum ? grade! : reExam!;
-    }
-
-    // Case 2: Only grade is numeric
-    if (gradeNum !== null) return grade!;
-    // Case 3: Only reExam is numeric
-    if (reExamNum !== null) return reExam!;
-
-    // ✅ Case 4: If grade or reExam is a non-numeric string like "DRP"
-    if (isNonNumeric(grade)) return grade!;
-    if (isNonNumeric(reExam)) return reExam!;
-
-    // Fallback
-    return "-";
-  }
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        const student = await getStudentData();
-
-        setStudentData({
-          fullName: `${student.firstName} ${student.middleInit} ${student.lastName}`,
-          studentNumber: student.studentNumber,
-          address: student.address || "",
-          phone: student.phone || "",
-          course: student.course,
-          major: student.major,
-        });
-
-        const curriculum = await getCurriculumChecklist(
-          student.course,
-          student.major
-        );
-
-        const curriculumWithGrades = curriculum.map((item) => {
-          const gradeInfos = student.grades.filter(
-            (g) => g.courseCode === item.courseCode
-          );
-
-          const allAttempts = gradeInfos.map((gradeInfo) => {
-            const [_, startYear, endYear] = gradeInfo.academicYear.split("_");
-            const shortAY = `${startYear.slice(2)}/${endYear.slice(2)}`;
-            const semesterNum =
-              gradeInfo.semester === "FIRST"
-                ? "1"
-                : gradeInfo.semester === "SECOND"
-                  ? "2"
-                  : "MIDYEAR";
-            return {
-              academicYear: `AY/${shortAY} - ${semesterNum}`,
-              grade: getBetterGrade(gradeInfo.grade, gradeInfo.reExam),
-              remarks: gradeInfo.remarks || "",
-              instructor: gradeInfo.instructor || "",
-              isRetaken: gradeInfo.isRetaken,
-              attemptNumber: gradeInfo.attemptNumber,
-              retakenAYSem: gradeInfo.retakenAYSem || "",
-            };
-          });
-
-          allAttempts.sort((a, b) => a.attemptNumber - b.attemptNumber);
-          const latestAttempt = allAttempts[allAttempts.length - 1] || {};
-
-          return {
-            ...item,
-            grade: latestAttempt.grade || "-",
-            remarks: latestAttempt.remarks || "",
-            instructor: latestAttempt.instructor || "",
-            academicYear: latestAttempt.academicYear || "",
-            semesterTaken: gradeInfos[0]?.semester || "",
-            isRetaken: gradeInfos.some((g) => g.isRetaken),
-            allAttempts,
-            retakeCount: allAttempts.length > 1 ? allAttempts.length - 1 : 0,
-          };
-        });
-
-        setChecklistData(
-          curriculumWithGrades.map((item) => ({
-            ...item,
-            allAttempts: item.allAttempts?.map((attempt) => ({
-              ...attempt,
-              semester:
-                attempt.retakenAYSem?.split("-")[1]?.trim() === "1"
-                  ? "FIRST"
-                  : attempt.retakenAYSem?.split("-")[1]?.trim() === "2"
-                    ? "SECOND"
-                    : "MIDYEAR",
-            })),
-          }))
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-
-        if (message.toLowerCase().includes("too many requests")) {
-          toast.error(
-            "Too many requests. Please wait a minute before trying again."
-          );
-          setRateLimited(true);
-          setTimeout(() => setRateLimited(false), 60000);
-        } else {
-          toast.error(
-            "An unexpected error occurred while loading your curriculum."
-          );
-        }
-
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  const checklistData = data.curriculum;
 
   const getCourseTitle = () => {
     if (!studentData) return "";
@@ -226,14 +90,19 @@ const GenerateChecklistPDF = () => {
       const logoX = 40;
       const logoY = 5;
 
-      doc.addImage(
-        "/printlogo.png",
-        "PNG",
-        logoX,
-        logoY,
-        logoWidth,
-        logoHeight
-      );
+      // Ensure the logo exists in public folder
+      try {
+        doc.addImage(
+          "/printlogo.png",
+          "PNG",
+          logoX,
+          logoY,
+          logoWidth,
+          logoHeight
+        );
+      } catch (e) {
+        console.warn("Logo not found or invalid");
+      }
 
       doc.setFontSize(9);
       doc.text("Republic of the Philippines", 105, 11, { align: "center" });
@@ -339,10 +208,9 @@ const GenerateChecklistPDF = () => {
           attemptsText = allAttempts
             .map(
               (attempt) =>
-                `${attempt.academicYear} (${attempt.grade || "-"}) ${
-                  attempt.attemptNumber > 1
-                    ? `(Attempt ${attempt.attemptNumber})`
-                    : ""
+                `${attempt.academicYear} (${attempt.grade || "-"}) ${attempt.attemptNumber > 1
+                  ? `(Attempt ${attempt.attemptNumber})`
+                  : ""
                 }`
             )
             .join("\n");
@@ -423,22 +291,22 @@ const GenerateChecklistPDF = () => {
         doc.text(
           "Summer",
           tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3] +
-            columnWidths[4],
+          columnWidths[0] +
+          columnWidths[1] +
+          columnWidths[2] +
+          columnWidths[3] +
+          columnWidths[4],
           yPos - 3
         );
         doc.text(
           "TOTAL (Lec)",
           tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3] +
-            columnWidths[4] +
-            columnWidths[5],
+          columnWidths[0] +
+          columnWidths[1] +
+          columnWidths[2] +
+          columnWidths[3] +
+          columnWidths[4] +
+          columnWidths[5],
           yPos - 3
         );
         doc.text(
@@ -462,10 +330,10 @@ const GenerateChecklistPDF = () => {
         doc.text(
           "Lab",
           tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3],
+          columnWidths[0] +
+          columnWidths[1] +
+          columnWidths[2] +
+          columnWidths[3],
           yPos + 4
         );
 
@@ -516,15 +384,14 @@ const GenerateChecklistPDF = () => {
             const totalLab = sem1Lab + sem2Lab;
 
             return {
-              year: `${
-                yearLevel === "FIRST"
-                  ? "First"
-                  : yearLevel === "SECOND"
-                    ? "Second"
-                    : yearLevel === "THIRD"
-                      ? "Third"
-                      : "Fourth"
-              } Year`,
+              year: `${yearLevel === "FIRST"
+                ? "First"
+                : yearLevel === "SECOND"
+                  ? "Second"
+                  : yearLevel === "THIRD"
+                    ? "Third"
+                    : "Fourth"
+                } Year`,
               sem1Lec,
               sem1Lab,
               sem2Lec,
@@ -564,31 +431,31 @@ const GenerateChecklistPDF = () => {
           doc.text(
             row.sem2Lab.toString(),
             tableStartX +
-              columnWidths[0] +
-              columnWidths[1] +
-              columnWidths[2] +
-              columnWidths[3],
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3],
             yPos
           );
           doc.text(
             row.summer.toString(),
             tableStartX +
-              columnWidths[0] +
-              columnWidths[1] +
-              columnWidths[2] +
-              columnWidths[3] +
-              columnWidths[4],
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3] +
+            columnWidths[4],
             yPos
           );
           doc.text(
             row.totalLec.toString(),
             tableStartX +
-              columnWidths[0] +
-              columnWidths[1] +
-              columnWidths[2] +
-              columnWidths[3] +
-              columnWidths[4] +
-              columnWidths[5],
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3] +
+            columnWidths[4] +
+            columnWidths[5],
             yPos
           );
           doc.text(
@@ -604,12 +471,12 @@ const GenerateChecklistPDF = () => {
         doc.text(
           grandTotalLec.toString(),
           tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3] +
-            columnWidths[4] +
-            columnWidths[5],
+          columnWidths[0] +
+          columnWidths[1] +
+          columnWidths[2] +
+          columnWidths[3] +
+          columnWidths[4] +
+          columnWidths[5],
           yPos
         );
         doc.text(
@@ -793,21 +660,10 @@ const GenerateChecklistPDF = () => {
       ref={buttonRef}
       className="bg-blue-700 hover:bg-blue-500 w-full sm:w-auto text-sm px-4 py-2 rounded-lg"
       onClick={generateChecklistPDF}
-      disabled={
-        loading ||
-        generating ||
-        !studentData ||
-        !checklistData.length ||
-        rateLimited
-      }
+      disabled={generating || !studentData || !checklistData.length}
     >
-      {loading ? (
-        "Loading Data..."
-      ) : generating ? (
-        "Generating PDF..."
-      ) : (
-        <DownloadIcon />
-      )}
+      <DownloadIcon className="h-4 w-4 mr-2" />
+      {generating ? "Generating..." : "Download Checklist"}
     </Button>
   );
 };

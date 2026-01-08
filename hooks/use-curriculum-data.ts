@@ -13,6 +13,8 @@ export interface CurriculumData {
     studentNumber: string;
     course: string;
     major: string | null;
+    address: string;
+    phone: string | null;
   };
 }
 
@@ -28,7 +30,7 @@ export function useCurriculumData() {
         const student = await getStudentGradesWithReExam();
 
         if (!student || !student.student) {
-            throw new Error("Student data not found");
+          throw new Error("Student data not found");
         }
 
         const grades = student.student.grades || [];
@@ -63,13 +65,12 @@ export function useCurriculumData() {
               grade.retakenAYSem = `AY ${grade.academicYear
                 .split("_")
                 .slice(1)
-                .join("-")} / ${
-                grade.semester === "FIRST"
+                .join("-")} / ${grade.semester === "FIRST"
                   ? "1st"
                   : grade.semester === "SECOND"
                     ? "2nd"
                     : "Midyear"
-              } Sem (Attempt ${index + 1})`;
+                } Sem (Attempt ${index + 1})`;
             });
           } else {
             grades[0].attemptNumber = 1;
@@ -153,9 +154,9 @@ export function useCurriculumData() {
         const gpa =
           gradedSubjects.length > 0
             ? gradedSubjects.reduce(
-                (sum, { grade, credits }) => sum + grade * credits,
-                0
-              ) / gradedSubjects.reduce((sum, { credits }) => sum + credits, 0)
+              (sum, { grade, credits }) => sum + grade * credits,
+              0
+            ) / gradedSubjects.reduce((sum, { credits }) => sum + credits, 0)
             : 0;
 
         setData({
@@ -179,6 +180,8 @@ export function useCurriculumData() {
             studentNumber: student.student.studentNumber,
             course: student.student.course,
             major: student.student.major,
+            address: student.student.address,
+            phone: student.student.phone,
           },
         });
       } catch (error: any) {
