@@ -95,6 +95,7 @@ export default function LoginForm({
                   id="username"
                   type="text"
                   placeholder="19010825name"
+                  required
                   className="p-3 border border-blue-700 rounded-md text-sm focus:border-blue-900 focus:outline-none focus:ring-0 focus:border-2"
                 />
                 <Clerk.FieldError className="block text-sm text-red-400" />
@@ -116,6 +117,7 @@ export default function LoginForm({
                     id="password"
                     type={isPasswordVisible ? "text" : "password"}
                     placeholder="•••••••••••"
+                    required
                     className="w-full p-3 border border-blue-700 rounded-md text-sm focus:border-blue-900 focus:outline-none focus:ring-0 focus:border-2"
                   />
                   <button

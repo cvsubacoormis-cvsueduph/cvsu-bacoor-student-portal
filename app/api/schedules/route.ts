@@ -4,8 +4,8 @@ import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { Courses } from "@prisma/client";
+import { addDays, format, isAfter, isSameDay, parseISO } from "date-fns";
 
-// Helper: Redis cache key
 const getCacheKey = (course: string, date: Date) =>
     `course-access:${course}:${date.toISOString().split("T")[0]}`;
 
@@ -42,24 +42,47 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { course, accessDate, startTime, endTime } = body;
+        const { course, startDate, endDate, startTime, endTime, accessDate } = body;
 
-        if (!course || !accessDate || !startTime || !endTime) {
+        const effectiveStartDate = startDate || accessDate;
+        const effectiveEndDate = endDate || accessDate;
+
+        if (!course || !effectiveStartDate || !startTime || !endTime) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const date = new Date(accessDate);
+        const start = new Date(effectiveStartDate);
+        const end = new Date(effectiveEndDate);
+        let current = start;
 
-        const schedule = await prisma.courseAccessSchedule.upsert({
-            where: { course_accessDate: { course, accessDate: date } },
-            update: { startTime, endTime, isActive: true },
-            create: { course, accessDate: date, startTime, endTime },
-        });
+        const results = [];
 
-        // Update Redis cache
-        await redis.set(getCacheKey(course, date), JSON.stringify(schedule), "EX", 300);
+        while (!isAfter(current, end)) {
+            let dayStartTime = "00:00";
+            let dayEndTime = "23:59";
 
-        return NextResponse.json({ message: "Schedule set successfully", schedule });
+            if (isSameDay(current, start)) {
+                dayStartTime = startTime;
+            }
+            if (isSameDay(current, end)) {
+                dayEndTime = endTime;
+            }
+
+            const accessDate = new Date(current);
+
+            const schedule = await prisma.courseAccessSchedule.upsert({
+                where: { course_accessDate: { course, accessDate } },
+                update: { startTime: dayStartTime, endTime: dayEndTime, isActive: true },
+                create: { course, accessDate, startTime: dayStartTime, endTime: dayEndTime },
+            });
+
+            await redis.set(getCacheKey(course, accessDate), JSON.stringify(schedule), "EX", 300);
+
+            results.push(schedule);
+            current = addDays(current, 1);
+        }
+
+        return NextResponse.json({ message: "Schedule(s) set successfully", schedules: results });
     } catch (err: any) {
         console.error("❌ /api/schedules POST error:", err);
         return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
@@ -77,21 +100,34 @@ export async function PUT(req: Request) {
         }
 
         const body = await req.json();
-        const { course, accessDate, startTime, endTime, isActive } = body;
+        const { course, accessDate, newTaskDate, startTime, endTime, isActive } = body;
 
         if (!course || !accessDate) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const date = new Date(accessDate);
+        const oldDate = new Date(accessDate);
+        let newDate = oldDate;
+        if (newTaskDate) {
+            newDate = new Date(newTaskDate);
+        }
 
+        // Atomic update if date changed
         const schedule = await prisma.courseAccessSchedule.update({
-            where: { course_accessDate: { course, accessDate: date } },
-            data: { startTime, endTime, isActive },
+            where: { course_accessDate: { course, accessDate: oldDate } },
+            data: {
+                startTime,
+                endTime,
+                isActive,
+                accessDate: newDate
+            },
         });
 
-        // Update Redis cache
-        await redis.set(getCacheKey(course, date), JSON.stringify(schedule), "EX", 300);
+        // Update Redis cache (Clear old, set new)
+        if (newTaskDate && !isSameDay(oldDate, newDate)) {
+            await redis.del(getCacheKey(course, oldDate));
+        }
+        await redis.set(getCacheKey(course, newDate), JSON.stringify(schedule), "EX", 300);
 
         return NextResponse.json({ message: "Schedule updated successfully", schedule });
     } catch (err: any) {

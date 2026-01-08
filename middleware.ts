@@ -10,8 +10,7 @@ export default clerkMiddleware(async (auth, req) => {
   // Allow public routes
   if (
     pathname === "/sign-in" ||
-    pathname === "/sign-up" ||
-    pathname === "/pending-approval"
+    pathname === "/sign-up"
   ) {
     return NextResponse.next();
   }
