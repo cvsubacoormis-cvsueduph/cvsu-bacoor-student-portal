@@ -87,7 +87,9 @@ export function PreviewGrades({
     if (isDialogOpen && academicTerms.length === 0) {
       async function fetchAcademicTerms() {
         try {
-          const res = await fetch("/api/academic-terms");
+          const res = await fetch(
+            `/api/academic-terms?studentNumber=${studentNumber}`
+          );
           if (!res.ok) {
             throw new Error("Failed to fetch academic terms");
           }
@@ -128,10 +130,7 @@ export function PreviewGrades({
           }
           const data = await response.json();
           // Filter results based on firstName and lastName.
-          const filteredGrades = data.filter(
-            (grade: Grade) =>
-              grade.firstName === firstName && grade.lastName === lastName
-          );
+          const filteredGrades = data;
           if (filteredGrades.length === 0) {
             setError(
               "No matching record found for the student name. Please verify the details."
