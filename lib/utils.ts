@@ -32,3 +32,25 @@ export function semesterMap(semesterAbbreviation: string) {
       return "";
   }
 }
+
+// Course-specific color mapping
+export const courseColors: { [key: string]: string } = {
+  BSCS: "#800000",    // Maroon
+  BSIT: "#22c55e",    // Green
+  BSCRIM: "#000000",  // Black
+  BSP: "#a855f7",     // Purple
+  BSHM: "#ef4444",    // Red
+  BSED: "#3b82f6",    // Blue
+  BSBA: "#eab308",    // Yellow
+};
+
+export const allCourses = [
+  "BSCS",
+  "BSIT",
+  "BSCRIM",
+  "BSP",
+  "BSHM",
+  "BSBA",
+  "BSED",
+];
+

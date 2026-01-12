@@ -1,6 +1,5 @@
 import Menu from "@/components/Menu";
 import NavBar from "@/components/NavBar";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import Image from "next/image";
 import { Toaster } from "sonner";
 import { auth, currentUser } from "@clerk/nextjs/server";

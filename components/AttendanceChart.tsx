@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TrendingUp } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis } from "recharts";
-import { SyncLoader } from "react-spinners";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, XAxis } from "recharts";
 import {
   Card,
   CardContent,
@@ -19,13 +18,35 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import AttendanceChartSkeleton from "./skeleton/AttendanceChartSkeleton";
+import { allCourses, courseColors } from "@/lib/utils";
 
 const chartConfig = {
   desktop: {
-    label: "Courses",
-    color: "#1d4ed8", // This is the hex code for bg-blue-700
+    label: "Students",
+    color: "#1d4ed8",
   },
 } satisfies ChartConfig;
+
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="rounded-lg border bg-background p-2 shadow-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col">
+            <span className="text-[0.70rem] uppercase">
+              {data.course}
+            </span>
+            <span className="font-bold">
+              {data.desktop}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 interface CourseData {
   course: string;
@@ -46,16 +67,6 @@ export default function AttendanceChart() {
       try {
         const res = await fetch("/api/courses-total");
         const json: { data: CourseData[] } = await res.json();
-
-        const allCourses = [
-          "BSCS",
-          "BSIT",
-          "BSCRIM",
-          "BSP",
-          "BSHM",
-          "BSBA",
-          "BSED",
-        ];
 
         const fetchedMap: { [course: string]: number } = {};
         json.data.forEach((item) => {
@@ -117,13 +128,18 @@ export default function AttendanceChart() {
                 />
                 <ChartTooltip
                   cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
+                  content={<CustomTooltip />}
                 />
                 <Bar
                   dataKey="desktop"
-                  fill="#1d4ed8" // Updated to blue-700
                   radius={8}
                 >
+                  {chartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={courseColors[entry.course] || "#1d4ed8"}
+                    />
+                  ))}
                   <LabelList
                     position="top"
                     offset={12}

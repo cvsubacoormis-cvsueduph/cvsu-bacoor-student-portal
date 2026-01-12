@@ -27,7 +27,7 @@ const chartConfig = {
   },
   female: {
     label: "Female",
-    color: "#93c5fd",
+    color: "#f472b6",
   },
 } satisfies ChartConfig;
 
@@ -47,7 +47,7 @@ export default function AdminPage() {
         const data = await response.json();
         setChartData([
           { sex: "MALE", count: data.maleCount, fill: "#1d4ed8" },
-          { sex: "FEMALE", count: data.femaleCount, fill: "#93c5fd" },
+          { sex: "FEMALE", count: data.femaleCount, fill: "#f472b6" },
         ]);
         setTotalVisitors(data.total);
       } catch (error) {
