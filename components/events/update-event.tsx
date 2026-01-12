@@ -40,7 +40,11 @@ export default function UpdateEvent({ event }: { event: Event }) {
 
       setErrorMessage("");
       setDialogOpen(false);
-      mutate("/api/events");
+      mutate(
+        (key) => typeof key === 'string' && key.startsWith('/api/events'),
+        undefined,
+        { revalidate: true }
+      );
       toast.success("Event updated successfully", { duration: 3000 });
     } catch (error) {
       console.error("Error updating event:", error);

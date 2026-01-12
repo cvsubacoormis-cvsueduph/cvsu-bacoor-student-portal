@@ -57,7 +57,12 @@ export default function CreateEvents() {
       }
       form.reset();
       setDialogOpen(false);
-      mutate("/api/events");
+      // Revalidate all event keys (including paginated ones)
+      mutate(
+        (key) => typeof key === 'string' && key.startsWith('/api/events'),
+        undefined,
+        { revalidate: true }
+      );
       toast.success("Event created successfully");
       setErrorMessage("");
     } catch (error) {
