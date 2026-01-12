@@ -43,7 +43,7 @@ export default async function Menu() {
           icon: "/student.png",
           label: "Pending Approvals",
           href: "/list/approve-students",
-          visible: ["admin", "superuser", "registrar"],
+          visible: ["admin", "superuser",],
         },
         {
           icon: "/profile.png",

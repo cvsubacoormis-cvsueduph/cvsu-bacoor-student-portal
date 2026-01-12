@@ -2,36 +2,104 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
+import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { z } from "zod";
+
 export const runtime = "nodejs";
 
+// Validation schemas
+const getQuerySchema = z.object({
+  studentNumber: z.string().min(1, "Student number is required"),
+  academicYear: z.nativeEnum(AcademicYear, {
+    errorMap: () => ({ message: "Invalid academic year" }),
+  }),
+  semester: z.nativeEnum(Semester, {
+    errorMap: () => ({ message: "Invalid semester" }),
+  }),
+});
+
+const patchBodySchema = z.object({
+  courseCode: z.string().min(1, "Course code is required"),
+  creditUnit: z.number().int().positive("Credit unit must be positive"),
+  courseTitle: z.string().min(1, "Course title is required"),
+  grade: z.string().min(1, "Grade is required"),
+  reExam: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
+  instructor: z.string().min(1, "Instructor is required"),
+});
+
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { searchParams } = new URL(request.url);
-  const studentNumber = searchParams.get("studentNumber");
-  const academicYear = searchParams.get("academicYear");
-  const semester = searchParams.get("semester");
-
-  // Ensure all required parameters are provided
-  if (!studentNumber || !academicYear || !semester) {
-    return NextResponse.json(
-      { error: "Missing query parameters" },
-      { status: 400 }
-    );
-  }
-
-  // Convert studentNumber to a number
-
   try {
-    // Query the database for matching grade records.
-    // We include the related student's firstName and lastName for filtering.
+    const { userId, sessionClaims } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    try {
+      await checkRateLimit({
+        action: "preview-grades-get",
+        limit: 20,
+        windowSeconds: 60,
+      });
+    } catch (error: any) {
+      if (error.code === "RATE_LIMIT_EXCEEDED") {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 429 }
+        );
+      }
+      throw error;
+    }
+
+    // Parse and validate query parameters
+    const { searchParams } = new URL(request.url);
+    const studentNumber = searchParams.get("studentNumber");
+    const academicYear = searchParams.get("academicYear");
+    const semester = searchParams.get("semester");
+
+    const validationResult = getQuerySchema.safeParse({
+      studentNumber,
+      academicYear,
+      semester,
+    });
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid query parameters",
+          details: validationResult.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { studentNumber: validStudentNumber, academicYear: validAcademicYear, semester: validSemester } = validationResult.data;
+
+    // Authorization - Role-based access control
+    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+
+    // Students can only view their own grades
+    if (role === "student") {
+      const student = await prisma.student.findUnique({
+        where: { id: userId },
+        select: { studentNumber: true },
+      });
+
+      if (!student || student.studentNumber !== validStudentNumber) {
+        return NextResponse.json(
+          { error: "Forbidden: You can only view your own grades" },
+          { status: 403 }
+        );
+      }
+    }
+    // Admin and other authorized roles can view any student's grades
+    // (no additional check needed for admin/faculty/registrar)
+
+    // Query the database for matching grade records
     const grades = await prisma.grade.findMany({
       where: {
-        studentNumber,
-        academicYear: academicYear as AcademicYear,
-        semester: semester as Semester,
+        studentNumber: validStudentNumber,
+        academicYear: validAcademicYear,
+        semester: validSemester,
       },
       include: {
         student: {
@@ -46,7 +114,7 @@ export async function GET(request: Request) {
       },
     });
 
-    // Map each grade record to include firstName and lastName at the top level.
+    // Map each grade record to include firstName and lastName at the top level
     const mappedGrades = grades.map((grade) => ({
       ...grade,
       firstName: grade.student.firstName,
@@ -64,14 +132,61 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
-  if (!id) {
-    return NextResponse.json({ message: "id is required" }, { status: 400 });
-  }
-
   try {
-    // Destructure only the updatable fields from the request body.
+    // Authentication check
+    const { userId, sessionClaims } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Authorization - Only admin and authorized staff can edit grades
+    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+
+    if (role === "student") {
+      return NextResponse.json(
+        { error: "Forbidden: Students cannot edit grades" },
+        { status: 403 }
+      );
+    }
+
+    // Rate limiting - stricter for PATCH (5 requests per minute)
+    try {
+      await checkRateLimit({
+        action: "preview-grades-patch",
+        limit: 5,
+        windowSeconds: 60,
+      });
+    } catch (error: any) {
+      if (error.code === "RATE_LIMIT_EXCEEDED") {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 429 }
+        );
+      }
+      throw error;
+    }
+
+    // Validate ID parameter
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    // Parse and validate request body
+    const body = await request.json();
+    const validationResult = patchBodySchema.safeParse(body);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+          details: validationResult.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
     const {
       courseCode,
       creditUnit,
@@ -80,17 +195,22 @@ export async function PATCH(request: Request) {
       reExam,
       remarks,
       instructor,
-    } = await request.json();
+    } = validationResult.data;
 
-    // Optionally, convert or validate fields here
+    // Get user email or username for audit trail
+    const name = sessionClaims?.firstName as string | "" + " " + sessionClaims?.lastName as string | "";
+    const editorIdentifier = name;
+
+    // Update the grade record
     const data = {
       courseCode,
       creditUnit,
       courseTitle,
       grade,
-      reExam: reExam === "" ? null : reExam, // keep reExam as a string
+      reExam: reExam === "" ? null : reExam,
       remarks,
       instructor,
+      uploadedBy: editorIdentifier,
     };
 
     const updatedGrade = await prisma.grade.update({
@@ -102,7 +222,7 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Error updating grade:", error);
     return NextResponse.json(
-      { message: "Failed to update grade" },
+      { error: "Failed to update grade" },
       { status: 500 }
     );
   }
