@@ -1,33 +1,25 @@
 "use client";
 
-import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export default function SearchStudent({
   query,
   setSearchQuery,
-}:{
+}: {
   query: string;
-  setSearchQuery: (value:string) => void;
+  setSearchQuery: (value: string) => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  function handleSearch(value: string) {
-    setSearchQuery(value);
-  }
-
   return (
-    <div className="w-full md:w-auto flex items-center gap-2 text-xs rounded-full ring-[1.5px] ring-gray-300 px-2">
-      <input
-        type="text"
+    <div className="relative w-full md:w-auto">
+      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Input
+        type="search"
         placeholder="Search..."
-        className="w-[200px] p-2 bg-transparent outline-none"
-        onChange={(e) => handleSearch(e.target.value)}
+        className="w-full pl-8 md:w-[200px] lg:w-[300px]"
         value={query}
+        onChange={(e) => setSearchQuery(e.target.value)}
       />
-      <Image src="/search.png" alt="" width={14} height={14} />
     </div>
   );
 }
