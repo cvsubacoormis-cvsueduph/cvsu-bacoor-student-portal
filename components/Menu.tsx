@@ -148,7 +148,7 @@ export default async function Menu() {
         },
         {
           icon: "/subject.png",
-          label: "Schedule",
+          label: "Logged in Schedule",
           href: "/list/schedule",
           visible: ["admin"],
         },
