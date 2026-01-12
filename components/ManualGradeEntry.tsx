@@ -1,7 +1,8 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
   Plus,
@@ -12,9 +13,19 @@ import {
   LocateIcon,
   MailIcon,
   PhoneCallIcon,
+  BookOpen,
+  GraduationCap,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,6 +37,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   searchStudent,
   addManualGrade,
@@ -48,9 +67,10 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, GRADE_HIERARCHY } from "@/lib/utils";
 import { getCourseOptions } from "@/lib/subjects";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 
 interface Student {
   studentNumber: string;
@@ -80,12 +100,24 @@ interface StudentDetails {
 }
 
 export default function ManualGradeEntry() {
-  const [academicYear, setAcademicYear] = useState<string>("");
-  const [semester, setSemester] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchType, setSearchType] = useState<"studentNumber" | "name">(
-    "studentNumber"
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Initialize state from URL params
+  const [academicYear, setAcademicYear] = useState<string>(
+    searchParams.get("academicYear") || ""
   );
+  const [semester, setSemester] = useState<string>(
+    searchParams.get("semester") || ""
+  );
+  const [searchQuery, setSearchQuery] = useState<string>(
+    searchParams.get("q") || ""
+  );
+  const [searchType, setSearchType] = useState<"studentNumber" | "name">(
+    (searchParams.get("type") as "studentNumber" | "name") || "studentNumber"
+  );
+
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -95,9 +127,6 @@ export default function ManualGradeEntry() {
   const [showStudentDetails, setShowStudentDetails] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<
-    "idle" | "success" | "error"
-  >("idle");
   const [validationError, setValidationError] = useState<string>("");
 
   // Form fields
@@ -113,43 +142,142 @@ export default function ManualGradeEntry() {
   const [courseTitleOpen, setCourseTitleOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
 
+  // Helper to update URL params
+  const createQueryString = useCallback(
+    (params: Record<string, string | null>) => {
+      const newSearchParams = new URLSearchParams(searchParams.toString());
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === null) {
+          newSearchParams.delete(key);
+        } else {
+          newSearchParams.set(key, value);
+        }
+      });
+
+      return newSearchParams.toString();
+    },
+    [searchParams]
+  );
+
+  const updateUrl = (params: Record<string, string | null>) => {
+    router.replace(`${pathname}?${createQueryString(params)}`, { scroll: false });
+  };
+
+  // Sync state changes to URL (for dropdowns)
+  const handleAcademicYearChange = (value: string) => {
+    setAcademicYear(value);
+    updateUrl({ academicYear: value });
+  };
+
+  const handleSemesterChange = (value: string) => {
+    setSemester(value);
+    setValidationError("");
+    updateUrl({ semester: value });
+  };
+
+  // Handle URL-based student selection on mount or URL change
+  useEffect(() => {
+    const selectedId = searchParams.get("selected");
+
+    const fetchSelectedStudent = async () => {
+      if (!selectedId || selectedStudent?.studentNumber === selectedId) return;
+
+      setIsLoadingDetails(true);
+      try {
+        // We reuse getStudentDetails to fetch the student by ID
+        const details = await getStudentDetails(selectedId);
+        if (details) {
+          const student: Student = {
+            studentNumber: details.studentNumber,
+            firstName: details.firstName,
+            lastName: details.lastName,
+            course: details.course,
+            major: details.major,
+          };
+
+          handleStudentSelect(student, false); // false = don't update URL again
+        } else {
+          // Invalid ID in URL, remove it
+          updateUrl({ selected: null });
+        }
+      } catch (error) {
+        console.error("Error fetching selected student from URL:", error);
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    fetchSelectedStudent();
+
+    // Also perform search if query exists and results are empty (initial load)
+    const initialQuery = searchParams.get("q");
+    if (initialQuery && searchResults.length === 0 && !selectedId) {
+      // We can trigger search here, but need to be careful about infinite loops.
+      // It's safer to just let the user see the query in the box and click search, 
+      // OR trigger it once. 
+      // Let's rely on the user clicking search to avoid auto-triggering heavy queries 
+      // unless explicitly desired. 
+      // User request: "add search params when searching ... is that prod level"
+      // Prod level usually implies auto-hydration.
+      // Let's auto-search if not already searching.
+      if (!isSearching) {
+        performSearch(initialQuery, (searchParams.get("type") as "name" | "studentNumber") || "studentNumber");
+      }
+    }
+  }, [searchParams]); // Depend on searchParams to react to navigation
+
+  const performSearch = async (query: string, type: "studentNumber" | "name") => {
+    if (!academicYear || !semester) {
+      // Even if URL has query, if AY/Sem are missing, we can't search effectively if backend requires it.
+      // But wait, searchStudent API usually just needs the query? 
+      // Previous code required AY/Sem for validation before search. 
+      // We'll respect that logic.
+      if (!academicYear && !semester) return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await searchStudent(query, type);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Search failed:", error);
+      toast.error("An error occurred while searching");
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  const calculateRemarks = (gradeVal: string, reExamVal: string) => {
+    const basis = (reExamVal && reExamVal !== "none") ? reExamVal : gradeVal;
+
+    if (["1.00", "1.25", "1.50", "1.75", "2.00", "2.25", "2.50", "2.75", "3.00"].includes(basis)) {
+      return "PASSED";
+    } else if (basis === "4.00") {
+      return "CON. FAILURE";
+    } else if (basis === "5.00") {
+      return "FAILED";
+    } else if (basis === "INC") {
+      return "LACK OF REQ";
+    } else if (basis === "DRP") {
+      return "DROPPED";
+    } else if (basis === "S") {
+      return "SATISFACTORY";
+    } else if (basis === "US") {
+      return "UNSATISFACTORY";
+    }
+    return "";
+  };
+
   const handleGradeChange = (value: string) => {
     setGrade(value);
+    setRemarks(calculateRemarks(value, reExam));
+  };
 
-    // Automatically set remarks based on grade
-    switch (value) {
-      case "1.00":
-      case "1.25":
-      case "1.50":
-      case "1.75":
-      case "2.00":
-      case "2.25":
-      case "2.50":
-      case "2.75":
-      case "3.00":
-        setRemarks("PASSED");
-        break;
-      case "4.00":
-        setRemarks("CON. FAILURE");
-        break;
-      case "5.00":
-        setRemarks("FAILED");
-        break;
-      case "INC":
-        setRemarks("LACK OF REQ");
-        break;
-      case "DRP":
-        setRemarks("DROPPED");
-        break;
-      case "S":
-        setRemarks("SATISFACTORY");
-        break;
-      case "US":
-        setRemarks("UNSATISFACTORY");
-        break;
-      default:
-        setRemarks("");
-    }
+  const handleReExamChange = (value: string) => {
+    setReExam(value);
+    setRemarks(calculateRemarks(grade, value));
   };
 
   const handleCourseSelect = (id: string) => {
@@ -160,6 +288,7 @@ export default function ManualGradeEntry() {
       setCourseTitle(selectedCourse.title);
     }
   };
+
   const handleSearch = async () => {
     if (!academicYear || !semester) {
       setValidationError("Please select both academic year and semester first");
@@ -172,25 +301,36 @@ export default function ManualGradeEntry() {
     }
 
     setValidationError("");
-    setIsSearching(true);
-    try {
-      const results = await searchStudent(searchQuery, searchType);
-      setSearchResults(results);
-    } catch (error) {
-      console.error("Search failed:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+
+    // Update URL with search params
+    updateUrl({
+      q: searchQuery,
+      type: searchType,
+      selected: null // Clear selection on new search
+    });
+
+    // Search is also triggered by the useEffect when URL changes, 
+    // but we can call it directly for immediate feedback logic if needed.
+    // However, sticking to "URL as source of truth" is cleaner.
+    // BUT, router.replace is async-ish. 
+    // Let's call performSearch directly AND update URL.
+    await performSearch(searchQuery, searchType);
   };
 
-  const handleStudentSelect = (student: Student) => {
+  const handleStudentSelect = (student: Student, shouldUpdateUrl = true) => {
     setSelectedStudent(student);
     setSearchResults([]);
-    setSearchQuery("");
+    // Don't clear query from state so user sees what they searched, 
+    // but maybe clear from URL if we want "clean" selected state? 
+    // Usually keep it.
+
     setShowStudentDetails(false);
     setStudentDetails(null);
     setValidationError("");
+
+    if (shouldUpdateUrl) {
+      updateUrl({ selected: student.studentNumber });
+    }
 
     // Update course options based on student's program
     const options = getCourseOptions(student.course, student.major).map(
@@ -216,6 +356,7 @@ export default function ManualGradeEntry() {
       setShowStudentDetails(true);
     } catch (error) {
       console.error("Failed to load student details:", error);
+      toast.error("Failed to load student details");
     } finally {
       setIsLoadingDetails(false);
     }
@@ -223,12 +364,15 @@ export default function ManualGradeEntry() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudent || !academicYear || !semester || !selectedCourseId)
+    if (!selectedStudent || !academicYear || !semester || !selectedCourseId) {
+      toast.error("Please fill in all required fields.");
       return;
+    }
 
     const selectedCourse = courseOptions.find((c) => c.id === selectedCourseId);
     if (!selectedCourse) return;
 
+    // Check for existing grade
     const alreadyHasGrade = await checkExsistingGrade({
       studentNumber: selectedStudent.studentNumber,
       courseCode: selectedCourse.code,
@@ -237,14 +381,33 @@ export default function ManualGradeEntry() {
     });
 
     if (alreadyHasGrade) {
-      toast.error(
-        "This student already has a grade for this course. please contact registrar if you want to edit the grade."
-      );
+      Swal.fire({
+        icon: 'warning',
+        title: 'Grade Already Exists',
+        text: 'This student already has a grade for this course in the selected term.',
+      });
       return;
     }
 
+    const result = await Swal.fire({
+      title: 'Confirm Grade Submission',
+      html: `
+            <div class="text-left text-sm">
+                <p><strong>Student:</strong> ${selectedStudent.firstName} ${selectedStudent.lastName}</p>
+                <p><strong>Course:</strong> ${selectedCourse.code}</p>
+                <p><strong>Grade:</strong> <span class="text-blue-600 font-bold text-lg">${grade}</span></p>
+                <p><strong>Remarks:</strong> ${remarks}</p>
+            </div>
+        `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Submit Grade',
+      confirmButtonColor: '#1d4ed8'
+    });
+
+    if (!result.isConfirmed) return;
+
     setIsSubmitting(true);
-    setSubmitStatus("idle");
     try {
       const gradeData = {
         studentNumber: selectedStudent.studentNumber,
@@ -268,30 +431,43 @@ export default function ManualGradeEntry() {
         isResolved: false
       });
 
-      setSubmitStatus("success");
+      Swal.fire({
+        icon: 'success',
+        title: 'Grade Added',
+        text: `Successfully added grade for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      // Reset form
       setSelectedCourseId("");
       setCreditUnit("");
       setGrade("");
       setReExam("");
       setRemarks("");
       setInstructor("");
+
+      // Clear selection
       setSelectedStudent(null);
+      updateUrl({ selected: null }); // Clear URL selection
+
       setShowStudentDetails(false);
       setStudentDetails(null);
 
-      setTimeout(() => {
-        setSubmitStatus("idle");
-      }, 3000);
     } catch (error) {
       console.error("Failed to add grade:", error);
-      setSubmitStatus("error");
+      Swal.fire({
+        icon: 'error',
+        title: 'Submission Failed',
+        text: 'An error occurred while saving the grade.',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const startYear = 2024;
-  const numberOfYears = 6; // generate next 5 academic years
+  const numberOfYears = 6;
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
     const ayEnd = ayStart + 1;
@@ -299,42 +475,45 @@ export default function ManualGradeEntry() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Academic Year and Semester Selection */}
-      <Card>
-        <CardContent className="pt-6">
-          <h3 className="font-medium text-lg mb-4">Select Academic Period</h3>
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* 1. Academic Configuration */}
+      <Card className="border-t-4 border-t-amber-500 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <BookOpen className="w-5 h-5 text-amber-500" />
+            Configuration
+          </CardTitle>
+          <CardDescription>Select the academic term before searching for students.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="academic-year">Academic Year *</Label>
-              <Select value={academicYear} onValueChange={setAcademicYear}>
+              <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
+              <Select value={academicYear} onValueChange={handleAcademicYearChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select academic year" />
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears.map((year: string) => (
                     <SelectItem key={year} value={year}>
-                      {year}
+                      {year.replace('AY_', 'AY ').replace('_', '-')}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="semester">Semester *</Label>
+              <Label htmlFor="semester">Semester <span className="text-red-500">*</span></Label>
               <Select
                 value={semester}
-                onValueChange={(value) => {
-                  setSemester(value);
-                  setValidationError("");
-                }}
+                onValueChange={handleSemesterChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">1st Semester</SelectItem>
-                  <SelectItem value="SECOND">2nd Semester</SelectItem>
+                  <SelectItem value="FIRST">First Semester</SelectItem>
+                  <SelectItem value="SECOND">Second Semester</SelectItem>
                   <SelectItem value="MIDYEAR">Midyear</SelectItem>
                 </SelectContent>
               </Select>
@@ -345,7 +524,7 @@ export default function ManualGradeEntry() {
 
       {/* Validation Error */}
       {validationError && (
-        <div className="rounded-lg bg-red-50 p-4 flex items-start gap-3">
+        <div className="rounded-lg bg-red-50 p-4 flex items-start gap-3 border border-red-100">
           <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
           <div>
             <h3 className="font-medium text-red-800">Validation Error</h3>
@@ -354,66 +533,21 @@ export default function ManualGradeEntry() {
         </div>
       )}
 
-      {/* Data Accuracy Warning for Manual Entry */}
-      <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="space-y-2">
-            <h3 className="font-medium text-blue-800">
-              Important: Verify Student Information
-            </h3>
-            <p className="text-blue-700 text-sm">
-              Before adding grades manually, please ensure all student
-              information is accurate:
-            </p>
-            <ul className="text-blue-700 text-sm space-y-1 ml-4">
-              <li className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-blue-600 rounded-full"></span>
-                <strong>Student Number</strong> - Verify the student number is
-                correct and exists in the system
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-blue-600 rounded-full"></span>
-                <strong>Student Name</strong> - Confirm first name and last name
-                spelling match official records
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-blue-600 rounded-full"></span>
-                <strong>Course Information</strong> - Ensure course code and
-                title are valid and current
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-blue-600 rounded-full"></span>
-                <strong>Grade Values</strong> - Use only approved grade values
-                from the dropdown
-              </li>
-            </ul>
-            <div className="mt-3 p-3 bg-blue-100 rounded-md">
-              <p className="text-blue-800 text-sm font-medium">
-                💡 Use the search function to find and verify student
-                information before entering grades.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Student Search */}
+      {/* 2. Search Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Search Student
+            Find Student
           </CardTitle>
-          <p className="text-sm text-gray-600">
-            Search for the student to ensure accurate information before adding
-            grades.
-          </p>
+          <CardDescription>
+            Search by Student Number or Name (e.g., "Lastname" or "Firstname").
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label htmlFor="search-type">Search by</Label>
+        <CardContent className="space-y-6">
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="w-full md:w-1/3 space-y-2">
+              <Label>Search Criteria</Label>
               <Select
                 value={searchType}
                 onValueChange={(value: "studentNumber" | "name") =>
@@ -429,309 +563,138 @@ export default function ManualGradeEntry() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-2">
-              <Label htmlFor="search-query">
-                {searchType === "studentNumber"
-                  ? "Student Number"
-                  : "First Name or Last Name"}
-              </Label>
+            <div className="w-full md:flex-1 space-y-2">
+              <Label>Search Query</Label>
               <div className="flex gap-2">
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={
                     searchType === "studentNumber"
-                      ? "Enter student number"
-                      : "Enter first name or last name"
+                      ? "20XXXXXXX"
+                      : "Enter name..."
                   }
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 />
                 <Button
                   onClick={handleSearch}
                   disabled={isSearching || !searchQuery.trim()}
-                  className="bg-blue-700 hover:bg-blue-900"
+                  className="bg-blue-600 hover:bg-blue-700 min-w-[100px]"
                 >
-                  {isSearching ? "Searching..." : "Search"}
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Search Results */}
+          {/* Search Results Table */}
           {searchResults.length > 0 && (
-            <div className="space-y-2">
-              <Label>Search Results</Label>
-              <div className="max-h-60 overflow-y-auto space-y-2">
-                {searchResults.map((student) => (
-                  <div
-                    key={student.studentNumber}
-                    className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <User className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <p className="font-medium">
-                            {student.firstName} {student.lastName}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {student.studentNumber} • {student.course} •
-                          </p>
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Program</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((student) => (
+                    <TableRow key={student.studentNumber}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <User className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{student.firstName} {student.lastName}</p>
+                            <p className="text-xs text-gray-500">{student.studentNumber}</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2">
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{student.course}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
                         <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleViewStudentDetails(student)}
-                          variant="outline"
-                          size="sm"
-                          disabled={isLoadingDetails}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          {isLoadingDetails ? "Loading..." : "View Details"}
+                          <Eye className="w-4 h-4 mr-1" /> Details
                         </Button>
                         <Button
-                          onClick={() => handleStudentSelect(student)}
                           size="sm"
-                          className="bg-blue-700 hover:bg-blue-900"
+                          onClick={() => handleStudentSelect(student)}
+                          className="bg-blue-600 hover:bg-blue-700"
                         >
-                          Select
+                          Select <CheckCircle className="w-3 h-3 ml-1" />
                         </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
 
-          {/* Student Details Modal */}
-          {showStudentDetails && studentDetails && (
-            <Card className="border-2 border-blue-200 bg-blue-50">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-blue-800">
-                    <User className="h-5 w-5" />
-                    Student Information
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() =>
-                        handleStudentSelect({
-                          studentNumber: studentDetails.studentNumber,
-                          firstName: studentDetails.firstName,
-                          lastName: studentDetails.lastName,
-                          course: studentDetails.course,
-                          major: studentDetails.major,
-                        })
-                      }
-                      size="sm"
-                      className="bg-blue-700 hover:bg-blue-900"
-                    >
-                      Select for Grading
-                    </Button>
-                    <Button
-                      onClick={() => setShowStudentDetails(false)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Close
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Full Name
-                      </Label>
-                      <p className="text-base font-medium">
-                        {studentDetails.firstName} {studentDetails.middleName}{" "}
-                        {studentDetails.lastName}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Student Number
-                      </Label>
-                      <p className="text-base">
-                        {studentDetails.studentNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Course & Year
-                      </Label>
-                      <p className="text-base">
-                        {courseMap(studentDetails.course)}{" "}
-                        {studentDetails.major === "NONE"
-                          ? ""
-                          : formatMajor(studentDetails.major)}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Status{" "}
-                      </Label>
-                      <Badge
-                        variant={
-                          studentDetails.status === "REGULAR"
-                            ? "outline"
-                            : "secondary"
-                        }
-                      >
-                        {studentDetails.status}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Address
-                      </Label>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                          <LocateIcon className="h-4 w-4 text-blue-600" />
-                          <span className="text-base font-medium">
-                            {studentDetails.address}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Email Address
-                      </Label>
-                      <div className="flex items-center gap-1">
-                        <MailIcon className="h-4 w-4 text-gray-500" />
-                        <span className="text-base">
-                          {studentDetails.email}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Contact Number
-                      </Label>
-                      <div className="flex items-center gap-1">
-                        <PhoneCallIcon className="h-4 w-4 text-gray-500" />
-                        <span className="text-base">
-                          {studentDetails.phone}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <Separator />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* No Results Message */}
           {searchQuery && searchResults.length === 0 && !isSearching && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                <div>
-                  <p className="text-yellow-800 font-medium">
-                    No students found
-                  </p>
-                  <p className="text-yellow-700 text-sm">
-                    Please verify the{" "}
-                    {searchType === "studentNumber" ? "student number" : "name"}{" "}
-                    and try again. Make sure the information is correct and the
-                    student exists in the system.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Selected Student */}
-          {selectedStudent && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <div className="flex-1">
-                  <p className="font-medium text-green-900">
-                    ✓ Student Verified: {selectedStudent.firstName}{" "}
-                    {selectedStudent.lastName}
-                  </p>
-                  <p className="text-sm text-green-700">
-                    {selectedStudent.studentNumber} • {selectedStudent.course} •
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedStudent(null)}
-                  className="ml-auto"
-                >
-                  Change
-                </Button>
-              </div>
+            <div className="text-center py-8 text-gray-500">
+              <User className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+              <p>No students found matching your criteria.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Grade Entry Form */}
+      {/* Selected Student / Entry Form */}
       {selectedStudent && academicYear && semester && (
-        <Card>
+        <Card className="border-t-4 border-t-green-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" />
-              Add Grade
-            </CardTitle>
-            <div className="text-sm text-gray-600">
-              Adding grade for:{" "}
-              <strong>
-                {selectedStudent.firstName} {selectedStudent.lastName}
-              </strong>{" "}
-              ({selectedStudent.studentNumber})
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-6 w-6 text-green-600" />
+                  Grade Entry Form
+                </CardTitle>
+                <CardDescription className="my-2">
+                  Entering grades for <span className="font-semibold text-green-700">{selectedStudent.firstName} {selectedStudent.lastName}</span>
+                </CardDescription>
+              </div>
+              <Badge variant="secondary" className="text-lg px-3 py-1">
+                {selectedStudent.studentNumber}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            {/* Course Information Warning */}
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-amber-700 text-sm">
-                  <strong>Double-check course information:</strong> Ensure the
-                  course code and title are correct and that the student is
-                  enrolled in this course for the selected academic period.
-                </p>
-              </div>
+            <div className="bg-amber-50 border-amber-200 border rounded-lg p-4 mb-6 text-sm text-amber-800 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <p>Make sure the Course Code and Title match the student's actual enrollment for this semester.</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                {/* Course Code */}
                 <div className="space-y-2">
-                  <Label htmlFor="course-code">Course Code *</Label>
-                  <Popover
-                    open={courseCodeOpen}
-                    onOpenChange={setCourseCodeOpen}
-                  >
+                  <Label>Course Code <span className="text-red-500">*</span></Label>
+                  <Popover open={courseCodeOpen} onOpenChange={setCourseCodeOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
-                        aria-expanded={courseCodeOpen}
-                        className="w-full justify-between bg-transparent"
+                        className="w-full justify-between"
                       >
                         {selectedCourseId
-                          ? courseOptions.find(
-                            (course) => course.id === selectedCourseId
-                          )?.code
+                          ? courseOptions.find((c) => c.id === selectedCourseId)?.code
                           : "Select course code..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0">
+                    <PopoverContent className="w-[300px] p-0">
                       <Command>
-                        <CommandInput placeholder="Search course code..." />
+                        <CommandInput placeholder="Search code..." />
                         <CommandList>
                           <CommandEmpty>No course found.</CommandEmpty>
                           <CommandGroup>
@@ -739,20 +702,13 @@ export default function ManualGradeEntry() {
                               <CommandItem
                                 key={course.id}
                                 value={course.id}
-                                onSelect={(currentValue) => {
-                                  handleCourseSelect(currentValue);
+                                onSelect={(val) => {
+                                  handleCourseSelect(val);
                                   setCourseCodeOpen(false);
                                 }}
                               >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedCourseId === course.id
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                {course.code} - {course.title}
+                                <Check className={cn("mr-2 h-4 w-4", selectedCourseId === course.id ? "opacity-100" : "opacity-0")} />
+                                {course.code}
                               </CommandItem>
                             ))}
                           </CommandGroup>
@@ -761,171 +717,92 @@ export default function ManualGradeEntry() {
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Credit Unit */}
                 <div className="space-y-2">
-                  <Label htmlFor="credit-unit">Credit Unit *</Label>
-                  <Select
-                    value={creditUnit}
-                    onValueChange={setCreditUnit}
-                    required
-                  >
+                  <Label>Credit Unit <span className="text-red-500">*</span></Label>
+                  <Select value={creditUnit} onValueChange={setCreditUnit} required>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select credit unit" />
+                      <SelectValue placeholder="Select Units" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">0</SelectItem>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="4">4</SelectItem>
-                      <SelectItem value="5">5</SelectItem>
+                      {[0, 1, 2, 3, 4, 5].map(u => (
+                        <SelectItem key={u} value={u.toString()}>{u}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="course-title">Course Title *</Label>
-                <Popover
-                  open={courseTitleOpen}
-                  onOpenChange={setCourseTitleOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={courseTitleOpen}
-                      className="w-full justify-between bg-transparent"
-                    >
-                      {selectedCourseId
-                        ? courseOptions.find(
-                          (course) => course.id === selectedCourseId
-                        )?.title
-                        : "Select course title..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
-                      <CommandInput placeholder="Search course title..." />
-                      <CommandList>
-                        <CommandEmpty>No course found.</CommandEmpty>
-                        <CommandGroup>
-                          {courseOptions.map((course) => (
-                            <CommandItem
-                              key={course.id}
-                              value={course.id}
-                              onSelect={(currentValue) => {
-                                handleCourseSelect(currentValue);
-                                setCourseTitleOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  selectedCourseId === course.id
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {course.title}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+                {/* Course Title */}
+                <div className="col-span-1 md:col-span-2 space-y-2">
+                  <Label>Course Title <span className="text-red-500">*</span></Label>
+                  <Input value={courseTitle} readOnly className="bg-gray-50" placeholder="Auto-populated upon selecting course code" />
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Grade */}
                 <div className="space-y-2">
-                  <Label htmlFor="grade">Grade *</Label>
-                  <Select
-                    value={grade}
-                    onValueChange={handleGradeChange}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select grade" />
+                  <Label>Grade <span className="text-red-500">*</span></Label>
+                  <Select value={grade} onValueChange={handleGradeChange} required>
+                    <SelectTrigger className="font-medium text-blue-700">
+                      <SelectValue placeholder="Select Grade" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1.00">1.00</SelectItem>
-                      <SelectItem value="1.25">1.25</SelectItem>
-                      <SelectItem value="1.50">1.50</SelectItem>
-                      <SelectItem value="1.75">1.75</SelectItem>
-                      <SelectItem value="2.00">2.00</SelectItem>
-                      <SelectItem value="2.25">2.25</SelectItem>
-                      <SelectItem value="2.50">2.50</SelectItem>
-                      <SelectItem value="2.75">2.75</SelectItem>
-                      <SelectItem value="3.00">3.00</SelectItem>
-                      <SelectItem value="4.00">4.00</SelectItem>
-                      <SelectItem value="5.00">5.00</SelectItem>
-                      <SelectItem value="INC">INC</SelectItem>
-                      <SelectItem value="DRP">DRP</SelectItem>
-                      <SelectItem value="S">S</SelectItem>
-                      <SelectItem value="US">US</SelectItem>
+                      {GRADE_HIERARCHY.map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Remarks */}
                 <div className="space-y-2">
-                  <Label htmlFor="remarks">Remarks *</Label>
-                  <Select
-                    value={remarks}
-                    onValueChange={setRemarks}
-                    required
-                    disabled={!!grade}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          grade ? "Auto-set from grade" : "Select remarks"
-                        }
-                      />
-                    </SelectTrigger>
+                  <Label>Remarks <span className="text-red-500">*</span></Label>
+                  <Input value={remarks} readOnly className={cn("font-medium",
+                    remarks === "PASSED" ? "text-green-600" :
+                      remarks === "FAILED" ? "text-red-600" : "text-gray-700"
+                  )} />
+                </div>
+
+                {/* Re-exam */}
+                <div className="space-y-2">
+                  <Label>Re-exam Grade</Label>
+                  <Select value={reExam} onValueChange={handleReExamChange}>
+                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PASSED">PASSED</SelectItem>
-                      <SelectItem value="CON. FAILURE">CON. FAILURE</SelectItem>
-                      <SelectItem value="FAILED">FAILED</SelectItem>
-                      <SelectItem value="DROPPED">DROPPED</SelectItem>
-                      <SelectItem value="LACK OF REQ">LACK OF REQ</SelectItem>
-                      <SelectItem value="SATISFACTORY">SATISFACTORY</SelectItem>
-                      <SelectItem value="UNSATISFACTORY">
-                        UNSATISFACTORY
-                      </SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                      {GRADE_HIERARCHY.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Instructor */}
                 <div className="space-y-2">
-                  <Label htmlFor="re-exam">Re-exam</Label>
+                  <Label>Instructor <span className="text-red-500">*</span></Label>
                   <Input
-                    id="re-exam"
-                    value={reExam}
-                    onChange={(e) => setReExam(e.target.value)}
-                    placeholder="Re-exam details (optional)"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="instructor">Instructor *</Label>
-                  <Input
-                    id="instructor"
                     value={instructor}
                     onChange={(e) => setInstructor(e.target.value)}
-                    placeholder="MR. ZANNIE I. GAMUYAO"
+                    placeholder="Instructor Name"
                     required
                   />
                 </div>
+
               </div>
 
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end pt-6 border-t">
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-8 bg-blue-700 hover:bg-blue-900"
+                  className="bg-green-600 hover:bg-green-700 min-w-[150px]"
                 >
-                  {isSubmitting ? "Adding Grade..." : "Add Grade"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" /> Add Grade
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
@@ -933,32 +810,80 @@ export default function ManualGradeEntry() {
         </Card>
       )}
 
-      {/* Status Messages */}
-      {submitStatus === "success" && (
-        <div className="rounded-lg bg-green-50 p-4 flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-green-800">
-              Grade Added Successfully
-            </h3>
-            <p className="text-green-700 text-sm">
-              The grade has been successfully added for{" "}
-              {selectedStudent?.firstName} {selectedStudent?.lastName}.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Student Details Dialog / Modal can remain as overlay or inline. Currently it's inline overlay in existing code? 
+          Wait, existing code had it as a conditional render.  */}
+      {showStudentDetails && studentDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="bg-blue-50 border-b">
+              <div className="flex items-center justify-between">
+                <CardTitle className=" text-blue-800 flex items-center gap-2">
+                  <User className="h-5 w-5" /> Student Profile
+                </CardTitle>
+                <Button variant="ghost" size="icon" onClick={() => setShowStudentDetails(false)}>
+                  <span className="text-xl">×</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <Label className="text-gray-500">Full Name</Label>
+                  <p className="font-semibold text-lg">{studentDetails.firstName} {studentDetails.middleName} {studentDetails.lastName}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-gray-500">Student Number</Label>
+                  <p className="font-mono text-lg">{studentDetails.studentNumber}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-gray-500">Course & Major</Label>
+                  <p>{courseMap(studentDetails.course)} {studentDetails.major !== "NONE" && `(${formatMajor(studentDetails.major)})`}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-gray-500 mr-2">Status</Label>
+                  <Badge className={`ml-auto ${studentDetails.status === "REGULAR" ? "bg-green-700" : "bg-blue-700"}`}>{studentDetails.status}</Badge>
+                </div>
+              </div>
 
-      {submitStatus === "error" && (
-        <div className="rounded-lg bg-red-50 p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-red-800">Failed to Add Grade</h3>
-            <p className="text-red-700 text-sm">
-              There was an error adding the grade. Please verify all information
-              and try again.
-            </p>
-          </div>
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                  <LocateIcon className="w-4 h-4" /> Contact Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500 block">Email</span>
+                    <span>{studentDetails.email}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Phone</span>
+                    <span>{studentDetails.phone}</span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="text-gray-500 block">Address</span>
+                    <span>{studentDetails.address}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t gap-2">
+                <Button variant="outline" onClick={() => setShowStudentDetails(false)}>Close</Button>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => handleStudentSelect({
+                    studentNumber: studentDetails.studentNumber,
+                    firstName: studentDetails.firstName,
+                    lastName: studentDetails.lastName,
+                    course: studentDetails.course,
+                    major: studentDetails.major,
+                  })}
+                >
+                  Select for Grading
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

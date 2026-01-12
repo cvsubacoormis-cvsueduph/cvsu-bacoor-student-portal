@@ -2,7 +2,7 @@
 
 import type React from "react";
 import * as XLSX from "xlsx";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -10,10 +10,12 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  Download,
+  Loader2,
+  XCircle,
+  RefreshCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -23,55 +25,99 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Swal from "sweetalert2";
 import UploadGradeNotice from "./Notices/upload-grade-notice";
-import { Skeleton } from "./ui/skeleton";
 import UploadGradesSkeleton from "./skeleton/UploadGradesSkeleton";
+import { z } from "zod";
+import { Badge } from "@/components/ui/badge";
+
+// --- Validation Schema ---
+const gradeRowSchema = z.object({
+  studentNumber: z.union([z.string(), z.number()]).transform(String),
+  courseCode: z.string().min(1),
+  grade: z.union([z.string(), z.number()]),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+}).passthrough(); // Allow other fields
+
+const BATCH_SIZE = 50;
 
 interface UploadResult {
   studentNumber?: string;
   courseCode: string;
   status: string;
   studentName?: string;
-  possibleMatches?: Array<{
-    studentNumber: string;
-    firstName: string;
-    lastName: string;
-  }>;
+}
+
+interface LogEntry {
+  type: 'success' | 'error' | 'warning';
+  message: string;
+  timestamp: Date;
 }
 
 export function UploadGrades() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<
-    "idle" | "success" | "error"
-  >("idle");
+  const [isParsing, setIsParsing] = useState(false);
+
+  // Progress State
+  const [progress, setProgress] = useState(0);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
+
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [academicYear, setAcademicYear] = useState<string>("");
   const [semester, setSemester] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
-  const recordsPerPage = 10;
-  const [abortController, setAbortController] =
-    useState<AbortController | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (abortController) {
-        abortController.abort();
-      }
-    };
-  }, [abortController]);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 10;
+
+  const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Computed
+  const totalPages = previewData ? Math.ceil(previewData.length / recordsPerPage) : 0;
+  const paginatedData = previewData?.slice(
+    (currentPage - 1) * recordsPerPage,
+    currentPage * recordsPerPage
+  );
+
+  const resetState = () => {
+    setFile(null);
+    setPreviewData(null);
+    setUploadResults([]);
+    setLogs([]);
+    setProgress(0);
+    setProcessedCount(0);
+    setTotalRecords(0);
+    setIsUploading(false);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
+    await processFile(selectedFile);
+  };
 
-    setIsLoading(true);
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (!droppedFile) return;
+    await processFile(droppedFile);
+  };
 
+  const processFile = async (selectedFile: File) => {
     const validTypes = [
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -79,73 +125,42 @@ export function UploadGrades() {
     ];
 
     if (!validTypes.includes(selectedFile.type)) {
-      alert("Please select a valid Excel file (.xls or .xlsx)");
-      e.target.value = "";
+      Swal.fire({
+        icon: "error",
+        title: "Invalid File",
+        text: "Please select a valid Excel file (.xls or .xlsx)",
+      });
       return;
     }
 
     setFile(selectedFile);
-    setUploadStatus("idle");
-    setIsLoadingPreview(true);
+    setIsParsing(true);
+    setUploadResults([]);
+    setLogs([]);
 
     try {
       const data = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      // Basic Validation of headers (optional, relying on row schema later)
+      if (jsonData.length === 0) {
+        throw new Error("File is empty");
+      }
+
       setPreviewData(jsonData);
+      setTotalRecords(jsonData.length);
     } catch (error) {
       console.error("Error parsing Excel file:", error);
       Swal.fire({
         icon: "error",
-        title: "Error",
+        title: "Parse Error",
         text: "Failed to parse Excel file. Please check the format.",
       });
+      setFile(null);
     } finally {
-      setIsLoadingPreview(false);
-      setIsLoading(false);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files?.[0];
-    if (!droppedFile) return;
-
-    const validTypes = [
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel.sheet.macroEnabled.12",
-    ];
-
-    if (!validTypes.includes(droppedFile.type)) {
-      Swal.fire({
-        icon: "error",
-        title: "Invalid file type",
-        text: "Please select a valid Excel file (.xls or.xlsx)",
-      });
-      return;
-    }
-
-    setFile(droppedFile);
-    setUploadStatus("idle");
-    setIsLoadingPreview(true);
-
-    try {
-      const data = await droppedFile.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-      setPreviewData(jsonData);
-    } catch (error) {
-      console.error("Error parsing Excel file:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to parse Excel file. Please check the format.",
-      });
-    } finally {
-      setIsLoadingPreview(false);
+      setIsParsing(false);
     }
   };
 
@@ -153,137 +168,191 @@ export function UploadGrades() {
     e.preventDefault();
   };
 
+  const addLog = (type: 'success' | 'error' | 'warning', message: string) => {
+    setLogs(prev => [{ type, message, timestamp: new Date() }, ...prev]);
+  };
+
+  const cancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsUploading(false);
+      addLog("warning", "Upload cancelled by user.");
+    }
+  };
+
   const handleUpload = async () => {
     if (!file || !academicYear || !semester || !previewData) return;
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setProgress(0);
+    setProcessedCount(0);
     setUploadResults([]);
+    setLogs([]);
 
     const controller = new AbortController();
-    setAbortController(controller);
+    abortControllerRef.current = controller;
 
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(progressInterval);
-          return prev;
-        }
-        return prev + 5;
+    // Chunking Logic
+    const chunks = [];
+    for (let i = 0; i < previewData.length; i += BATCH_SIZE) {
+      chunks.push(previewData.slice(i, i + BATCH_SIZE));
+    }
+
+    let completed = 0;
+
+    // Validate first
+    // We can do client-side validation for all rows quickly before starting
+    let validationErrors = 0;
+    previewData.forEach((row, idx) => {
+      const result = gradeRowSchema.safeParse(row);
+      if (!result.success) {
+        validationErrors++;
+        // We could log specific errors but might be too noisy for large files
+      }
+    });
+
+    if (validationErrors > 0) {
+      const proceed = await Swal.fire({
+        title: 'Validation Issues',
+        text: `Found ${validationErrors} records with missing required fields (Student Number, Course Code, or Grade). These will likely fail. Continue?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, proceed',
+        cancelButtonText: 'No, cancel'
       });
-    }, 100);
 
-    try {
-      const res = await fetch("/api/upload-grades", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          previewData.map((item: any) => ({
-            ...item,
-            academicYear,
-            semester,
-          }))
-        ),
-        signal: controller.signal,
-      });
-
-      const result = await res.json();
-
-      clearInterval(progressInterval);
-
-      if (!res.ok) {
-        console.error(result.error || "Upload failed");
-        setUploadStatus("error");
-        Swal.fire({
-          icon: "error",
-          title: "Upload Failed",
-          text: result.error || "An error occurred during upload",
-        });
+      if (!proceed.isConfirmed) {
+        setIsUploading(false);
         return;
       }
+    }
 
-      setUploadProgress(100);
-      setUploadStatus("success");
-      setUploadResults(result.results);
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        if (controller.signal.aborted) break;
 
-      Swal.fire({
-        icon: "success",
-        title: "Upload Complete",
-        width: 800,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        console.log("Upload cancelled");
+        const chunk = chunks[i];
+        const payload = chunk.map((item: any) => ({
+          ...item,
+          academicYear,
+          semester,
+        }));
+
+        try {
+          const res = await fetch("/api/upload-grades", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            addLog("error", `Batch ${i + 1} Failed: ${res.statusText}`);
+            // Push placeholder errors for this chunk
+            setUploadResults(prev => [
+              ...prev,
+              ...chunk.map((item: any) => ({
+                studentNumber: item.studentNumber,
+                courseCode: item.courseCode,
+                status: "❌ Batch Upload Failed",
+                studentName: "Unknown"
+              }))
+            ]);
+          } else {
+            const result = await res.json();
+            if (result.results) {
+              setUploadResults((prev) => [...prev, ...result.results]);
+              // Check for warnings/errors in the success response
+              const failures = result.results.filter((r: any) => r.status.includes("❌"));
+              const warnings = result.results.filter((r: any) => r.status.includes("⚠️"));
+
+              if (failures.length > 0) addLog("error", `Batch ${i + 1}: ${failures.length} errors`);
+              else if (warnings.length > 0) addLog("warning", `Batch ${i + 1}: ${warnings.length} warnings`);
+              else addLog("success", `Batch ${i + 1} uploaded successfully`);
+            }
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') throw err;
+          console.error(err);
+          addLog("error", `Batch ${i + 1} Network Error`);
+        }
+
+        completed += chunk.length;
+        setProcessedCount(completed);
+        setProgress(Math.round((completed / totalRecords) * 100));
+      }
+
+      if (!controller.signal.aborted) {
+        Swal.fire({
+          icon: "success",
+          title: "Processing Complete",
+          text: `Processed ${totalRecords} records. Check the logs for details.`,
+        });
+      }
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        // Handled
       } else {
-        clearInterval(progressInterval);
-        setUploadStatus("error");
-        setIsUploading(false);
-        console.error("Upload failed:", error);
+        console.error("Upload process failed:", error);
         Swal.fire({
           icon: "error",
-          title: "Upload Failed",
-          text: "An error occurred during the upload process",
+          title: "System Error",
+          text: "An unexpected error occurred during the upload process.",
         });
       }
     } finally {
-      setAbortController(null);
       setIsUploading(false);
+      abortControllerRef.current = null;
     }
   };
 
-  const totalPages = previewData
-    ? Math.ceil(previewData.length / recordsPerPage)
-    : 0;
-  const paginatedData = previewData?.slice(
-    (currentPage - 1) * recordsPerPage,
-    currentPage * recordsPerPage
-  );
-
   const startYear = 2024;
-  const numberOfYears = 6; // generate next 5 academic years
+  const numberOfYears = 6;
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
     const ayEnd = ayStart + 1;
     return `AY_${ayStart}_${ayEnd}`;
   });
 
-  if (isLoading) {
-    return <UploadGradesSkeleton />;
-  }
-
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="pt-6">
-          <h3 className="font-medium text-lg mb-4">Select Academic Period</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Configuration Card */}
+      <Card className="border-t-4 border-t-blue-600 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+            Upload Configuration
+          </CardTitle>
+          <CardDescription>Select the academic term for these grades before uploading.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="academic-year">Academic Year *</Label>
-              <Select value={academicYear} onValueChange={setAcademicYear}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select academic year" />
+              <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
+              <Select value={academicYear} onValueChange={setAcademicYear} disabled={isUploading}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears.map((year: string) => (
                     <SelectItem key={year} value={year}>
-                      {year}
+                      {year.replace("AY_", "AY ").replace("_", "-")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="semester">Semester *</Label>
-              <Select value={semester} onValueChange={setSemester}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select semester" />
+              <Label htmlFor="semester">Semester <span className="text-red-500">*</span></Label>
+              <Select value={semester} onValueChange={setSemester} disabled={isUploading}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">FIRST</SelectItem>
-                  <SelectItem value="SECOND">SECOND</SelectItem>
-                  <SelectItem value="MIDYEAR">MIDYEAR</SelectItem>
+                  <SelectItem value="FIRST">First Semester</SelectItem>
+                  <SelectItem value="SECOND">Second Semester</SelectItem>
+                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -291,213 +360,246 @@ export function UploadGrades() {
         </CardContent>
       </Card>
 
-      {/* Data Format Warning */}
       <UploadGradeNotice />
 
-      {/* File Upload Section */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
-          file
-            ? "border-green-500 bg-green-50"
-            : !academicYear || !semester
-              ? "border-gray-200 bg-gray-50 cursor-not-allowed"
-              : "border-gray-300 hover:border-gray-400"
-        }`}
-        onDrop={!academicYear || !semester ? undefined : handleDrop}
-        onDragOver={!academicYear || !semester ? undefined : handleDragOver}
-        onClick={
-          !academicYear || !semester
-            ? undefined
-            : () => document.getElementById("file-input")?.click()
-        }
-      >
-        <input
-          id="file-input"
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={!academicYear || !semester}
-        />
+      {/* Upload Area */}
+      {!file && (
+        <div
+          className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${!academicYear || !semester
+            ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
+            : "border-blue-200 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-50 cursor-pointer"
+            }`}
+          onDrop={!academicYear || !semester ? undefined : handleDrop}
+          onDragOver={!academicYear || !semester ? undefined : handleDragOver}
+          onClick={
+            !academicYear || !semester
+              ? undefined
+              : () => document.getElementById("file-input")?.click()
+          }
+        >
+          <input
+            id="file-input"
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            className="hidden"
+            disabled={!academicYear || !semester}
+          />
 
-        {!academicYear || !semester ? (
-          <div className="flex flex-col items-center">
-            <Upload className="h-16 w-16 text-gray-300 mb-2" />
-            <p className="text-lg font-medium text-gray-400">
-              Please select academic year and semester first
-            </p>
-            <p className="text-sm text-gray-400">
-              Complete the form above to enable file upload
-            </p>
-            <div className="mt-3 text-xs text-amber-600 text-center max-w-md">
-              <p>
-                📋 Remember to verify studentNumber, lastName, firstName, and
-                courseCode in your Excel file
-              </p>
+          {!academicYear || !semester ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-4 rounded-full bg-gray-100">
+                <Upload className="h-8 w-8 text-gray-400" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-gray-600">
+                  Configuration Required
+                </p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Please select an Academic Year and Semester above to unlock upload.
+                </p>
+              </div>
             </div>
-          </div>
-        ) : file ? (
-          <div className="flex flex-col items-center">
-            <FileSpreadsheet className="h-16 w-16 text-green-500 mb-2" />
-            <p className="text-lg font-medium">{file.name}</p>
-            <p className="text-sm text-gray-500">
-              {(file.size / 1024 / 1024).toFixed(2)} MB
-            </p>
-            <div className="mt-2 text-sm text-blue-600">
-              <p>
-                {academicYear} •{" "}
-                {semester
-                  .replace("-", " ")
-                  .replace(/\b\w/g, (l) => l.toUpperCase())}
-              </p>
+          ) : isParsing ? (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
+              <p className="font-medium text-blue-600">Parsing Excel File...</p>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <Upload className="h-16 w-16 text-gray-400 mb-2" />
-            <p className="text-lg font-medium">Upload your Excel file here</p>
-            <p className="text-sm text-gray-500">or click to browse</p>
-            <p className="text-xs text-gray-400 mt-2">
-              Supports .xlsx and .xls files
-            </p>
-          </div>
-        )}
-      </div>
-
-      {file && academicYear && semester && (
-        <div className="flex justify-center">
-          <Button
-            onClick={handleUpload}
-            disabled={isUploading}
-            className="px-8 bg-blue-700 hover:bg-blue-800"
-          >
-            {isUploading ? "Uploading..." : "Upload Grades"}
-          </Button>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-4 rounded-full bg-blue-100 shadow-sm">
+                <Upload className="h-8 w-8 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-gray-700">
+                  Click to Upload or Drag & Drop
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Excel files (.xlsx, .xls) only
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {isUploading && (
-        <Card className="mt-4">
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium mb-2">
-              Uploading grades for {academicYear} -{" "}
-              {semester
-                .replace("-", " ")
-                .replace(/\b\w/g, (l) => l.toUpperCase())}
-              ...
-            </p>
-            <Progress value={uploadProgress} className="h-2" />
-          </CardContent>
-        </Card>
-      )}
-
-      {isLoadingPreview && (
-        <Card className="mt-6">
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              {/* Table Header Skeleton */}
-              <div className="grid grid-cols-6 gap-2 border-b pb-2">
-                {[...Array(6)].map((_, i) => (
-                  <Skeleton key={i} className="h-6 w-full" />
-                ))}
-              </div>
-
-              {/* Table Rows Skeleton */}
-              <div className="space-y-2">
-                {[...Array(5)].map((_, rowIndex) => (
-                  <div
-                    key={rowIndex}
-                    className="grid grid-cols-6 gap-2 items-center"
-                  >
-                    {[...Array(6)].map((_, colIndex) => (
-                      <Skeleton key={colIndex} className="h-6 w-full" />
-                    ))}
+      {/* File Preview & Action Area */}
+      {file && previewData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: File Info & Actions */}
+          <div className="lg:col-span-1 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>File Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
+                  <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                  <div className="overflow-hidden">
+                    <p className="font-medium truncate" title={file.name}>{file.name}</p>
+                    <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB • {totalRecords} Records</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!isLoadingPreview &&
-        previewData &&
-        paginatedData &&
-        paginatedData.length > 0 && (
-          <Card className="mt-6">
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium text-lg">Data Preview</h3>
-                <div className="text-sm text-gray-600">
-                  {academicYear} •{" "}
-                  {semester
-                    .replace("-", " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase())}
                 </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      {Object.keys(previewData[0]).map((header) => (
-                        <th key={header} className="border px-4 py-2 text-left">
-                          {header}
-                        </th>
+
+                {isUploading ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span>Progress</span>
+                      <span className="font-medium">{progress}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                    <p className="text-xs text-center text-gray-500">
+                      Processed {processedCount} of {totalRecords} rows
+                    </p>
+                    <Button variant="destructive" className="w-full" onClick={cancelUpload}>
+                      <XCircle className="w-4 h-4 mr-2" /> Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleUpload}>
+                      <Upload className="w-4 h-4 mr-2" /> Start Upload
+                    </Button>
+                    <Button variant="outline" className="w-full" onClick={resetState}>
+                      <RefreshCcw className="w-4 h-4 mr-2" /> Reset / New File
+                    </Button>
+                  </div>
+                )}
+
+                {/* Mini Logs */}
+                {logs.length > 0 && (
+                  <div className="mt-4 border-t pt-4">
+                    <h4 className="text-sm font-medium mb-2">Activity Log</h4>
+                    <div className="max-h-[200px] overflow-y-auto text-xs space-y-1 bg-gray-50 p-2 rounded border">
+                      {logs.map((log, i) => (
+                        <div key={i} className={`flex gap-2 ${log.type === 'error' ? 'text-red-600' :
+                          log.type === 'warning' ? 'text-amber-600' : 'text-green-600'
+                          }`}>
+                          <span>•</span>
+                          <span>{log.message}</span>
+                        </div>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedData.map((row, index) => (
-                      <tr
-                        key={index}
-                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                      >
-                        {Object.values(row).map((cell: any, cellIndex) => (
-                          <td key={cellIndex} className="border px-4 py-2">
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-sm text-gray-500">
-                    Showing {(currentPage - 1) * recordsPerPage + 1} to{" "}
-                    {Math.min(currentPage * recordsPerPage, previewData.length)}{" "}
-                    of {previewData.length} records
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.max(1, prev - 1))
-                      }
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column: Data Preview / Results */}
+          <div className="lg:col-span-2">
+            <Card className="h-full flex flex-col">
+              <CardHeader>
+                <CardTitle>
+                  {isUploading || uploadResults.length > 0 ? "Upload Results" : "Data Preview"}
+                </CardTitle>
+                <CardDescription>
+                  {isUploading || uploadResults.length > 0
+                    ? "Real-time results of the upload process."
+                    : `Previewing first ${Math.min(previewData.length, 50)} records of ${previewData.length}.`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden min-h-[400px]">
+                {isUploading || uploadResults.length > 0 ? (
+                  // Results Table
+                  <div className="h-full flex flex-col">
+                    <div className="overflow-auto border rounded-md flex-1 relative">
+                      <Table>
+                        <TableHeader className="bg-gray-50 sticky top-0">
+                          <TableRow>
+                            <TableHead>Student</TableHead>
+                            <TableHead>Course</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {uploadResults.slice().reverse().map((res, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium">
+                                {res.studentName || res.studentNumber}
+                                <div className="text-xs text-gray-500">{res.studentNumber}</div>
+                              </TableCell>
+                              <TableCell>{res.courseCode}</TableCell>
+                              <TableCell>
+                                {res.status.includes("✅") ? (
+                                  <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
+                                ) : res.status.includes("⚠️") ? (
+                                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200">Warning</Badge>
+                                ) : (
+                                  <div className="flex items-center text-red-600 gap-1 text-sm font-medium">
+                                    <AlertCircle className="w-4 h-4" />
+                                    {res.status.replace("❌", "").trim()}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {uploadResults.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                                Waiting for results...
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ) : (
+                  // Preview Table
+                  <div className="h-full flex flex-col">
+                    <div className="overflow-auto border rounded-md flex-1">
+                      <Table>
+                        <TableHeader className="bg-gray-50">
+                          <TableRow>
+                            {previewData.length > 0 && Object.keys(previewData[0]).slice(0, 5).map(header => (
+                              <TableHead key={header}>{header}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedData?.map((row, i) => (
+                            <TableRow key={i}>
+                              {Object.values(row).slice(0, 5).map((val: any, j) => (
+                                <TableCell key={j}>{val}</TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between pt-4">
+                      <span className="text-sm text-gray-500">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

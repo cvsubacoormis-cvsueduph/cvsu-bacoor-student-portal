@@ -86,7 +86,7 @@ export default async function GradesListsPage({
 }) {
   // Authentication check
   const { userId } = await auth();
-  const user = await (currentUser());
+  const user = await currentUser();
 
   if (!userId) {
     return <RedirectToSignIn />;
