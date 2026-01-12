@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const { userId } = await auth();
   const user = await currentUser();
 
-  if (!userId) {
+  if (!userId || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -39,6 +39,14 @@ export async function POST(req: Request) {
   if (!grades || !Array.isArray(grades) || grades.length === 0) {
     return NextResponse.json({ error: "Invalid payload or empty batch" }, { status: 400 });
   }
+
+  // --- Security: Check for Legacy Mode Authorization ---
+  const requestLegacyMode = grades[0]?.allowLegacy === true;
+  const userRole = (user.publicMetadata?.role as string) || "";
+  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(userRole);
+
+  // Only enable legacy mode if requested AND authorized
+  const isLegacyMode = requestLegacyMode && canUseLegacyMode;
 
   // Extract unique identifiers from THIS BATCH only
   const uniqueStudentNumbers = [
@@ -99,7 +107,7 @@ export async function POST(req: Request) {
     where: {
       academicYear,
       semester,
-      isActive: true,
+      isActive: true, // Only active offerings?
       curriculumId: { in: curriculumSubjects.map((cs) => cs.id) },
     },
     select: { id: true, curriculumId: true },
@@ -160,13 +168,7 @@ export async function POST(req: Request) {
       let resolvedStudentNumber = normalizedStudentNumber;
       let student = resolvedStudentNumber ? studentMap.get(resolvedStudentNumber) : undefined;
 
-      // NOTE: Removed strict name matching fallback for performance and safety. 
-      // We rely on Student Number primarily. 
       if (!student) {
-        // Try to match strictly by name if provided, but only within the fetched set is not possible 
-        // if we only fetched by studentNumber. 
-        // If we want name matching, we'd need to fetch ALL students which is bad.
-        // Strategy: Batch uploads MUST have student number.
         results.push({
           identifier: `${firstName} ${lastName}`,
           courseCode: sanitizedCourseCode,
@@ -185,16 +187,6 @@ export async function POST(req: Request) {
           action: "FAILED",
         });
         continue;
-      }
-
-      // Conflict detection: studentNumber + name mismatch
-      // Only check if both are present in the file
-      if (firstName && lastName) {
-        const fileFullName = normalizeName(`${firstName} ${lastName}`);
-        const dbFullName = normalizeName(`${student.firstName} ${student.lastName}`);
-        // Simple check, might be too strict if typos? Let's safeguard but maybe not block.
-        // Actually, let's block if it's completely different.
-        // For now, let's trust the Student Number as the source of truth but warn.
       }
 
       // Ensure required fields
@@ -222,52 +214,53 @@ export async function POST(req: Request) {
       const checklistSubject = curriculumSubjects.find(
         (cs) =>
           cs.courseCode === sanitizedCourseCode &&
-          cs.course === student!.course && // TS knows student is defined here
+          cs.course === student!.course &&
           cs.major === (student!.major || Major.NONE)
       );
 
-      if (!checklistSubject) {
-        results.push({
-          studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
-          status: `❌ Subject not in curriculum for ${student.course}`,
-        });
-        // Log failure
-        logsToCreate.push({
-          studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
-          courseTitle: sanitizedCourseTitle || "",
-          creditUnit: Number(creditUnit) || 0,
-          grade: standardizedGrade,
-          remarks: "Subject not in curriculum",
-          instructor: sanitizedInstructor,
-          academicYear,
-          semester,
-          action: "FAILED",
-        });
-        continue;
+      let subjectOfferingId: string | null = null;
+      let isLegacyUpload = false;
+
+      // Logic: Only stricter 'Existing' mode matches both. 
+      // Legacy mode ignores checklist/offering if missing.
+
+      if (checklistSubject) {
+        const offering = offeringMap.get(checklistSubject.id);
+        if (offering) {
+          subjectOfferingId = offering.id;
+        }
       }
 
-      const subjectOffering = offeringMap.get(checklistSubject.id);
-      if (!subjectOffering) {
-        results.push({
-          studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
-          status: "❌ Subject not offered in selected term",
-        });
-        logsToCreate.push({
-          studentNumber: student.studentNumber,
-          courseCode: sanitizedCourseCode,
-          courseTitle: sanitizedCourseTitle || "",
-          creditUnit: Number(creditUnit) || 0,
-          grade: standardizedGrade,
-          remarks: "Subject not offered",
-          instructor: sanitizedInstructor,
-          academicYear,
-          semester,
-          action: "FAILED",
-        });
-        continue;
+      if (!subjectOfferingId) {
+        // If strict mode, fail
+        if (!isLegacyMode) {
+          const statusMsg = checklistSubject
+            ? "❌ Subject not offered in selected term"
+            : `❌ Subject not in curriculum for ${student.course}`;
+
+          results.push({
+            studentNumber: student.studentNumber,
+            courseCode: sanitizedCourseCode,
+            status: statusMsg,
+          });
+
+          logsToCreate.push({
+            studentNumber: student.studentNumber,
+            courseCode: sanitizedCourseCode,
+            courseTitle: sanitizedCourseTitle || "",
+            creditUnit: Number(creditUnit) || 0,
+            grade: standardizedGrade,
+            remarks: checklistSubject ? "Subject not offered" : "Subject not in curriculum",
+            instructor: sanitizedInstructor,
+            academicYear,
+            semester,
+            action: "FAILED",
+          });
+          continue;
+        } else {
+          // Legacy Mode: Allow without link
+          isLegacyUpload = true;
+        }
       }
 
       // Check existing grade
@@ -295,11 +288,6 @@ export async function POST(req: Request) {
         const existingIndex = GRADE_HIERARCHY.indexOf(existingGrade.grade);
         const newIndex = GRADE_HIERARCHY.indexOf(standardizedGrade);
 
-        // If existing is passed (index 0-9 approx) and new is worse or same?
-        // Actually, logic was: if existingIndex < newIndex, keep existing.
-        // e.g. Existing 1.00 (index 0), New 5.00 (index 10). 0 < 10. Keep 1.00.
-        // e.g. Existing 5.00 (index 10), New 1.00 (index 0). 10 < 0 False. Update.
-
         if (existingIndex !== -1 && newIndex !== -1 && existingIndex < newIndex) {
           results.push({
             studentNumber: student.studentNumber,
@@ -309,6 +297,8 @@ export async function POST(req: Request) {
           continue;
         }
         action = "UPDATED";
+      } else if (isLegacyMode && !subjectOfferingId) {
+        action = "LEGACY_ENTRY";
       }
 
       gradesToUpsert.push({
@@ -322,7 +312,7 @@ export async function POST(req: Request) {
         instructor: sanitizedInstructor,
         academicYear,
         semester,
-        subjectOfferingId: subjectOffering.id,
+        subjectOfferingId: subjectOfferingId, // Can be null now
         uploadedBy: user?.fullName ?? "",
       });
 
@@ -342,7 +332,7 @@ export async function POST(req: Request) {
       results.push({
         studentNumber: student.studentNumber,
         courseCode: sanitizedCourseCode,
-        status: action === "UPDATED" ? "✅ Grade updated" : "✅ Grade uploaded",
+        status: action === "UPDATED" ? "✅ Grade updated" : (isLegacyMode && !subjectOfferingId ? "⚠️ Legacy Grade uploaded" : "✅ Grade uploaded"),
         studentName: `${student.firstName} ${student.lastName}`,
       });
 
@@ -357,12 +347,6 @@ export async function POST(req: Request) {
   }
 
   // Execute Batch Transaction
-  // We use a transaction to ensure logs and grades are consistent, 
-  // but if one fails in the batch, the whole batch fails?
-  // Ideally yes, but for bulk uploads partially succeeding is often preferred if errors are isolated.
-  // However, prisma $transaction is all-or-nothing.
-  // Given we pre-validated, it SHOULD pass.
-
   if (gradesToUpsert.length > 0 || logsToCreate.length > 0) {
     try {
       await prisma.$transaction([
@@ -393,7 +377,7 @@ export async function POST(req: Request) {
                   },
                 },
               },
-              subjectOffering: { connect: { id: gradeData.subjectOfferingId } },
+              subjectOffering: gradeData.subjectOfferingId ? { connect: { id: gradeData.subjectOfferingId } } : undefined,
               uploadedBy: gradeData.uploadedBy,
             },
             update: {
@@ -403,19 +387,18 @@ export async function POST(req: Request) {
               reExam: gradeData.reExam,
               remarks: gradeData.remarks,
               instructor: gradeData.instructor,
-              subjectOffering: { connect: { id: gradeData.subjectOfferingId } },
+              subjectOffering: gradeData.subjectOfferingId ? { connect: { id: gradeData.subjectOfferingId } } : { disconnect: true },
               uploadedBy: gradeData.uploadedBy,
             },
           })
         ),
         prisma.gradeLog.createMany({
           data: logsToCreate,
-          skipDuplicates: true, // Just in case
+          skipDuplicates: true,
         })
       ]);
     } catch (txError) {
       console.error("Batch Transaction Failed", txError);
-      // Return generic error so client can retry or show fatal error
       return NextResponse.json({ error: "Database transaction failed for this batch" }, { status: 500 });
     }
   }

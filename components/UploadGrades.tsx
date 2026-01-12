@@ -36,9 +36,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Swal from "sweetalert2";
 import UploadGradeNotice from "./Notices/upload-grade-notice";
-import UploadGradesSkeleton from "./skeleton/UploadGradesSkeleton";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
+import { useUser } from "@clerk/nextjs";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // --- Validation Schema ---
 const gradeRowSchema = z.object({
@@ -65,9 +66,16 @@ interface LogEntry {
 }
 
 export function UploadGrades() {
+  const { user } = useUser();
+  const role = user?.publicMetadata?.role as string | undefined;
+  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(role || "");
+
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+
+  // Legacy Mode State
+  const [allowLegacy, setAllowLegacy] = useState(false);
 
   // Progress State
   const [progress, setProgress] = useState(0);
@@ -102,6 +110,7 @@ export function UploadGrades() {
     setProcessedCount(0);
     setTotalRecords(0);
     setIsUploading(false);
+    setAllowLegacy(false);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,6 +245,7 @@ export function UploadGrades() {
           ...item,
           academicYear,
           semester,
+          allowLegacy: canUseLegacyMode ? allowLegacy : false, // Security: only send true if authorized
         }));
 
         try {
@@ -357,6 +367,29 @@ export function UploadGrades() {
               </Select>
             </div>
           </div>
+
+          {/* Legacy Mode Checkbox - Only for authorized roles */}
+          {canUseLegacyMode && (
+            <div className="mt-4 flex items-center space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
+              <Checkbox
+                id="legacy-mode"
+                checked={allowLegacy}
+                onCheckedChange={(checked) => setAllowLegacy(checked as boolean)}
+                disabled={isUploading}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="legacy-mode"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-amber-900"
+                >
+                  Allow Legacy / Unmatched Subjects
+                </label>
+                <p className="text-xs text-amber-700">
+                  If checked, grades for subjects NOT in the current curriculum will be accepted (without curriculum linking). Use with caution.
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
