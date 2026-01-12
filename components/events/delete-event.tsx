@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { TrashIcon } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { mutate } from "swr";
 
 export default function DeleteEvent({ id }: { id: number }) {
@@ -22,18 +22,18 @@ export default function DeleteEvent({ id }: { id: number }) {
       });
 
       if (response.ok) {
-        toast.success("Event deleted successfully");
+        toast("Event deleted successfully");
         mutate(
           (key) => typeof key === "string" && key.startsWith("/api/events"),
           undefined,
           { revalidate: true }
         );
       } else {
-        toast.error("Failed to delete event");
+        toast("Failed to delete event");
       }
     } catch (error) {
       console.error(error);
-      toast.error("An error occurred");
+      toast("An error occurred");
     }
   };
 
