@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
 import { z } from "zod";
 
@@ -198,8 +198,8 @@ export async function PATCH(request: Request) {
     } = validationResult.data;
 
     // Get user email or username for audit trail
-    const name = sessionClaims?.firstName as string | "" + " " + sessionClaims?.lastName as string | "";
-    const editorIdentifier = name;
+    const user = await currentUser();
+    const editorIdentifier = user?.fullName ?? "";
 
     // Update the grade record
     const data = {
