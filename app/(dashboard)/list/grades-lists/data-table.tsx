@@ -39,42 +39,67 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  totalRecords: number;
+  currentPage: number;
+  currentPageSize: number;
+  totalPages: number;
+  onPageChange: (page: number, pageSize: number) => void;
+  onSearchChange: (search: string) => void;
+  isLoading: boolean;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  totalRecords,
+  currentPage,
+  currentPageSize,
+  totalPages,
+  onPageChange,
+  onSearchChange,
+  isLoading,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
+  const [searchValue, setSearchValue] = useState("");
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onSearchChange(searchValue);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchValue, onSearchChange]);
+
   const table = useReactTable({
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
+    pageCount: totalPages,
     state: {
       sorting,
-      columnFilters,
       columnVisibility,
       rowSelection,
+      pagination: {
+        pageIndex: currentPage - 1,
+        pageSize: currentPageSize,
+      },
     },
+    getCoreRowModel: getCoreRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    manualPagination: true,
+    manualFiltering: true,
   });
 
   return (
@@ -82,11 +107,12 @@ export function DataTable<TData, TValue>({
       <div className="flex items-center py-4">
         <Input
           placeholder="Search students..."
-          value={(table.getState().globalFilter as string) ?? ""}
+          value={searchValue}
           onChange={(event) => {
-            table.setGlobalFilter(event.target.value);
+            setSearchValue(event.target.value);
           }}
           className="w-full sm:max-w-xs"
+          disabled={isLoading}
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -126,9 +152,9 @@ export function DataTable<TData, TValue>({
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   );
                 })}
@@ -174,51 +200,51 @@ export function DataTable<TData, TValue>({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(1, currentPageSize)}
+            disabled={currentPage === 1 || isLoading}
           >
             <ChevronsLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(currentPage - 1, currentPageSize)}
+            disabled={currentPage === 1 || isLoading}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm">
             Page{" "}
             <strong>
-              {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
+              {currentPage} of {totalPages}
             </strong>
           </span>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(currentPage + 1, currentPageSize)}
+            disabled={currentPage === totalPages || isLoading}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(totalPages, currentPageSize)}
+            disabled={currentPage === totalPages || isLoading}
           >
             <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
         <select
-          value={table.getState().pagination.pageSize}
+          value={currentPageSize}
           onChange={(e) => {
-            table.setPageSize(Number(e.target.value));
+            onPageChange(1, Number(e.target.value));
           }}
           className="border rounded p-1"
+          disabled={isLoading}
         >
-          {[10, 20, 30].map((pageSize) => (
+          {[10, 20, 30, 50].map((pageSize) => (
             <option key={pageSize} value={pageSize}>
               Show {pageSize}
             </option>
