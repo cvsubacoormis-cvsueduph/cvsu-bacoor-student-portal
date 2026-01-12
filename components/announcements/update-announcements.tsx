@@ -46,7 +46,13 @@ export default function UpdateAnnouncements({
 
       setErrorMessage("");
       setDialogOpen(false);
-      mutate("/api/announcements");
+      setErrorMessage("");
+      setDialogOpen(false);
+      mutate(
+        (key) => typeof key === 'string' && key.startsWith('/api/announcements'),
+        undefined,
+        { revalidate: true }
+      );
       toast.success("Announcements updated successfully", { duration: 3000 });
     } catch (error) {
       console.error("Error updating event:", error);

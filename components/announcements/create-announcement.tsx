@@ -62,7 +62,12 @@ export default function CreateAnnouncements() {
       }
       form.reset();
       setDialogOpen(false);
-      mutate("/api/announcements");
+      // Revalidate all announcement keys (including paginated ones)
+      mutate(
+        (key) => typeof key === 'string' && key.startsWith('/api/announcements'),
+        undefined,
+        { revalidate: true }
+      );
       toast.success("Announcement created successfully");
       setErrorMessage("");
     } catch (error) {
