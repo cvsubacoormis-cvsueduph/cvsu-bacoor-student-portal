@@ -18,6 +18,7 @@ export type FailedLog = {
     action: string;
     performedAt: Date;
     isResolved: boolean;
+    importedName: string | null;
 };
 
 export type GetLogsFilters = {
@@ -65,6 +66,7 @@ export async function getFailedLogs(filters?: GetLogsFilters): Promise<FailedLog
         academicYear: log.academicYear,
         semester: log.semester,
         isResolved: log.isResolved,
+        importedName: log.importedName,
     }));
 }
 

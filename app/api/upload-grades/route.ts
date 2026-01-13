@@ -139,6 +139,7 @@ export async function POST(req: Request) {
   const results = [];
   const gradesToUpsert = [];
   const logsToCreate = [];
+  const failedLogsToCreate = []; // Separate array for failed logs
 
   // Process each entry in the batch
   for (const entry of grades) {
@@ -174,7 +175,7 @@ export async function POST(req: Request) {
           courseCode: sanitizedCourseCode,
           status: "❌ Student not found (Check Student Number)",
         });
-        logsToCreate.push({
+        failedLogsToCreate.push({
           studentNumber: normalizedStudentNumber || "UNKNOWN",
           courseCode: sanitizedCourseCode || "",
           courseTitle: sanitizedCourseTitle || "",
@@ -185,6 +186,7 @@ export async function POST(req: Request) {
           academicYear,
           semester,
           action: "FAILED",
+          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
         });
         continue;
       }
@@ -244,7 +246,7 @@ export async function POST(req: Request) {
             status: statusMsg,
           });
 
-          logsToCreate.push({
+          failedLogsToCreate.push({
             studentNumber: student.studentNumber,
             courseCode: sanitizedCourseCode,
             courseTitle: sanitizedCourseTitle || "",
@@ -255,6 +257,7 @@ export async function POST(req: Request) {
             academicYear,
             semester,
             action: "FAILED",
+            importedName: `${firstName || ""} ${lastName || ""}`.trim(),
           });
           continue;
         } else {
@@ -327,6 +330,7 @@ export async function POST(req: Request) {
         academicYear,
         semester,
         action: action,
+        importedName: `${firstName || ""} ${lastName || ""}`.trim(),
       });
 
       results.push({
@@ -346,7 +350,20 @@ export async function POST(req: Request) {
     }
   }
 
-  // Execute Batch Transaction
+  // Save failed logs separately (outside transaction so they persist even if grades fail)
+  if (failedLogsToCreate.length > 0) {
+    try {
+      await prisma.gradeLog.createMany({
+        data: failedLogsToCreate,
+        skipDuplicates: true,
+      });
+    } catch (logError) {
+      console.error("Failed to save error logs:", logError);
+      // Don't fail the whole batch if logging fails
+    }
+  }
+
+  // Execute Batch Transaction for successful grades and their logs
   if (gradesToUpsert.length > 0 || logsToCreate.length > 0) {
     try {
       await prisma.$transaction([

@@ -1,6 +1,6 @@
 "use client";
 
-import type React from "react";
+import React from "react";
 import * as XLSX from "xlsx";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -57,6 +57,7 @@ interface UploadResult {
   courseCode: string;
   status: string;
   studentName?: string;
+  identifier?: string;
 }
 
 interface LogEntry {
@@ -317,13 +318,36 @@ export function UploadGrades() {
     }
   };
 
-  const startYear = 2024;
-  const numberOfYears = 6;
-  const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
-    const ayStart = startYear + i;
-    const ayEnd = ayStart + 1;
-    return `AY_${ayStart}_${ayEnd}`;
-  });
+  // Calculate Current Academic Year
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth(); // 0-11
+  const currentYear = currentDate.getFullYear();
+  // If Month is Jan-June (0-5), we are in the 2nd semester of previous year start
+  // e.g., Jan 2026 is part of AY 2025-2026
+  const currentAyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
+
+  const academicYears = React.useMemo(() => {
+    if (!allowLegacy) {
+      // If legacy is NOT allowed, ONLY show current academic year
+      const ayEnd = currentAyStartYear + 1;
+      return [`AY_${currentAyStartYear}_${ayEnd}`];
+    }
+
+    // If legacy IS allowed, show from 2014 up to current
+    const startYear = 2014;
+    const years = [];
+    for (let y = startYear; y <= currentAyStartYear; y++) {
+      years.push(`AY_${y}_${y + 1}`);
+    }
+    return years.reverse(); // Show newest first usually looks better
+  }, [allowLegacy, currentAyStartYear]);
+
+  // Reset selection if it becomes invalid
+  useEffect(() => {
+    if (academicYear && !academicYears.includes(academicYear)) {
+      setAcademicYear("");
+    }
+  }, [allowLegacy, academicYears, academicYear]);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -549,8 +573,8 @@ export function UploadGrades() {
                           {uploadResults.slice().reverse().map((res, i) => (
                             <TableRow key={i}>
                               <TableCell className="font-medium">
-                                {res.studentName || res.studentNumber}
-                                <div className="text-xs text-gray-500">{res.studentNumber}</div>
+                                {res.studentName || res.identifier || res.studentNumber || "Unknown"}
+                                <div className="text-xs text-gray-500">{res.studentNumber || "No Student #"}</div>
                               </TableCell>
                               <TableCell>{res.courseCode}</TableCell>
                               <TableCell>

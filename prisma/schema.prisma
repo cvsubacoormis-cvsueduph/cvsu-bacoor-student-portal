@@ -144,9 +144,15 @@ model GradeLog {
   action        String
   performedAt   DateTime     @default(now())
   isResolved    Boolean      @default(false)
+  importedName  String?
 }
 
 enum AcademicYear {
+  AY_2014_2015
+  AY_2015_2016
+  AY_2016_2017
+  AY_2017_2018
+  AY_2018_2019
   AY_2019_2020
   AY_2020_2021
   AY_2021_2022

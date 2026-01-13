@@ -242,7 +242,12 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     <TableCell>
                                         {new Date(log.performedAt).toLocaleDateString()}
                                     </TableCell>
-                                    <TableCell>{log.studentNumber}</TableCell>
+                                    <TableCell>
+                                        <div>{log.studentNumber}</div>
+                                        {log.importedName && log.studentNumber === "UNKNOWN" && (
+                                            <div className="text-xs text-blue-600 font-medium">{log.importedName}</div>
+                                        )}
+                                    </TableCell>
                                     <TableCell>{log.courseCode}</TableCell>
                                     <TableCell>{log.courseTitle}</TableCell>
                                     <TableCell>{log.grade}</TableCell>
