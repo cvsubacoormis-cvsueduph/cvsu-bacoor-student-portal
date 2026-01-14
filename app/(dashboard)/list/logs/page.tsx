@@ -1,4 +1,5 @@
 import { getFailedLogs } from "@/actions/logs";
+import { getAllAcademicTerms } from "@/actions/academic-terms";
 import { LogsTable } from "@/components/LogsTable";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -22,7 +23,9 @@ export default async function LogsPage(props: {
             typeof resolved.semester === "string" ? resolved.semester : undefined,
     };
 
-    const logs = await getFailedLogs(filters);
+    const page = typeof resolved.page === "string" ? parseInt(resolved.page) : 1;
+    const logs = await getFailedLogs(filters, page);
+    const terms = await getAllAcademicTerms();
 
     return (
         <div className="flex-1 m-4 mt-0">
@@ -35,7 +38,7 @@ export default async function LogsPage(props: {
                         </p>
                     </div>
                 </div>
-                <LogsTable initialLogs={logs} />
+                <LogsTable initialLogs={logs.data} metadata={logs.metadata} initialTerms={terms} />
             </div>
         </div>
     );

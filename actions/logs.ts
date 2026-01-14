@@ -27,7 +27,18 @@ export type GetLogsFilters = {
     semester?: string;
 };
 
-export async function getFailedLogs(filters?: GetLogsFilters): Promise<FailedLog[]> {
+export type LogsMetadata = {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
+export async function getFailedLogs(
+    filters?: GetLogsFilters,
+    page: number = 1,
+    limit: number = 10
+): Promise<{ data: FailedLog[]; metadata: LogsMetadata }> {
     const { userId } = await auth();
     if (!userId) {
         throw new Error("Unauthorized");
@@ -51,23 +62,39 @@ export async function getFailedLogs(filters?: GetLogsFilters): Promise<FailedLog
             { studentNumber: { contains: filters.search, mode: "insensitive" } },
             { courseCode: { contains: filters.search, mode: "insensitive" } },
             { instructor: { contains: filters.search, mode: "insensitive" } },
+            { importedName: { contains: filters.search, mode: "insensitive" } },
         ];
     }
+
+    const total = await prisma.gradeLog.count({ where });
+    const totalPages = Math.ceil(total / limit);
 
     const logs = await prisma.gradeLog.findMany({
         where,
         orderBy: {
             performedAt: "desc",
         },
+        skip: (page - 1) * limit,
+        take: limit,
     });
 
-    return logs.map((log) => ({
+    const data = logs.map((log) => ({
         ...log,
         academicYear: log.academicYear,
         semester: log.semester,
         isResolved: log.isResolved,
         importedName: log.importedName,
     }));
+
+    return {
+        data,
+        metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+        },
+    };
 }
 
 export async function resolveGradeLog(

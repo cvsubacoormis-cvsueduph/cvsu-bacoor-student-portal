@@ -102,6 +102,8 @@ export function UploadGrades() {
     currentPage * recordsPerPage
   );
 
+  const totalResultPages = Math.ceil(uploadResults.length / recordsPerPage);
+
   const resetState = () => {
     setFile(null);
     setPreviewData(null);
@@ -295,11 +297,12 @@ export function UploadGrades() {
       }
 
       if (!controller.signal.aborted) {
-        Swal.fire({
+        await Swal.fire({
           icon: "success",
           title: "Processing Complete",
           text: `Processed ${totalRecords} records. Check the logs for details.`,
         });
+        resetState();
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
@@ -327,19 +330,18 @@ export function UploadGrades() {
   const currentAyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
 
   const academicYears = React.useMemo(() => {
-    if (!allowLegacy) {
-      // If legacy is NOT allowed, ONLY show current academic year
-      const ayEnd = currentAyStartYear + 1;
-      return [`AY_${currentAyStartYear}_${ayEnd}`];
-    }
+    // New curriculum starts in 2018
+    const newCurriculumStart = 2018;
+    // Legacy support (old curriculum) - adjust start year as needed, e.g., 2005
+    const legacyStart = 2005;
 
-    // If legacy IS allowed, show from 2014 up to current
-    const startYear = 2014;
+    const startYear = allowLegacy ? legacyStart : newCurriculumStart;
+
     const years = [];
     for (let y = startYear; y <= currentAyStartYear; y++) {
       years.push(`AY_${y}_${y + 1}`);
     }
-    return years.reverse(); // Show newest first usually looks better
+    return years.reverse(); // Show newest first
   }, [allowLegacy, currentAyStartYear]);
 
   // Reset selection if it becomes invalid
@@ -570,7 +572,7 @@ export function UploadGrades() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {uploadResults.slice().reverse().map((res, i) => (
+                          {uploadResults.slice().reverse().slice((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage).map((res, i) => (
                             <TableRow key={i}>
                               <TableCell className="font-medium">
                                 {res.studentName || res.identifier || res.studentNumber || "Unknown"}
@@ -601,6 +603,32 @@ export function UploadGrades() {
                         </TableBody>
                       </Table>
                     </div>
+                    {/* Results Pagination */}
+                    {uploadResults.length > 0 && (
+                      <div className="flex items-center justify-between pt-4">
+                        <span className="text-sm text-gray-500">
+                          Page {currentPage} of {Math.max(1, totalResultPages)}
+                        </span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={currentPage === totalResultPages || totalResultPages === 0}
+                            onClick={() => setCurrentPage(prev => Math.min(totalResultPages, prev + 1))}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   // Preview Table

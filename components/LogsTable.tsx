@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FailedLog, resolveGradeLog } from "@/actions/logs";
+import { FailedLog, resolveGradeLog, LogsMetadata } from "@/actions/logs";
+import { AcademicTerm } from "@prisma/client";
 import {
     Table,
     TableBody,
@@ -43,6 +44,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useDebounce } from "use-debounce";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const formSchema = z.object({
     studentNumber: z.string().min(1, "Student number is required"),
@@ -51,6 +53,11 @@ const formSchema = z.object({
     remarks: z.string().optional(),
     instructor: z.string().min(1, "Instructor is required"),
     academicYear: z.enum([
+        "AY_2014_2015",
+        "AY_2015_2016",
+        "AY_2016_2017",
+        "AY_2017_2018",
+        "AY_2018_2019",
         "AY_2019_2020",
         "AY_2020_2021",
         "AY_2021_2022",
@@ -80,9 +87,11 @@ const formSchema = z.object({
 
 interface LogsTableProps {
     initialLogs: FailedLog[];
+    metadata: LogsMetadata;
+    initialTerms: AcademicTerm[];
 }
 
-export function LogsTable({ initialLogs }: LogsTableProps) {
+export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProps) {
     const [logs, setLogs] = useState<FailedLog[]>(initialLogs);
     const [selectedLog, setSelectedLog] = useState<FailedLog | null>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -96,9 +105,16 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
         searchParams.get("academicYear") || "ALL"
     );
     const [semester, setSemester] = useState(searchParams.get("semester") || "ALL");
+    const [page, setPage] = useState(metadata.page);
 
     useEffect(() => {
         const params = new URLSearchParams(searchParams);
+
+        // Reset to page 1 on filter change
+        if (debouncedSearch !== (searchParams.get("search") || "")) {
+            params.set("page", "1");
+        }
+
         if (debouncedSearch) {
             params.set("search", debouncedSearch);
         } else {
@@ -116,6 +132,12 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
         }
         router.replace(`${pathname}?${params.toString()}`);
     }, [debouncedSearch, academicYear, semester, pathname, router, searchParams]);
+
+    const handlePageChange = (newPage: number) => {
+        const params = new URLSearchParams(searchParams);
+        params.set("page", newPage.toString());
+        router.replace(`${pathname}?${params.toString()}`);
+    };
 
     useEffect(() => {
         setLogs(initialLogs);
@@ -194,9 +216,11 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="ALL">All Years</SelectItem>
-                            <SelectItem value="AY_2023_2024">AY 2023-2024</SelectItem>
-                            <SelectItem value="AY_2024_2025">AY 2024-2025</SelectItem>
-                            {/* Add more years as needed or map from enum */}
+                            {Array.from(new Set(initialTerms.map((t) => t.academicYear))).map((year) => (
+                                <SelectItem key={year} value={year}>
+                                    {year.replace("AY_", "AY ").replace("_", "-")}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <Select
@@ -208,9 +232,11 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="ALL">All Semesters</SelectItem>
-                            <SelectItem value="FIRST">First Semester</SelectItem>
-                            <SelectItem value="SECOND">Second Semester</SelectItem>
-                            <SelectItem value="MIDYEAR">Midyear</SelectItem>
+                            {Array.from(new Set(initialTerms.map((t) => t.semester))).map((sem) => (
+                                <SelectItem key={sem} value={sem}>
+                                    {sem}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
@@ -244,7 +270,7 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                                     </TableCell>
                                     <TableCell>
                                         <div>{log.studentNumber}</div>
-                                        {log.importedName && log.studentNumber === "UNKNOWN" && (
+                                        {log.importedName && (
                                             <div className="text-xs text-blue-600 font-medium">{log.importedName}</div>
                                         )}
                                     </TableCell>
@@ -269,6 +295,34 @@ export function LogsTable({ initialLogs }: LogsTableProps) {
                         )}
                     </TableBody>
                 </Table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between text-sm text-gray-500">
+                <div>
+                    Showing {Math.min(metadata.total, (metadata.page - 1) * metadata.limit + 1)} to{" "}
+                    {Math.min(metadata.total, metadata.page * metadata.limit)} of {metadata.total} entries
+                </div>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={metadata.page <= 1}
+                        onClick={() => handlePageChange(metadata.page - 1)}
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={metadata.page >= metadata.totalPages}
+                        onClick={() => handlePageChange(metadata.page + 1)}
+                    >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>

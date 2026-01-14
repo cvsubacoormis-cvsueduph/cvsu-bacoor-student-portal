@@ -99,7 +99,12 @@ export async function POST(req: Request) {
   });
   if (!academicTerm) {
     // If term not found, fail the whole batch (client should ensure term exists)
-    return NextResponse.json({ error: "Academic term not found", status: 404 });
+    return NextResponse.json(
+      {
+        error: `Academic term not found for Year: ${academicYear}, Semester: ${semester}. Please contact the administrator to initialize this term.`
+      },
+      { status: 404 }
+    );
   }
 
   // 4. Fetch Offering for these subjects in this term
@@ -198,6 +203,19 @@ export async function POST(req: Request) {
           courseCode: sanitizedCourseCode,
           status: "❌ Missing required fields",
         });
+        failedLogsToCreate.push({
+          studentNumber: normalizedStudentNumber || "UNKNOWN",
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
+          grade: String(grade) || "",
+          remarks: "Missing required fields (Student Number, Course Code, or Grade)",
+          instructor: sanitizedInstructor,
+          academicYear,
+          semester,
+          action: "FAILED",
+          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+        });
         continue;
       }
 
@@ -208,6 +226,19 @@ export async function POST(req: Request) {
           identifier: resolvedStudentNumber,
           courseCode: sanitizedCourseCode,
           status: "❌ Invalid grade value",
+        });
+        failedLogsToCreate.push({
+          studentNumber: resolvedStudentNumber,
+          courseCode: sanitizedCourseCode || "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
+          grade: String(grade) || "",
+          remarks: "Invalid grade value",
+          instructor: sanitizedInstructor,
+          academicYear,
+          semester,
+          action: "FAILED",
+          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
         });
         continue;
       }
@@ -342,10 +373,42 @@ export async function POST(req: Request) {
 
     } catch (error) {
       console.error(`Error processing entry:`, entry, error);
+      const {
+        studentNumber,
+        lastName,
+        firstName,
+        courseCode,
+        creditUnit,
+        courseTitle,
+        grade,
+        instructor,
+      } = entry;
+
+      const normalizedStudentNumber = studentNumber
+        ? String(studentNumber).replace(/-/g, "")
+        : null;
+      const sanitizedCourseCode = sanitizeString(courseCode);
+      const sanitizedCourseTitle = sanitizeString(courseTitle);
+      const sanitizedInstructor = sanitizeString(instructor)?.toUpperCase() ?? "";
+
       results.push({
-        identifier: entry.studentNumber,
-        courseCode: entry.courseCode,
+        identifier: normalizedStudentNumber || `${firstName} ${lastName}`,
+        courseCode: sanitizedCourseCode,
         status: "❌ Processing error",
+      });
+
+      failedLogsToCreate.push({
+        studentNumber: normalizedStudentNumber || "UNKNOWN",
+        courseCode: sanitizedCourseCode || "",
+        courseTitle: sanitizedCourseTitle || "",
+        creditUnit: Number(creditUnit) || 0,
+        grade: String(grade) || "",
+        remarks: `Processing error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        instructor: sanitizedInstructor,
+        academicYear,
+        semester,
+        action: "FAILED",
+        importedName: `${firstName || ""} ${lastName || ""}`.trim(),
       });
     }
   }
