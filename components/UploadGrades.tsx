@@ -279,10 +279,18 @@ export function UploadGrades() {
               // Check for warnings/errors in the success response
               const failures = result.results.filter((r: any) => r.status.includes("❌"));
               const warnings = result.results.filter((r: any) => r.status.includes("⚠️"));
+              const successes = result.results.filter((r: any) => r.status.includes("✅"));
 
-              if (failures.length > 0) addLog("error", `Batch ${i + 1}: ${failures.length} errors`);
-              else if (warnings.length > 0) addLog("warning", `Batch ${i + 1}: ${warnings.length} warnings`);
-              else addLog("success", `Batch ${i + 1} uploaded successfully`);
+              const parts = [];
+              if (successes.length > 0) parts.push(`${successes.length} success`);
+              if (warnings.length > 0) parts.push(`${warnings.length} warnings`);
+              if (failures.length > 0) parts.push(`${failures.length} errors`);
+
+              const message = `Batch ${i + 1}: ${parts.join(", ")}`;
+
+              if (failures.length > 0) addLog("error", message);
+              else if (warnings.length > 0) addLog("warning", message);
+              else addLog("success", message);
             }
           }
         } catch (err: any) {

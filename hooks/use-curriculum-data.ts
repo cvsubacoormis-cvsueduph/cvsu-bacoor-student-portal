@@ -79,7 +79,10 @@ export function useCurriculumData() {
         });
 
         // Merge curriculum with grades
+        const usedCourseCodes = new Set<string>();
+
         const curriculumWithGrades = curriculum.map((item) => {
+          usedCourseCodes.add(item.courseCode);
           const gradesForCourse = gradesByCourse[item.courseCode] || [];
           const latestGrade = gradesForCourse[gradesForCourse.length - 1];
           const retakeCount =
@@ -126,6 +129,65 @@ export function useCurriculumData() {
             retaken: latestGrade?.isRetaken ? latestGrade.retakenAYSem : null,
           };
         });
+
+        // Handle extra subjects (Old Curriculum / Unmatched)
+        const extraSubjects: any[] = [];
+        Object.entries(gradesByCourse).forEach(([courseCode, courseGrades]) => {
+          if (!usedCourseCodes.has(courseCode)) {
+            const latestGrade = courseGrades[courseGrades.length - 1];
+            const retakeCount =
+              courseGrades.length > 1 ? courseGrades.length - 1 : 0;
+            const allAttempts = courseGrades.map((g: any) => ({
+              academicYear: g.academicYear,
+              semester: g.semester,
+              grade: g.grade,
+              remarks: g.remarks,
+              attemptNumber: g.attemptNumber,
+              retakenAYSem: g.retakenAYSem,
+              reExam: g.reExam,
+            }));
+
+            const effectiveGrade = getBetterGrade(
+              latestGrade?.grade,
+              latestGrade?.reExam ?? ""
+            );
+
+            const completion =
+              effectiveGrade === "INC" ||
+                latestGrade.remarks?.toUpperCase().includes("LACK OF REQ.")
+                ? "Incomplete"
+                : latestGrade.remarks?.toUpperCase().includes("FAILED")
+                  ? "Failed"
+                  : latestGrade.remarks?.toUpperCase().includes("UNSATISFACTORY")
+                    ? "Unsatisfactory"
+                    : latestGrade.remarks?.toUpperCase().includes("CON. FAILURE")
+                      ? "Con. Failure"
+                      : latestGrade.remarks?.toUpperCase().includes("DROPPED")
+                        ? "Dropped"
+                        : "Completed";
+
+            extraSubjects.push({
+              id: `extra-${courseCode}`,
+              yearLevel: "OTHERS",
+              semester: "OTHERS",
+              courseCode: courseCode,
+              courseTitle: latestGrade.courseTitle || "Unknown Subject",
+              creditUnit: { lec: latestGrade.creditUnit, lab: 0 }, // Using total credits as lec since we don't have breakdown
+              contactHrs: { lec: 0, lab: 0 },
+              preRequisite: "",
+              grade: latestGrade.grade,
+              completion,
+              remarks: latestGrade.remarks || "",
+              retakeCount,
+              latestAttempt: latestGrade.attemptNumber,
+              allAttempts,
+              retaken: latestGrade.isRetaken ? latestGrade.retakenAYSem : null,
+            });
+          }
+        });
+
+        // Append extra subjects to curriculumWithGrades
+        curriculumWithGrades.push(...extraSubjects);
 
         // Calculate progress metrics
         const creditsCompleted = curriculumWithGrades

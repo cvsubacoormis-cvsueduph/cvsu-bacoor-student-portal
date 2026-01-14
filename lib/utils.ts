@@ -15,6 +15,8 @@ export function yearLevelMap(yearlevelAbbreviation: string) {
       return "Third Year";
     case "FOURTH":
       return "Fourth Year";
+    case "OTHERS":
+      return "Other Subjects (Old Curriculum)";
     default:
       return "";
   }
@@ -28,6 +30,8 @@ export function semesterMap(semesterAbbreviation: string) {
       return "Second Semester";
     case "MIDYEAR":
       return "Mid year";
+    case "OTHERS":
+      return "Additional Subjects";
     default:
       return "";
   }
