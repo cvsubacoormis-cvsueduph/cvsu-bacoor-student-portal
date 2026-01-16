@@ -17,6 +17,8 @@ import {
   GraduationCap,
   Save,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +73,19 @@ import { cn, GRADE_HIERARCHY } from "@/lib/utils";
 import { getCourseOptions } from "@/lib/subjects";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useUser } from "@clerk/nextjs";
 
 interface Student {
   studentNumber: string;
@@ -99,10 +114,45 @@ interface StudentDetails {
   address: string;
 }
 
+const formSchema = z.object({
+  courseCode: z.string().min(1, "Course code is required"),
+  creditUnit: z.string().min(1, "Credit unit is required"),
+  courseTitle: z.string().min(1, "Course title is required"),
+  grade: z.string().min(1, "Grade is required"),
+  reExam: z.string().optional(),
+  remarks: z.string().min(1, "Remarks is required"),
+  instructor: z.string().min(1, "Instructor is required"),
+  selectedCourseId: z.string().min(1, "Course selection is required"),
+});
+
+const calculateRemarks = (gradeVal: string, reExamVal: string) => {
+  const basis = (reExamVal && reExamVal !== "none") ? reExamVal : gradeVal;
+
+  if (["1.00", "1.25", "1.50", "1.75", "2.00", "2.25", "2.50", "2.75", "3.00"].includes(basis)) {
+    return "PASSED";
+  } else if (basis === "4.00") {
+    return "CON. FAILURE";
+  } else if (basis === "5.00") {
+    return "FAILED";
+  } else if (basis === "INC") {
+    return "LACK OF REQ";
+  } else if (basis === "DRP") {
+    return "DROPPED";
+  } else if (basis === "S") {
+    return "SATISFACTORY";
+  } else if (basis === "US") {
+    return "UNSATISFACTORY";
+  }
+  return "";
+};
+
 export default function ManualGradeEntry() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { user } = useUser();
+
+  const role = user?.publicMetadata?.role as string;
 
   // Initialize state from URL params
   const [academicYear, setAcademicYear] = useState<string>(
@@ -117,6 +167,8 @@ export default function ManualGradeEntry() {
   const [searchType, setSearchType] = useState<"studentNumber" | "name">(
     (searchParams.get("type") as "studentNumber" | "name") || "studentNumber"
   );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Student[]>([]);
@@ -129,18 +181,34 @@ export default function ManualGradeEntry() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
 
-  // Form fields
-  const [courseCode, setCourseCode] = useState<string>("");
-  const [creditUnit, setCreditUnit] = useState<string>("");
-  const [courseTitle, setCourseTitle] = useState<string>("");
-  const [grade, setGrade] = useState<string>("");
-  const [reExam, setReExam] = useState<string>("");
-  const [remarks, setRemarks] = useState<string>("");
-  const [instructor, setInstructor] = useState<string>("");
+  // Form
   const [courseOptions, setCourseOptions] = useState<CourseOption[]>([]);
   const [courseCodeOpen, setCourseCodeOpen] = useState(false);
-  const [courseTitleOpen, setCourseTitleOpen] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      courseCode: "",
+      creditUnit: "",
+      courseTitle: "",
+      grade: "",
+      reExam: "",
+      remarks: "",
+      instructor: "",
+      selectedCourseId: "",
+    },
+  });
+
+  const { watch, setValue } = form;
+  const grade = watch("grade");
+  const reExam = watch("reExam");
+
+  useEffect(() => {
+    if (grade) {
+      const remarks = calculateRemarks(grade, reExam || "none");
+      setValue("remarks", remarks);
+    }
+  }, [grade, reExam, setValue]);
 
   // Helper to update URL params
   const createQueryString = useCallback(
@@ -227,19 +295,17 @@ export default function ManualGradeEntry() {
     }
   }, [searchParams]); // Depend on searchParams to react to navigation
 
-  const performSearch = async (query: string, type: "studentNumber" | "name") => {
+  const performSearch = async (query: string, type: "studentNumber" | "name", page: number = 1) => {
     if (!academicYear || !semester) {
-      // Even if URL has query, if AY/Sem are missing, we can't search effectively if backend requires it.
-      // But wait, searchStudent API usually just needs the query? 
-      // Previous code required AY/Sem for validation before search. 
-      // We'll respect that logic.
       if (!academicYear && !semester) return;
     }
 
     setIsSearching(true);
     try {
-      const results = await searchStudent(query, type);
-      setSearchResults(results);
+      const result = await searchStudent(query, type, page);
+      setSearchResults(result.data);
+      setTotalPages(result.meta.totalPages);
+      setCurrentPage(result.meta.page);
     } catch (error) {
       console.error("Search failed:", error);
       toast.error("An error occurred while searching");
@@ -249,43 +315,12 @@ export default function ManualGradeEntry() {
     }
   }
 
-  const calculateRemarks = (gradeVal: string, reExamVal: string) => {
-    const basis = (reExamVal && reExamVal !== "none") ? reExamVal : gradeVal;
-
-    if (["1.00", "1.25", "1.50", "1.75", "2.00", "2.25", "2.50", "2.75", "3.00"].includes(basis)) {
-      return "PASSED";
-    } else if (basis === "4.00") {
-      return "CON. FAILURE";
-    } else if (basis === "5.00") {
-      return "FAILED";
-    } else if (basis === "INC") {
-      return "LACK OF REQ";
-    } else if (basis === "DRP") {
-      return "DROPPED";
-    } else if (basis === "S") {
-      return "SATISFACTORY";
-    } else if (basis === "US") {
-      return "UNSATISFACTORY";
-    }
-    return "";
-  };
-
-  const handleGradeChange = (value: string) => {
-    setGrade(value);
-    setRemarks(calculateRemarks(value, reExam));
-  };
-
-  const handleReExamChange = (value: string) => {
-    setReExam(value);
-    setRemarks(calculateRemarks(grade, value));
-  };
-
   const handleCourseSelect = (id: string) => {
     const selectedCourse = courseOptions.find((course) => course.id === id);
     if (selectedCourse) {
-      setSelectedCourseId(id);
-      setCourseCode(selectedCourse.code);
-      setCourseTitle(selectedCourse.title);
+      setValue("selectedCourseId", id);
+      setValue("courseCode", selectedCourse.code);
+      setValue("courseTitle", selectedCourse.title);
     }
   };
 
@@ -314,7 +349,8 @@ export default function ManualGradeEntry() {
     // However, sticking to "URL as source of truth" is cleaner.
     // BUT, router.replace is async-ish. 
     // Let's call performSearch directly AND update URL.
-    await performSearch(searchQuery, searchType);
+    // Let's call performSearch directly AND update URL.
+    await performSearch(searchQuery, searchType, 1);
   };
 
   const handleStudentSelect = (student: Student, shouldUpdateUrl = true) => {
@@ -331,6 +367,18 @@ export default function ManualGradeEntry() {
     if (shouldUpdateUrl) {
       updateUrl({ selected: student.studentNumber });
     }
+
+    // Reset Form
+    form.reset({
+      courseCode: "",
+      creditUnit: "",
+      courseTitle: "",
+      grade: "",
+      reExam: "",
+      remarks: "",
+      instructor: "",
+      selectedCourseId: "",
+    });
 
     // Update course options based on student's program
     const options = getCourseOptions(student.course, student.major).map(
@@ -362,20 +410,16 @@ export default function ManualGradeEntry() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStudent || !academicYear || !semester || !selectedCourseId) {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!selectedStudent || !academicYear || !semester) {
       toast.error("Please fill in all required fields.");
       return;
     }
 
-    const selectedCourse = courseOptions.find((c) => c.id === selectedCourseId);
-    if (!selectedCourse) return;
-
     // Check for existing grade
     const alreadyHasGrade = await checkExsistingGrade({
       studentNumber: selectedStudent.studentNumber,
-      courseCode: selectedCourse.code,
+      courseCode: values.courseCode,
       academicYear: academicYear as AcademicYear,
       semester: semester as Semester,
     });
@@ -394,9 +438,9 @@ export default function ManualGradeEntry() {
       html: `
             <div class="text-left text-sm">
                 <p><strong>Student:</strong> ${selectedStudent.firstName} ${selectedStudent.lastName}</p>
-                <p><strong>Course:</strong> ${selectedCourse.code}</p>
-                <p><strong>Grade:</strong> <span class="text-blue-600 font-bold text-lg">${grade}</span></p>
-                <p><strong>Remarks:</strong> ${remarks}</p>
+                <p><strong>Course:</strong> ${values.courseCode}</p>
+                <p><strong>Grade:</strong> <span class="text-blue-600 font-bold text-lg">${values.grade}</span></p>
+                <p><strong>Remarks:</strong> ${values.remarks}</p>
             </div>
         `,
       icon: 'question',
@@ -415,13 +459,13 @@ export default function ManualGradeEntry() {
         lastName: selectedStudent.lastName,
         academicYear,
         semester,
-        courseCode: selectedCourse.code,
-        creditUnit: Number.parseFloat(creditUnit),
-        courseTitle: selectedCourse.title,
-        grade,
-        reExam,
-        remarks,
-        instructor,
+        courseCode: values.courseCode,
+        creditUnit: Number.parseFloat(values.creditUnit),
+        courseTitle: values.courseTitle,
+        grade: values.grade,
+        reExam: values.reExam,
+        remarks: values.remarks,
+        instructor: values.instructor,
       };
 
       await addManualGrade({
@@ -440,12 +484,16 @@ export default function ManualGradeEntry() {
       });
 
       // Reset form
-      setSelectedCourseId("");
-      setCreditUnit("");
-      setGrade("");
-      setReExam("");
-      setRemarks("");
-      setInstructor("");
+      form.reset({
+        courseCode: "",
+        creditUnit: "",
+        courseTitle: "",
+        grade: "",
+        reExam: "",
+        remarks: "",
+        instructor: "",
+        selectedCourseId: "",
+      });
 
       // Clear selection
       setSelectedStudent(null);
@@ -639,6 +687,37 @@ export default function ManualGradeEntry() {
             </div>
           )}
 
+          {/* Pagination Controls */}
+          {searchResults.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 border-t pt-4">
+              <div className="text-sm text-gray-500">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => performSearch(searchQuery, searchType, currentPage - 1)}
+                  disabled={currentPage <= 1 || isSearching}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => performSearch(searchQuery, searchType, currentPage + 1)}
+                  disabled={currentPage >= totalPages || isSearching}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {searchQuery && searchResults.length === 0 && !isSearching && (
             <div className="text-center py-8 text-gray-500">
               <User className="w-12 h-12 mx-auto text-gray-300 mb-2" />
@@ -673,139 +752,205 @@ export default function ManualGradeEntry() {
               <p>Make sure the Course Code and Title match the student's actual enrollment for this semester.</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                {/* Course Code */}
-                <div className="space-y-2">
-                  <Label>Course Code <span className="text-red-500">*</span></Label>
-                  <Popover open={courseCodeOpen} onOpenChange={setCourseCodeOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full justify-between"
-                      >
-                        {selectedCourseId
-                          ? courseOptions.find((c) => c.id === selectedCourseId)?.code
-                          : "Select course code..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search code..." />
-                        <CommandList>
-                          <CommandEmpty>No course found.</CommandEmpty>
-                          <CommandGroup>
-                            {courseOptions.map((course) => (
-                              <CommandItem
-                                key={course.id}
-                                value={course.id}
-                                onSelect={(val) => {
-                                  handleCourseSelect(val);
-                                  setCourseCodeOpen(false);
-                                }}
+                  {/* Course Code */}
+                  <FormField
+                    control={form.control}
+                    name="selectedCourseId"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Course Code <span className="text-red-500">*</span></FormLabel>
+                        <Popover open={courseCodeOpen} onOpenChange={setCourseCodeOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  "w-full justify-between",
+                                  !field.value && "text-muted-foreground"
+                                )}
                               >
-                                <Check className={cn("mr-2 h-4 w-4", selectedCourseId === course.id ? "opacity-100" : "opacity-0")} />
-                                {course.code}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Credit Unit */}
-                <div className="space-y-2">
-                  <Label>Credit Unit <span className="text-red-500">*</span></Label>
-                  <Select value={creditUnit} onValueChange={setCreditUnit} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Units" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[0, 1, 2, 3, 4, 5].map(u => (
-                        <SelectItem key={u} value={u.toString()}>{u}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Course Title */}
-                <div className="col-span-1 md:col-span-2 space-y-2">
-                  <Label>Course Title <span className="text-red-500">*</span></Label>
-                  <Input value={courseTitle} readOnly className="bg-gray-50" placeholder="Auto-populated upon selecting course code" />
-                </div>
-
-                {/* Grade */}
-                <div className="space-y-2">
-                  <Label>Grade <span className="text-red-500">*</span></Label>
-                  <Select value={grade} onValueChange={handleGradeChange} required>
-                    <SelectTrigger className="font-medium text-blue-700">
-                      <SelectValue placeholder="Select Grade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GRADE_HIERARCHY.map((g) => (
-                        <SelectItem key={g} value={g}>{g}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Remarks */}
-                <div className="space-y-2">
-                  <Label>Remarks <span className="text-red-500">*</span></Label>
-                  <Input value={remarks} readOnly className={cn("font-medium",
-                    remarks === "PASSED" ? "text-green-600" :
-                      remarks === "FAILED" ? "text-red-600" : "text-gray-700"
-                  )} />
-                </div>
-
-                {/* Re-exam */}
-                <div className="space-y-2">
-                  <Label>Re-exam Grade</Label>
-                  <Select value={reExam} onValueChange={handleReExamChange}>
-                    <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {GRADE_HIERARCHY.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Instructor */}
-                <div className="space-y-2">
-                  <Label>Instructor <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={instructor}
-                    onChange={(e) => setInstructor(e.target.value)}
-                    placeholder="Instructor Name"
-                    required
+                                {field.value
+                                  ? courseOptions.find((c) => c.id === field.value)?.code
+                                  : "Select course code..."}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0">
+                            <Command>
+                              <CommandInput placeholder="Search code..." />
+                              <CommandList>
+                                <CommandEmpty>No course found.</CommandEmpty>
+                                <CommandGroup>
+                                  {courseOptions.map((course) => (
+                                    <CommandItem
+                                      key={course.id}
+                                      value={course.id}
+                                      onSelect={(val) => {
+                                        handleCourseSelect(val);
+                                        setCourseCodeOpen(false);
+                                      }}
+                                    >
+                                      <Check className={cn("mr-2 h-4 w-4", field.value === course.id ? "opacity-100" : "opacity-0")} />
+                                      {course.code}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
+
+                  {/* Credit Unit */}
+                  <FormField
+                    control={form.control}
+                    name="creditUnit"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Credit Unit <span className="text-red-500">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Units" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {[0, 1, 2, 3, 4, 5].map(u => (
+                              <SelectItem key={u} value={u.toString()}>{u}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Course Title */}
+                  <FormField
+                    control={form.control}
+                    name="courseTitle"
+                    render={({ field }) => (
+                      <FormItem className="col-span-1 md:col-span-2 space-y-2">
+                        <FormLabel>Course Title <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} readOnly className="bg-gray-50" placeholder="Auto-populated upon selecting course code" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Grade */}
+                  <FormField
+                    control={form.control}
+                    name="grade"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Grade <span className="text-red-500">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="font-medium text-blue-700">
+                              <SelectValue placeholder="Select Grade" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {GRADE_HIERARCHY.map((g) => (
+                              <SelectItem key={g} value={g}>{g}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Remarks */}
+                  <FormField
+                    control={form.control}
+                    name="remarks"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Remarks <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input {...field} readOnly className={cn("font-medium",
+                            field.value === "PASSED" ? "text-green-600" :
+                              field.value === "FAILED" ? "text-red-600" : "text-gray-700"
+                          )} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Re-exam */}
+                  <FormField
+                    control={form.control}
+                    name="reExam"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Re-exam Grade</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {GRADE_HIERARCHY.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Instructor */}
+                  <FormField
+                    control={form.control}
+                    name="instructor"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2">
+                        <FormLabel>Instructor <span className="text-red-500">*</span></FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Instructor Name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                 </div>
 
-              </div>
-
-              <div className="flex justify-end pt-6 border-t">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700 min-w-[150px]"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" /> Add Grade
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
+                <div className="flex justify-end pt-6 border-t">
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-green-600 hover:bg-green-700 min-w-[150px]"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" /> Submit Grade
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </CardContent>
         </Card>
       )}
@@ -856,14 +1001,18 @@ export default function ManualGradeEntry() {
                     <span className="text-gray-500 block">Email</span>
                     <span>{studentDetails.email}</span>
                   </div>
-                  <div>
-                    <span className="text-gray-500 block">Phone</span>
-                    <span>{studentDetails.phone}</span>
-                  </div>
-                  <div className="md:col-span-2">
-                    <span className="text-gray-500 block">Address</span>
-                    <span>{studentDetails.address}</span>
-                  </div>
+                  {role !== "faculty" && (
+                    <>
+                      <div>
+                        <span className="text-gray-500 block">Phone</span>
+                        <span>{studentDetails.phone}</span>
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="text-gray-500 block">Address</span>
+                        <span>{studentDetails.address}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

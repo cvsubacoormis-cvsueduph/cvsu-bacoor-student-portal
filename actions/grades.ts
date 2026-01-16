@@ -12,6 +12,15 @@ export type StudentSearchResult = {
   major: string;
 };
 
+export type SearchResponse = {
+  data: StudentSearchResult[];
+  meta: {
+    total: number;
+    page: number;
+    totalPages: number;
+  };
+};
+
 export type StudentDetails = {
   studentNumber: string;
   firstName: string;
@@ -51,8 +60,10 @@ export type GradeData = {
 
 export async function searchStudent(
   query: string,
-  searchType: "studentNumber" | "name"
-): Promise<StudentSearchResult[]> {
+  searchType: "studentNumber" | "name",
+  page: number = 1,
+  limit: number = 10
+): Promise<SearchResponse> {
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
@@ -61,48 +72,67 @@ export async function searchStudent(
     throw new Error("Search query cannot be empty");
   }
 
-  const results = await prisma.student.findMany({
-    where:
-      searchType === "studentNumber"
-        ? {
-          studentNumber: {
-            contains: query,
-            mode: "insensitive",
-          },
-        }
-        : {
-          OR: [
-            {
-              firstName: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-            {
-              lastName: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-          ],
+  const skip = (page - 1) * limit;
+
+  const whereClause =
+    searchType === "studentNumber"
+      ? {
+        studentNumber: {
+          contains: query,
+          mode: "insensitive" as const,
         },
-    select: {
-      studentNumber: true,
-      firstName: true,
-      lastName: true,
-      course: true,
-      major: true,
-    },
-  });
+      }
+      : {
+        OR: [
+          {
+            firstName: {
+              contains: query,
+              mode: "insensitive" as const,
+            },
+          },
+          {
+            lastName: {
+              contains: query,
+              mode: "insensitive" as const,
+            },
+          },
+        ],
+      };
+
+  const [total, results] = await prisma.$transaction([
+    prisma.student.count({ where: whereClause }),
+    prisma.student.findMany({
+      where: whereClause,
+      select: {
+        studentNumber: true,
+        firstName: true,
+        lastName: true,
+        course: true,
+        major: true,
+      },
+      skip,
+      take: limit,
+      orderBy: { lastName: 'asc' },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
 
   // Ensure major is a string (not null)
-  return results.map((s) => ({
-    studentNumber: s.studentNumber,
-    firstName: s.firstName,
-    lastName: s.lastName,
-    course: s.course,
-    major: s.major ?? "",
-  }));
+  return {
+    data: results.map((s) => ({
+      studentNumber: s.studentNumber,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      course: s.course,
+      major: s.major ?? "",
+    })),
+    meta: {
+      total,
+      page,
+      totalPages,
+    },
+  };
 }
 
 export async function getStudentDetails(

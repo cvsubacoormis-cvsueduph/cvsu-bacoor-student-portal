@@ -40,8 +40,14 @@ export async function getFailedLogs(
     limit: number = 10
 ): Promise<{ data: FailedLog[]; metadata: LogsMetadata }> {
     const { userId } = await auth();
+    const user = await currentUser();
+    const role = user?.publicMetadata.role as string;
     if (!userId) {
-        throw new Error("Unauthorized");
+        throw new Error("Permission Denied: You must be logged in to view logs.");
+    }
+
+    if (role !== "admin" && role !== "registrar") {
+        throw new Error("Permission Denied: You do not have the required permissions (Admin or Registrar) to view these logs.");
     }
 
     const where: any = {
@@ -103,7 +109,7 @@ export async function resolveGradeLog(
 ): Promise<void> {
     const user = await currentUser();
     if (!user) {
-        throw new Error("Unauthorized");
+        throw new Error("Permission Denied: You must be logged in to perform this action.");
     }
 
     // Validate required fields
@@ -117,7 +123,30 @@ export async function resolveGradeLog(
         !gradeData.grade ||
         !gradeData.instructor
     ) {
-        throw new Error("Missing required fields");
+        throw new Error("Missing Grade Details: Please ensure Student Number, Course Code, Grade, and Term are complete.");
+    }
+
+    // Verify student exists
+    const student = await prisma.student.findUnique({
+        where: { studentNumber: gradeData.studentNumber },
+    });
+
+    if (!student) {
+        throw new Error(`Student Not Found: The student number '${gradeData.studentNumber}' does not match any registered student.`);
+    }
+
+    // Verify course code exists in curriculum
+    const validCourse = await prisma.curriculumChecklist.findFirst({
+        where: {
+            courseCode: {
+                equals: gradeData.courseCode,
+                mode: "insensitive",
+            },
+        },
+    });
+
+    if (!validCourse) {
+        throw new Error(`Invalid Course Code: '${gradeData.courseCode}' is not a recognized subject in the curriculum.`);
     }
 
     await prisma.$transaction(async (prisma) => {
@@ -228,4 +257,81 @@ export async function resolveGradeLog(
             },
         });
     });
+}
+
+export type BulkResolveResult = {
+    successCount: number;
+    failureCount: number;
+    failures: { id: string; error: string; studentNumber: string }[];
+};
+
+export async function bulkResolveLogs(
+    logIds: string[],
+    overrides?: Partial<GradeData>
+): Promise<BulkResolveResult> {
+    const user = await currentUser();
+    const role = user?.publicMetadata.role as string;
+
+    if (!user) {
+        throw new Error("Permission Denied: You must be logged in to perform this action.");
+    }
+
+    if (role !== "admin" && role !== "registrar") {
+        throw new Error("Permission Denied: You do not have the required permissions (Admin or Registrar) to resolve logs.");
+    }
+
+    const results: BulkResolveResult = {
+        successCount: 0,
+        failureCount: 0,
+        failures: [],
+    };
+
+    // Process logs sequentially to avoid database lock issues with transactions if any
+    for (const logId of logIds) {
+        let currentStudentNumber = "Unknown";
+        try {
+            const log = await prisma.gradeLog.findUnique({
+                where: { id: logId }
+            });
+
+            if (!log) {
+                throw new Error("Log Retrieval Failed: The specified log entry could not be found.");
+            }
+            currentStudentNumber = log.studentNumber;
+
+            if (log.isResolved) {
+                results.successCount++;
+                continue;
+            }
+
+            const gradeData: GradeData = {
+                studentNumber: log.studentNumber,
+                firstName: "",
+                lastName: "",
+                academicYear: log.academicYear,
+                semester: log.semester,
+                courseCode: log.courseCode,
+                courseTitle: log.courseTitle,
+                creditUnit: log.creditUnit,
+                grade: log.grade,
+                remarks: log.remarks || undefined,
+                instructor: log.instructor,
+                isResolved: false,
+                ...overrides, // Apply overrides here
+            };
+
+            await resolveGradeLog(logId, gradeData);
+            results.successCount++;
+
+        } catch (error: any) {
+            results.failureCount++;
+            results.failures.push({
+                id: logId,
+                error: error.message || "Unknown error",
+                studentNumber: currentStudentNumber
+            });
+        }
+    }
+
+    return results;
 }
