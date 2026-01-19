@@ -149,7 +149,7 @@ export default function ForgotPasswordDialog() {
         setError("");
       }
     } catch (err: any) {
-      console.log("error", err.errors?.[0]?.longMessage || "An error occurred");
+      console.error("error", err.errors?.[0]?.longMessage || "An error occurred");
       setError(err.errors?.[0]?.longMessage || "Failed to reset password");
     } finally {
       setIsResetLoading(false);
@@ -172,7 +172,7 @@ export default function ForgotPasswordDialog() {
       startResendCountdown();
       setError("");
     } catch (err: any) {
-      console.log("error", err.errors?.[0]?.longMessage || "An error occurred");
+      console.error("error", err.errors?.[0]?.longMessage || "An error occurred");
       setError(err.errors?.[0]?.longMessage || "Failed to resend code");
     } finally {
       setIsResendLoading(false);

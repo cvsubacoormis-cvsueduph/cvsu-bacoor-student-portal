@@ -90,7 +90,7 @@ export default function AttendanceChart() {
         });
         setPopularCourse(maxCourse);
       } catch (error) {
-        console.log("Error fetching data:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }

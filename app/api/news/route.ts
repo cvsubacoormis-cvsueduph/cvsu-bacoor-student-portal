@@ -120,10 +120,8 @@ export async function DELETE(request: Request) {
     await prisma.news.delete({
       where: { id },
     });
-    console.log("News deleted successfully");
     return NextResponse.json({ message: "News deleted successfully" });
   } catch (error) {
-    console.log("Error deleting news:", error);
     return NextResponse.json({ message: "Error deleting news" });
   }
 }

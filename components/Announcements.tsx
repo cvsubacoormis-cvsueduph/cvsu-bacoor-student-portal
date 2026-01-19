@@ -35,7 +35,7 @@ export default function Announcements() {
         const data = await response.json();
         setAnnouncements(data.announcements || []); // Extract announcements array
       } catch (error) {
-        console.log("Error fetching announcements:", error);
+        console.error("Error fetching announcements:", error);
       } finally {
         setLoading(false);
       }
@@ -72,14 +72,14 @@ export default function Announcements() {
                       <span className="text-gray-800 text-xs">
                         {item.startTime
                           ? format(new Date(item.startTime), "p")
-                              .replace("a.m.", "AM")
-                              .replace("p.m.", "PM")
+                            .replace("a.m.", "AM")
+                            .replace("p.m.", "PM")
                           : "—"}{" "}
                         -{" "}
                         {item.endTime
                           ? format(new Date(item.endTime), "p")
-                              .replace("a.m.", "AM")
-                              .replace("p.m.", "PM")
+                            .replace("a.m.", "AM")
+                            .replace("p.m.", "PM")
                           : "—"}
                       </span>
                       <span className="text-gray-800 text-xs">{item.date}</span>
@@ -93,9 +93,9 @@ export default function Announcements() {
                       {item.dateFrom
                         ? item.dateTo
                           ? `(${format(new Date(item.dateFrom), "PPP")} - ${format(
-                              new Date(item.dateTo),
-                              "PPP"
-                            )})`
+                            new Date(item.dateTo),
+                            "PPP"
+                          )})`
                           : `(${format(new Date(item.dateFrom), "PPP")}`
                         : "—"}
                     </span>
@@ -125,14 +125,14 @@ export default function Announcements() {
                   <span className="text-gray-800 text-xs">
                     {item.startTime
                       ? format(new Date(item.startTime), "p")
-                          .replace("a.m.", "AM")
-                          .replace("p.m.", "PM")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
                       : "—"}{" "}
                     -{" "}
                     {item.endTime
                       ? format(new Date(item.endTime), "p")
-                          .replace("a.m.", "AM")
-                          .replace("p.m.", "PM")
+                        .replace("a.m.", "AM")
+                        .replace("p.m.", "PM")
                       : "—"}
                   </span>
                   <span className="text-xs text-gray-800 bg-white rounded-md px-1 py-1">
@@ -145,9 +145,9 @@ export default function Announcements() {
                 {item.dateFrom
                   ? item.dateTo
                     ? `(${format(new Date(item.dateFrom), "PPP")} - ${format(
-                        new Date(item.dateTo),
-                        "PPP"
-                      )})`
+                      new Date(item.dateTo),
+                      "PPP"
+                    )})`
                     : `(${format(new Date(item.dateFrom), "PPP")}`
                   : "—"}
               </span>

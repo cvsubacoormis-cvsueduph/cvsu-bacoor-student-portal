@@ -70,7 +70,7 @@ export default function UploadStudents() {
             dateNF: "mmmm d, yyyy",
           });
           setJsonData(JSON.stringify(json, null, 2));
-          console.log(JSON.stringify(json, null, 2));
+          console.error(JSON.stringify(json, null, 2));
         }
       };
       reader.readAsBinaryString(file);

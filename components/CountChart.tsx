@@ -51,7 +51,7 @@ export default function AdminPage() {
         ]);
         setTotalVisitors(data.total);
       } catch (error) {
-        console.log("Error fetching student data:", error);
+        console.error("Error fetching student data:", error);
       } finally {
         setLoading(false);
       }

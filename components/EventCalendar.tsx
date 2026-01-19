@@ -46,7 +46,7 @@ export default function EventCalendar() {
           setEvents([]); // Ensure events is always an array
         }
       } catch (error) {
-        console.log("Error fetching events:", error);
+        console.error("Error fetching events:", error);
         setEvents([]); // Set an empty array on error
       } finally {
         setLoading(false);
@@ -71,14 +71,14 @@ export default function EventCalendar() {
           <span className="text-gray-800 text-xs">
             {event.startTime
               ? format(new Date(event.startTime), "p")
-                  .replace("a.m.", "AM")
-                  .replace("p.m.", "PM")
+                .replace("a.m.", "AM")
+                .replace("p.m.", "PM")
               : "—"}{" "}
             -{" "}
             {event.endTime
               ? format(new Date(event.endTime), "p")
-                  .replace("a.m.", "AM")
-                  .replace("p.m.", "PM")
+                .replace("a.m.", "AM")
+                .replace("p.m.", "PM")
               : "—"}
           </span>
         </div>
@@ -90,9 +90,9 @@ export default function EventCalendar() {
             {event.dateFrom
               ? event.dateTo
                 ? `(${format(new Date(event.dateFrom), "PPP")} - ${format(
-                    new Date(event.dateTo),
-                    "PPP"
-                  )})`
+                  new Date(event.dateTo),
+                  "PPP"
+                )})`
                 : `(${format(new Date(event.dateFrom), "PPP")}`
               : "—"}
           </span>
@@ -144,14 +144,14 @@ export default function EventCalendar() {
                       <span className="text-gray-800 text-xs">
                         {event.startTime
                           ? format(new Date(event.startTime), "p")
-                              .replace("a.m.", "AM")
-                              .replace("p.m.", "PM")
+                            .replace("a.m.", "AM")
+                            .replace("p.m.", "PM")
                           : "—"}{" "}
                         -{" "}
                         {event.endTime
                           ? format(new Date(event.endTime), "p")
-                              .replace("a.m.", "AM")
-                              .replace("p.m.", "PM")
+                            .replace("a.m.", "AM")
+                            .replace("p.m.", "PM")
                           : "—"}
                       </span>
                     </div>
@@ -165,9 +165,9 @@ export default function EventCalendar() {
                         {event.dateFrom
                           ? event.dateTo
                             ? `(${format(new Date(event.dateFrom), "PPP")} - ${format(
-                                new Date(event.dateTo),
-                                "PPP"
-                              )})`
+                              new Date(event.dateTo),
+                              "PPP"
+                            )})`
                             : `(${format(new Date(event.dateFrom), "PPP")}`
                           : "—"}
                       </span>
