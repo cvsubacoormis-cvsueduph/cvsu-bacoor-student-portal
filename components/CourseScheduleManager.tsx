@@ -26,6 +26,21 @@ export default function CourseScheduleManager() {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [course, setCourse] = useState<string>(courses[0]);
 
+    // Pagination & Search State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+
+    // Debounce Search
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setCurrentPage(1); // Reset to page 1 on search
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
+
     // Use DateRange for selection
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: new Date(),
@@ -41,10 +56,24 @@ export default function CourseScheduleManager() {
 
     async function fetchSchedules() {
         try {
-            const res = await fetch("/api/schedules");
+            const params = new URLSearchParams({
+                page: currentPage.toString(),
+                limit: "10",
+                search: debouncedSearch,
+            });
+
+            const res = await fetch(`/api/schedules?${params.toString()}`);
             const data = await res.json();
-            if (!Array.isArray(data.schedules)) setSchedules([]);
-            else setSchedules(data.schedules);
+
+            if (data.schedules && Array.isArray(data.schedules)) {
+                setSchedules(data.schedules);
+                if (data.meta) {
+                    setTotalPages(data.meta.totalPages);
+                }
+            } else {
+                setSchedules([]);
+            }
+
         } catch (err) {
             console.error(err);
             toast.error("Failed to load schedules");
@@ -54,7 +83,7 @@ export default function CourseScheduleManager() {
 
     useEffect(() => {
         fetchSchedules();
-    }, []);
+    }, [currentPage, debouncedSearch]);
 
     async function handleSave() {
         if (!course || !dateRange?.from || !startTime || !endTime) {
@@ -265,7 +294,17 @@ export default function CourseScheduleManager() {
 
             {/* Existing Schedules */}
             <div className="mt-6">
-                <h2 className="text-xl font-semibold mb-2">Existing Schedules</h2>
+                <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xl font-semibold">Existing Schedules</h2>
+                    <div className="w-[250px]">
+                        <Input
+                            placeholder="Search Course..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                </div>
+
                 <div className="rounded-md border">
                     <Table>
                         <TableHeader>
@@ -281,7 +320,7 @@ export default function CourseScheduleManager() {
                             {schedules.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={5} className="text-center h-24">
-                                        No schedules yet
+                                        No schedules found
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -324,6 +363,29 @@ export default function CourseScheduleManager() {
                             )}
                         </TableBody>
                     </Table>
+                </div>
+
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-end space-x-2 py-4">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                    >
+                        Previous
+                    </Button>
+                    <div className="text-sm font-medium">
+                        Page {currentPage} of {totalPages || 1}
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage >= totalPages}
+                    >
+                        Next
+                    </Button>
                 </div>
             </div>
             <Dialog open={!!scheduleToDelete} onOpenChange={(open) => !open && setScheduleToDelete(null)}>

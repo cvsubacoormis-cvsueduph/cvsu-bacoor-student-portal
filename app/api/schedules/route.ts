@@ -12,17 +12,68 @@ const getCacheKey = (course: string, date: Date) =>
 export async function GET(req: Request) {
     try {
         const url = new URL(req.url);
+
+        // Pagination Params
+        const page = parseInt(url.searchParams.get("page") || "1");
+        const limit = parseInt(url.searchParams.get("limit") || "10");
+        const skip = (page - 1) * limit;
+
+        // Filtering Params
+        const search = url.searchParams.get("search") || "";
         const courseParam = url.searchParams.get("course");
-        const course = courseParam && Object.values(Courses).includes(courseParam as Courses)
-            ? (courseParam as Courses)
-            : undefined;
 
-        const schedules = await prisma.courseAccessSchedule.findMany({
-            where: course ? { course } : undefined,
-            orderBy: { accessDate: "asc" },
+        let courseFilter: Courses | undefined;
+
+        // If 'course' is strictly provided and valid
+        if (courseParam && Object.values(Courses).includes(courseParam as Courses)) {
+            courseFilter = courseParam as Courses;
+        }
+
+        // Search Logic: Filter Courses Enum if search string exists
+        let matchingCourses: Courses[] | undefined;
+        if (search) {
+            const searchLower = search.toLowerCase();
+            matchingCourses = Object.values(Courses).filter((c) =>
+                c.toLowerCase().includes(searchLower)
+            );
+        }
+
+        // Construct Where Clause
+        const whereClause: any = {};
+
+        if (courseFilter) {
+            whereClause.course = courseFilter;
+        } else if (matchingCourses) {
+            // If search yielded results, filter by those courses
+            // If search yielded NO results, we should probably return nothing, or handle empty array
+            if (matchingCourses.length > 0) {
+                whereClause.course = { in: matchingCourses };
+            } else {
+                // Force empty result if search term doesn't match any course
+                whereClause.course = "INVALID_SEARCH_TERM";
+            }
+        }
+
+        // Fetch Data
+        const [schedules, total] = await Promise.all([
+            prisma.courseAccessSchedule.findMany({
+                where: whereClause,
+                orderBy: { accessDate: "asc" },
+                skip,
+                take: limit,
+            }),
+            prisma.courseAccessSchedule.count({ where: whereClause }),
+        ]);
+
+        return NextResponse.json({
+            schedules,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
         });
-
-        return NextResponse.json({ schedules });
     } catch (err: any) {
         console.error("❌ /api/schedules GET error:", err);
         return NextResponse.json(
