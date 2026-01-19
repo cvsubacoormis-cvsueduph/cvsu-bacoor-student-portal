@@ -33,7 +33,7 @@ const baseStudentSchema = z
         "Username can only contain letters and numbers"
       )
       .min(8, "Username is required")
-      .max(20, "Max 20 characters"),
+      .max(50, "Max 50 characters"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
