@@ -514,13 +514,19 @@ export default function ManualGradeEntry() {
     }
   };
 
-  const startYear = 2024;
-  const numberOfYears = 6;
+  const isAdminOrRegistrar = ["admin", "registrar"].includes(role);
+  const startYear = isAdminOrRegistrar ? 2014 : 2025;
+
+  const currentYear = new Date().getFullYear();
+  // Ensure we go at least up to next year or a bit more
+  const endYear = currentYear + 1;
+  const numberOfYears = (endYear - startYear) + 2; // +2 buffer
+
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
     const ayEnd = ayStart + 1;
     return `AY_${ayStart}_${ayEnd}`;
-  });
+  }).reverse();
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">

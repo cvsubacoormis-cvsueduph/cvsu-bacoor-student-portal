@@ -338,12 +338,19 @@ export function UploadGrades() {
   const currentAyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
 
   const academicYears = React.useMemo(() => {
-    // New curriculum starts in 2018
-    const newCurriculumStart = 2018;
+    // New curriculum starts in 2018 => Changed to 2025 for standard users per request
+    // Admin/Registrar get 2014
+
+    const isAdminOrRegistrar = ["admin", "registrar"].includes(role || "");
+    const standardStart = 2025;
+    const adminStart = 2014;
+
+    const baseStart = isAdminOrRegistrar ? adminStart : standardStart;
+
     // Legacy support (old curriculum) - adjust start year as needed, e.g., 2005
     const legacyStart = 2005;
 
-    const startYear = allowLegacy ? legacyStart : newCurriculumStart;
+    const startYear = allowLegacy ? legacyStart : baseStart;
 
     const years = [];
     for (let y = startYear; y <= currentAyStartYear; y++) {
