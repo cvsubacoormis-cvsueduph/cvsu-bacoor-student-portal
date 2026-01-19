@@ -137,6 +137,15 @@ export default function StudentSignup() {
   const { watch, setValue } = form;
   const watchedCourse = watch("course");
   const watchedMajor = watch("major");
+  const watchedStudentNumber = watch("studentNumber");
+  const watchedFirstName = watch("firstName");
+
+  useEffect(() => {
+    if (watchedStudentNumber && watchedFirstName) {
+      const cleanedFirstName = watchedFirstName.replace(/\s+/g, "").toLowerCase();
+      setValue("username", `${watchedStudentNumber}${cleanedFirstName}`);
+    }
+  }, [watchedStudentNumber, watchedFirstName, setValue]);
 
   useEffect(() => {
     if (coursesForcedNone.includes(watchedCourse)) {
@@ -507,12 +516,12 @@ export default function StudentSignup() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Username *</FormLabel>
+                        <FormLabel>Username (Auto-generated)</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter username" {...field} />
+                          <Input placeholder="Username will be generated" {...field} disabled />
                         </FormControl>
                         <FormDescription>
-                          This will be used to log into your student portal
+                          Username is your Student Number + First Name
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
