@@ -136,6 +136,30 @@ export default function Grades({
           </div>
         </CardHeader>
         <CardContent>
+          <Alert className="mb-6 bg-blue-50 border-blue-200">
+            <TriangleAlert className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-800">Notice</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              <p>
+                Due to some data inconsistencies encountered during the grade
+                upload process, some grades may not have been fully uploaded or
+                reflected correctly.
+              </p>
+              <p className="mt-2">
+                Please rest assured that these can still be updated and corrected.
+                If you believe your grade is missing or incorrect, kindly contact
+                the MIS Coordinator or email us at{" "}
+                <a
+                  href="mailto:cvsubacoor@cvsu.edu.ph"
+                  className="underline font-medium"
+                >
+                  cvsubacoor@cvsu.edu.ph
+                </a>{" "}
+                for assistance.
+              </p>
+              <p className="mt-2">Thank you for your understanding.</p>
+            </AlertDescription>
+          </Alert>
           <Alert variant="destructive" className="mb-6">
             <TriangleAlert className="h-4 w-4" />
             <AlertTitle>Warning</AlertTitle>
