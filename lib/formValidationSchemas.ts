@@ -56,13 +56,13 @@ const baseStudentSchema = z
       .string()
       .min(1, "First name is required")
       .max(20, "Max 20 characters")
-      .regex(/^[a-zA-Z]+$/, "First name can only contain letters"),
+      .regex(/^[a-zA-Z\s]+$/, "First name can only contain letters"),
     middleInit: z.string().max(10).optional(),
     lastName: z
       .string()
       .min(1, "Last name is required")
       .max(20, "Max 20 characters")
-      .regex(/^[a-zA-Z]+$/, "Last name can only contain letters"),
+      .regex(/^[a-zA-Z\s]+$/, "Last name can only contain letters"),
     email: z.string().email("Invalid email format").optional(),
     phone: z.string().min(1, "Phone number is required").max(11).optional(),
     address: z
@@ -138,13 +138,13 @@ export const updateStudentSchema = z.object({
     .string()
     .min(1, "First name is required")
     .max(20, "Max 20 characters")
-    .regex(/^[a-zA-Z]+$/, "First name can only contain letters"),
+    .regex(/^[a-zA-Z\s]+$/, "First name can only contain letters"),
   middleInit: z.string().max(10).optional().or(z.literal("")),
   lastName: z
     .string()
     .min(1, "Last name is required")
     .max(20, "Max 20 characters")
-    .regex(/^[a-zA-Z]+$/, "Last name can only contain letters"),
+    .regex(/^[a-zA-Z\s]+$/, "Last name can only contain letters"),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   phone: z.string().min(1, "Phone number is required").max(18).optional(),
   address: z.string().min(1, "Address is required").max(100),
