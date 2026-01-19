@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -76,10 +77,27 @@ export default function Grades({
     return reExamGrade < originalGrade ? reExamGrade : originalGrade;
   };
 
+  const effectiveYear =
+    year && year !== "all"
+      ? year
+      : availableYears.length > 0
+        ? availableYears[0]
+        : "";
+  const effectiveSemester =
+    semester && semester !== "all" ? semester : "FIRST";
+
+  const [selectedYear, setSelectedYear] = useState(effectiveYear);
+  const [selectedSemester, setSelectedSemester] = useState(effectiveSemester);
+
+  useEffect(() => {
+    setSelectedYear(effectiveYear);
+    setSelectedSemester(effectiveSemester);
+  }, [effectiveYear, effectiveSemester]);
+
   const filteredGrades = grades.filter((g) => {
     return (
-      (!year || year === "all" || g.academicYear === year) &&
-      (!semester || semester === "all" || g.semester === semester)
+      g.academicYear === effectiveYear &&
+      g.semester === effectiveSemester
     );
   });
 
@@ -135,12 +153,16 @@ export default function Grades({
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Academic Year
               </label>
-              <Select name="year" defaultValue={year || "all"}>
+              <Select
+                name="year"
+                value={selectedYear}
+                onValueChange={setSelectedYear}
+              >
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Years</SelectItem>
+                  {/* <SelectItem value="all">All Years</SelectItem> */}
                   {availableYears.map((yr) => (
                     <SelectItem key={yr} value={yr}>
                       {yr.replace("_", "-")}
@@ -154,12 +176,16 @@ export default function Grades({
               <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Semester
               </label>
-              <Select name="semester" defaultValue={semester || "all"}>
+              <Select
+                name="semester"
+                value={selectedSemester}
+                onValueChange={setSelectedSemester}
+              >
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Semesters</SelectItem>
+                  {/* <SelectItem value="all">All Semesters</SelectItem> */}
                   {availableSemesters.map((sem) => (
                     <SelectItem key={sem} value={sem}>
                       {sem === "FIRST"

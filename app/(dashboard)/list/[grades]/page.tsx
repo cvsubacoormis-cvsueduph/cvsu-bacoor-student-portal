@@ -28,10 +28,20 @@ export default function GradesPage() {
         if (isMounted) {
           setGrades(allGrades);
           setAvailableYears(
-            Array.from(new Set(allGrades.map((g) => g.academicYear))).sort()
+            Array.from(new Set(allGrades.map((g) => g.academicYear))).sort(
+              (a, b) => b.localeCompare(a)
+            )
           );
           setAvailableSemesters(
-            Array.from(new Set(allGrades.map((g) => g.semester)))
+            Array.from(new Set(allGrades.map((g) => g.semester))).sort(
+              (a, b) => {
+                const order = { FIRST: 1, SECOND: 2, MIDYEAR: 3 };
+                return (
+                  (order[a as keyof typeof order] || 4) -
+                  (order[b as keyof typeof order] || 4)
+                );
+              }
+            )
           );
           setError(null);
         }
