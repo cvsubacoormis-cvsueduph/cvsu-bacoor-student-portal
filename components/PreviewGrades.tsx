@@ -211,7 +211,28 @@ export function PreviewGrades({
   // Persist the updated grades by sending a PATCH request for each updated row.
   const handleSaveChanges = async () => {
     try {
-      const updatePromises = editedGrades.map(async (grade) => {
+      // Filter out grades that haven't changed
+      const changedGrades = editedGrades.filter((editedGrade, index) => {
+        const originalGrade = grades[index];
+        return (
+          editedGrade.grade !== originalGrade.grade ||
+          editedGrade.courseCode !== originalGrade.courseCode ||
+          editedGrade.creditUnit !== originalGrade.creditUnit ||
+          editedGrade.courseTitle !== originalGrade.courseTitle ||
+          editedGrade.reExam !== originalGrade.reExam ||
+          editedGrade.remarks !== originalGrade.remarks ||
+          editedGrade.instructor !== originalGrade.instructor
+        );
+      });
+
+      if (changedGrades.length === 0) {
+        toast("No changes to save");
+        setIsDialogOpen(false);
+        setEditingRows({});
+        return;
+      }
+
+      const updatePromises = changedGrades.map(async (grade) => {
         const res = await fetch(`/api/preview-grades?id=${grade.id}`, {
           method: "PATCH",
           headers: {
@@ -225,9 +246,10 @@ export function PreviewGrades({
         return res.json();
       });
 
-      const updatedGrades = await Promise.all(updatePromises);
-      setGrades(updatedGrades);
-      setEditedGrades(updatedGrades);
+      await Promise.all(updatePromises);
+
+      // Refresh local state with the edits we just saved
+      setGrades(editedGrades);
       setEditingRows({});
 
       toast.success("Grades updated successfully");

@@ -85,7 +85,6 @@ export default function StudentLists() {
                       </Button>
                     </Link>
                     <UploadStudents />
-                    <BulkDeleteStudent />
                   </>
                 )}
               </div>

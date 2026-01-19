@@ -153,7 +153,7 @@ export async function PATCH(request: Request) {
     try {
       await checkRateLimit({
         action: "preview-grades-patch",
-        limit: 5,
+        limit: 60,
         windowSeconds: 60,
       });
     } catch (error: any) {
