@@ -35,8 +35,8 @@ import { AlertCircleIcon, CheckCircle2Icon, PopcornIcon } from "lucide-react";
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
   "Enrollment/Evaluation Purposes Only",
-  "Work Purposes",
-  "Scholarship",
+  // "Work Purposes",
+  // "Scholarship",
   "Personal Copy",
 ];
 
