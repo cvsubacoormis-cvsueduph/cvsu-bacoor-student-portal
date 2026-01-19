@@ -29,8 +29,8 @@ const baseStudentSchema = z
     username: z
       .string()
       .regex(
-        /^[a-zA-Z][a-zA-Z0-9]*$/,
-        "Username must start with a letter and can contain letters and numbers"
+        /^[a-zA-Z0-9]+$/,
+        "Username can only contain letters and numbers"
       )
       .min(8, "Username is required")
       .max(20, "Max 20 characters"),
@@ -129,8 +129,8 @@ export const updateStudentSchema = z.object({
   username: z
     .string()
     .regex(
-      /^[a-zA-Z][a-zA-Z0-9]*$/,
-      "Username must start with a letter and can contain letters and numbers"
+      /^[a-zA-Z0-9]+$/,
+      "Username can only contain letters and numbers"
     )
     .min(1, "Username is required")
     .max(20, "Max 20 characters"),
