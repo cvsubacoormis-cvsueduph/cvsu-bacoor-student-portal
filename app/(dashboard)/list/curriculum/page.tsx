@@ -8,7 +8,7 @@ interface PageProps {
 }
 
 export default async function CurriculumPage({ searchParams }: PageProps) {
-  const { page, limit, search } = await searchParams;
+  const { page, limit, search, course } = await searchParams;
 
   const p = page ? parseInt(page as string) : 1;
   const l = limit ? parseInt(limit as string) : 10;
@@ -21,6 +21,10 @@ export default async function CurriculumPage({ searchParams }: PageProps) {
       { courseTitle: { contains: search as string, mode: "insensitive" } },
       { courseCode: { contains: search as string, mode: "insensitive" } },
     ];
+  }
+
+  if (course && course !== "ALL") {
+    query.course = course as Prisma.EnumCoursesFilter;
   }
 
   const [data, count] = await prisma.$transaction([

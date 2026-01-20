@@ -33,6 +33,7 @@ export function CurriculumDataTable({
   const isAdmin = role === "admin";
 
   const search = searchParams.get("search") || "";
+  const courseFilter = searchParams.get("course") || "";
 
   const totalPages = Math.ceil(count / limit);
   const startIndex = (page - 1) * limit;
@@ -89,6 +90,17 @@ export function CurriculumDataTable({
     router.push(`?${params.toString()}`);
   };
 
+  const handleCourseFilterChange = (value: string) => {
+    const params = new URLSearchParams(window.location.search);
+    if (value && value !== "ALL") {
+      params.set("course", value);
+    } else {
+      params.delete("course");
+    }
+    params.set("page", "1");
+    router.push(`?${params.toString()}`);
+  };
+
   return (
     <div className="space-y-6 h-screen">
       <CurriculumToolbar
@@ -96,6 +108,8 @@ export function CurriculumDataTable({
         onSearchChange={handleSearchChange}
         isAdmin={isAdmin}
         onCreate={createItem}
+        courseFilter={courseFilter}
+        onCourseFilterChange={handleCourseFilterChange}
       />
 
       <CurriculumStats data={data} />

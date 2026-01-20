@@ -252,3 +252,37 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
 
   return logs;
 }
+
+export async function getCurriculumForExport(course?: string) {
+  const { userId, sessionClaims } = await auth();
+  const role = sessionClaims?.metadata as { role?: string };
+
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  if (
+    role?.role !== "admin" &&
+    role?.role !== "faculty" &&
+    role?.role !== "registrar"
+  ) {
+    throw new Error("Unauthorized role");
+  }
+
+  const where: any = {};
+  if (course && course !== "ALL") {
+    where.course = course as Courses;
+  }
+
+  const items = await prisma.curriculumChecklist.findMany({
+    where,
+    orderBy: [
+      { course: "asc" },
+      { yearLevel: "asc" },
+      { semester: "asc" },
+      { courseCode: "asc" },
+    ],
+  });
+
+  return items;
+}
