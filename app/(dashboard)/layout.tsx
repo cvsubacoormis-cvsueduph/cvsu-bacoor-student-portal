@@ -96,12 +96,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex">
       <div className="w-[14%] p-4">
         <Image src="/logos.png" alt="logo" width={230} height={230} />
         <Menu />
       </div>
-      <div className="w-[86%] bg-[#F7F8FA] overflow-y-auto">
+      <div className="w-[86%]">
         <NavBar />
         {children}
         <Toaster position="top-right" />

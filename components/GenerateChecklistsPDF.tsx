@@ -681,12 +681,12 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
   return (
     <Button
       ref={buttonRef}
-      className="bg-blue-700 hover:bg-blue-500 w-full sm:w-auto text-sm px-4 py-2 rounded-lg"
+      className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-4 py-2 text-sm hover:bg-blue-500 sm:w-auto"
       onClick={generateChecklistPDF}
       disabled={generating || !studentData || !checklistData.length}
     >
-      <DownloadIcon className="h-4 w-4 mr-2" />
-      {generating ? "Generating..." : "Download Checklist"}
+      <DownloadIcon className="h-4 w-4" />
+      {generating ? "Generating..." : ""}
     </Button>
   );
 };

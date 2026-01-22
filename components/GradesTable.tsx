@@ -149,11 +149,12 @@ export default function Grades({
                 Please rest assured that these can still be updated and corrected.
                 If you believe your grade is missing or incorrect, kindly contact
                 the MIS Coordinator or email us at{" "}
-                <p
-                  className="underline font-medium"
+                <a
+                  href="mailto:cvsubacoor.mis@cvsu.edu.ph"
+                  className="font-medium text-blue-700 underline break-all sm:break-normal"
                 >
                   cvsubacoor.mis@cvsu.edu.ph
-                </p>{" "}
+                </a>{" "}
                 for assistance.
               </p>
               <p className="mt-2">Thank you for your understanding.</p>

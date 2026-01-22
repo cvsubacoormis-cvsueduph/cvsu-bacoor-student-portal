@@ -137,15 +137,17 @@ function ChecklistHeader({
 function ProgressSummary({ data }: { data: CurriculumData }) {
   return (
     <Card className="print:shadow-none print:border print:border-gray-300">
-      <CardHeader className="print:pb-2">
-        <CardTitle className="flex items-center gap-2 print:text-lg">
-          <BookOpen className="h-5 w-5 print:h-4 print:w-4" />
-          Academic Progress - {courseMap(data.studentInfo.course)}
-          {data.studentInfo.major !== "NONE" &&
-            ` ${data.studentInfo.major
-              ? formatMajor(data.studentInfo.major)
-              : ""
-            }`}
+      <CardHeader className="p-4 sm:p-6 print:pb-2">
+        <CardTitle className="flex flex-row items-start gap-2 text-base sm:items-center sm:text-lg print:text-lg">
+          <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground sm:mt-0 print:h-4 print:w-4" />
+          <span className="leading-tight">
+            Academic Progress - {courseMap(data.studentInfo.course)}
+            {data.studentInfo.major !== "NONE" &&
+              ` ${data.studentInfo.major
+                ? formatMajor(data.studentInfo.major)
+                : ""
+              }`}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="print:pt-0">
@@ -394,26 +396,39 @@ function StatusIcon({ status }: { status: string }) {
 
 function Legend() {
   return (
-    <Card className="print:shadow-none print:border print:border-gray-300 w-full">
-      <CardContent className="pt-6 print:pt-2">
-        <h4 className="font-medium text-gray-900 mb-3 print:text-sm print:mb-2 text-base sm:text-lg">
+    <Card className="w-full border-gray-200 print:border print:border-gray-300 print:shadow-none">
+      {/* Reduced padding on mobile (p-4) to maximize space */}
+      <CardContent className="p-4 sm:p-6 print:pt-2">
+
+        {/* Adjusted header size and margin for mobile */}
+        <h4 className="mb-3 text-base font-medium text-gray-900 sm:text-lg print:mb-2 print:text-sm">
           Legend
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 print:gap-2 print:text-xs">
+
+        {/* Responsive Grid:
+           - Mobile: 1 column, tighter vertical gap (gap-y-3)
+           - Tablet (sm): 2 columns
+           - Desktop (md): 4 columns
+        */}
+        <div className="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-2 md:grid-cols-4 print:grid-cols-4 print:gap-2 print:text-xs">
+
           <LegendItem
-            icon={<CheckCircle className="h-4 w-4 text-green-600 print:h-3 print:w-3 flex-shrink-0" />}
-            label="Completed/Passed/Satisfactory"
+            icon={<CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 print:mt-0 print:h-3 print:w-3" />}
+            label="Completed/Passed/S"
           />
+
           <LegendItem
-            icon={<XCircle className="h-4 w-4 text-red-600 print:h-3 print:w-3 flex-shrink-0" />}
+            icon={<XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 print:mt-0 print:h-3 print:w-3" />}
             label="Failed/Unsatisfactory"
           />
+
           <LegendItem
-            icon={<XCircle className="h-4 w-4 text-orange-600 print:h-3 print:w-3 flex-shrink-0" />}
+            icon={<XCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600 print:mt-0 print:h-3 print:w-3" />}
             label="Conditional Failure/Dropped/Lack of Requirements"
           />
+
           <LegendItem
-            icon={<div className="h-4 w-4 rounded-full border-2 border-gray-300 print:h-3 print:w-3 flex-shrink-0" />}
+            icon={<div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-gray-300 print:mt-0 print:h-3 print:w-3" />}
             label="Not Taken"
           />
         </div>
@@ -424,9 +439,9 @@ function Legend() {
 
 function LegendItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-start gap-2 text-sm text-gray-600 print:text-xs">
       {icon}
-      <span className="text-sm sm:text-base">{label}</span>
+      <span className="leading-tight">{label}</span>
     </div>
   );
 }
