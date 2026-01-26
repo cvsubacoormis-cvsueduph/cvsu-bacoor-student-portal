@@ -133,17 +133,17 @@ export const updateStudentSchema = z.object({
       "Username can only contain letters and numbers"
     )
     .min(1, "Username is required")
-    .max(20, "Max 20 characters"),
+    .max(50, "Max 50 characters"),
   firstName: z
     .string()
     .min(1, "First name is required")
-    .max(20, "Max 20 characters")
+    .max(50, "Max 50 characters")
     .regex(/^[A-Za-z]+(?:\s[A-Za-z]+)*$/, "Invalid first name format"),
   middleInit: z.string().max(10).optional().or(z.literal("")),
   lastName: z
     .string()
     .min(1, "Last name is required")
-    .max(20, "Max 20 characters")
+    .max(50, "Max 50 characters")
     .regex(/^[A-Za-z]+(?:\s[A-Za-z]+)*$/, "Invalid last name format"),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   phone: z.string().min(1, "Phone number is required").max(18).optional(),
