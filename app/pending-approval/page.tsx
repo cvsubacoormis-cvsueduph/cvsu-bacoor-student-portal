@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser } from "@clerk/nextjs";
+
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { SignOutButton } from "@clerk/nextjs";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
   RefreshCcw,
@@ -19,6 +19,13 @@ export default function PendingApprovalPage() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const { signOut } = useClerk();
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    await signOut({ redirectUrl: "/" });
+  };
 
   const isApproved = user?.publicMetadata?.isApproved as boolean;
   const role = user?.publicMetadata?.role as string;
@@ -159,12 +166,19 @@ export default function PendingApprovalPage() {
             </Button>
           )}
 
-          <SignOutButton>
-            <Button variant="outline" className="w-full">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+          >
+            {isSigningOut ? (
+              <HashLoader size={20} color="#000" />
+            ) : (
               <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </Button>
-          </SignOutButton>
+            )}
+            {isSigningOut ? "Signing Out..." : "Sign Out"}
+          </Button>
         </div>
       </div>
     </div>
