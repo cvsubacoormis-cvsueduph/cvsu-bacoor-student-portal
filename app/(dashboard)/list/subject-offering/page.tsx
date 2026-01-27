@@ -1,32 +1,32 @@
-import SeedingSubjectOffering from "@/components/SeedingSubjectOffering";
-import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
-import React from "react";
-import { CreateTermDialog } from "@/components/dialogs/CreateTermDialog";
+import { SubjectOfferingDataTable } from "@/components/SubjectOfferingDataTable";
+import { getSubjectOfferings } from "@/actions/subject-offering";
 
-export default function SubjectOffering() {
+interface PageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function SubjectOfferingPage({ searchParams }: PageProps) {
+  const { page, limit, search, academicYear, semester } = await searchParams;
+
+  const p = page ? parseInt(page as string) : 1;
+  const l = limit ? parseInt(limit as string) : 10;
+
+  const { data, count } = await getSubjectOfferings({
+    page: p,
+    limit: l,
+    search: search as string,
+    academicYear: academicYear as string,
+    semester: semester as string,
+  });
+
   return (
-    <>
-      <SignedIn>
-        <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-            <h1 className="md:block text-lg font-semibold">
-              Seed a Subject Offering{" "}
-              <span className=" flex text-xs text-gray-500 font-normal mt-1">
-                Seed a Subject Offering in a specific Academic Year and Semester
-              </span>
-            </h1>
-            <div className="mt-4 md:mt-0">
-              <CreateTermDialog />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <SeedingSubjectOffering />
-          </div>
-        </div>
-      </SignedIn>
-      <SignedOut>
-        <RedirectToSignIn />
-      </SignedOut>
-    </>
+    <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
+      <SubjectOfferingDataTable
+        data={data}
+        count={count}
+        page={p}
+        limit={l}
+      />
+    </div>
   );
 }

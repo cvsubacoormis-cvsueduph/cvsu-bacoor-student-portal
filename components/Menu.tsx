@@ -34,6 +34,12 @@ export default async function Menu() {
           visible: ["admin", "superuser", "faculty", "registrar"],
         },
         {
+          icon: "/calendar.png",
+          label: "Subject Offerings",
+          href: "/list/subject-offering",
+          visible: ["admin", "superuser", "faculty", "registrar"],
+        },
+        {
           icon: "/student.png",
           label: "Students",
           href: "/list/students",
