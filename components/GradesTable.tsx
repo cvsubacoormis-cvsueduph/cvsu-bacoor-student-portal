@@ -103,11 +103,13 @@ export default function Grades({
 
   const totalSubjectsEnrolled = filteredGrades.length;
   const totalCreditsEnrolled = filteredGrades.reduce((acc, cur) => {
+    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit;
   }, 0);
   const totalCreditsEarned = filteredGrades.reduce((acc, cur) => {
+    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit * finalGrade;

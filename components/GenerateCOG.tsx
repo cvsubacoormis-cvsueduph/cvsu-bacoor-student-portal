@@ -303,11 +303,13 @@ export default function GenerateCOG() {
 
     const totalSubjectsEnrolled = grades.length;
     const totalCreditsEnrolled = grades.reduce((acc, g) => {
+      if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(g.courseCode)) return acc;
       const final = getFinalGradeToUse(g);
       return final !== null ? acc + g.creditUnit : acc;
     }, 0);
 
     const totalCreditsEarned = grades.reduce((acc, g) => {
+      if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(g.courseCode)) return acc;
       const final = getFinalGradeToUse(g);
       return final !== null ? acc + g.creditUnit * final : acc;
     }, 0);
