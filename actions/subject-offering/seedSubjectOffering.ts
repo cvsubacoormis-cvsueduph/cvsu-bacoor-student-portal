@@ -43,7 +43,14 @@ export async function seedSubjectOffering({
 
       for (const subject of checklistSubjects) {
         const isNormalSemester = subject.semester === semester;
-        const isManuallyIncluded = manualOverrides.includes(subject.courseCode);
+        const normalizedOverrides = manualOverrides.map((m) =>
+          m.toUpperCase().replace(/\s+/g, "")
+        );
+        const normalizedSubjectCode = subject.courseCode
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        const isManuallyIncluded =
+          normalizedOverrides.includes(normalizedSubjectCode);
 
         if (!isNormalSemester && !isManuallyIncluded) continue;
 
@@ -68,19 +75,16 @@ export async function seedSubjectOffering({
           logs.push({
             type: "success",
             message: isManuallyIncluded
-              ? `✅ [PETITION] Offered ${subject.courseCode} (${course}${
-                  major !== "NONE" ? ` - ${major}` : ""
-                }) in ${semester} — originally ${subject.semester}`
-              : `✅ Offered ${subject.courseCode} (${course}${
-                  major !== "NONE" ? ` - ${major}` : ""
-                }) in ${semester}`,
+              ? `✅ [PETITION] Offered ${subject.courseCode} (${course}${major !== "NONE" ? ` - ${major}` : ""
+              }) in ${semester} — originally ${subject.semester}`
+              : `✅ Offered ${subject.courseCode} (${course}${major !== "NONE" ? ` - ${major}` : ""
+              }) in ${semester}`,
           });
         } else {
           logs.push({
             type: "warning",
-            message: `⏭️ Already exists: ${subject.courseCode} (${course}${
-              major !== "NONE" ? ` - ${major}` : ""
-            })`,
+            message: `⏭️ Already exists: ${subject.courseCode} (${course}${major !== "NONE" ? ` - ${major}` : ""
+              })`,
           });
         }
       }

@@ -111,7 +111,7 @@ export default function SeedingSubjectOffering() {
         semester,
         courseMajorMap: selectedMap,
         manualOverrides: manualOverrides
-          .split("")
+          .split("\n")
           .map((line) => line.trim())
           .filter((code) => code.length > 0),
       });
