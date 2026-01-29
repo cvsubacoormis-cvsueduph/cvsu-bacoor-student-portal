@@ -546,6 +546,8 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
                                                     <SelectItem value="5.00">5.00</SelectItem>
                                                     <SelectItem value="INC">INC</SelectItem>
                                                     <SelectItem value="DRP">DRP</SelectItem>
+                                                    <SelectItem value="S">S</SelectItem>
+                                                    <SelectItem value="US">US</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
