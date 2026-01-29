@@ -571,10 +571,8 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
                                                     <SelectItem value="FAILED">FAILED</SelectItem>
                                                     <SelectItem value="LACK OF REQ.">LACK OF REQ.</SelectItem>
                                                     <SelectItem value="DROPPED">DROPPED</SelectItem>
-                                                    <SelectItem value="S">S</SelectItem>
-                                                    <SelectItem value="US">US</SelectItem>
-                                                    <SelectItem value="INC">INC</SelectItem>
-                                                    <SelectItem value="DRP">DRP</SelectItem>
+                                                    <SelectItem value="SATISFACTORY">SATISFACTORY</SelectItem>
+                                                    <SelectItem value="UNSATISFACTORY">UNSATISFACTORY</SelectItem>
                                                     <SelectItem value="CON. FAILURE">CON. FAILURE</SelectItem>
                                                 </SelectContent>
                                             </Select>
