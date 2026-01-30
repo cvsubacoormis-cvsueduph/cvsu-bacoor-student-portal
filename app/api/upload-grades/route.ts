@@ -52,6 +52,83 @@ function normalizeCourseCode(code: string | null) {
   return noPunctuation.replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+function levenshteinDistance(a: string, b: string): number {
+  const matrix = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1 // deletion
+          )
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+function areNamesSimilar(name1: string, name2: string): boolean {
+  if (!name1 || !name2) return false;
+  if (name1 === name2) return true;
+
+  const len = Math.max(name1.length, name2.length);
+  if (len === 0) return true;
+
+  // 1. strict fuzzy check on whole string
+  const dist = levenshteinDistance(name1, name2);
+  const similarity = 1 - dist / len;
+  if (similarity >= 0.8) return true;
+
+  // 2. Token retrieval check (handles "Name Middle Surname" vs "Name Surname" and typos in specific words)
+  // Split into words
+  const tokens1 = name1.split(" ").filter((t) => t.length > 1); // ignore single letters? Maybe keep them for initials
+  const tokens2 = name2.split(" ").filter((t) => t.length > 1);
+
+  if (tokens1.length === 0 || tokens2.length === 0) return false;
+
+  const [shorter, longer] =
+    tokens1.length < tokens2.length ? [tokens1, tokens2] : [tokens2, tokens1];
+
+  let matches = 0;
+  for (const sToken of shorter) {
+    // For each token in shorter, is there a match in longer?
+    let found = false;
+    for (const lToken of longer) {
+      if (sToken === lToken) {
+        found = true;
+        break;
+      }
+      // Word-level fuzzy
+      const sLen = Math.max(sToken.length, lToken.length);
+      const wDist = levenshteinDistance(sToken, lToken);
+      if (1 - wDist / sLen >= 0.75) {
+        // Tolerant word match
+        found = true;
+        break;
+      }
+    }
+    if (found) matches++;
+  }
+
+  // If we matched all (or almost all) tokens of the shorter name
+  return matches >= shorter.length;
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   const user = await currentUser();
@@ -287,25 +364,19 @@ export async function POST(req: Request) {
         if (fileFullName && dbFullName !== fileFullName) {
           // Mismatch! The student number points to "John", but the file says "Jane".
           if (studentByName) {
-            // We found "Jane" under a different ID. Trust the Name (User Requirement).
+            // We found "Jane" under a different ID. Trust the Name if it's an EXACT/Normal match elsewhere.
             resolvedStudent = studentByName;
-            identificationMethod = "NAME_CORRECTION"; // Found by name, ignored wrong ID
+            identificationMethod = "NAME_CORRECTION";
+          } else if (areNamesSimilar(dbFullName, fileFullName)) {
+            // Fuzzy match confirmed it's likely the same person (typo/middle name)
+            resolvedStudent = studentByNum;
+            identificationMethod = "ID_MATCH_FUZZY";
           } else {
-            // We didn't find "Jane" anywhere.
-            // This is dangerous. The user said "one student number owns by 5 to 8 students".
-            // Use case: The ID in file is "123". DB has "123" -> "John". File says "123" -> "Jane".
-            // If we accept "John", we give "Jane's" grade to "John". BAD.
-            // We MUST reject if names don't match and we can't find the real student.
-            // UNLESS the file has no name columns? But schema requires them now implicitly for this logic.
+            // We didn't find "Jane" anywhere else, and it's not fuzzy similar to "John".
+            // Name mismatch and target not found. Fail.
 
-            // If name in file is empty/missing, we have to trust ID?
-            if (!fileFullName) {
-              resolvedStudent = studentByNum;
-              identificationMethod = "ID_OññNLY";
-            } else {
-              // Name mismatch and target not found. Fail.
-              resolvedStudent = undefined;
-            }
+            // Allow override if file name is "empty-ish"? No, fileFullName checked above.
+            resolvedStudent = undefined;
           }
         } else {
           // Name matches (or fuzzy match passed), or file name is missing.

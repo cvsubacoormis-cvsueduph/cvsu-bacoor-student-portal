@@ -310,7 +310,6 @@ export function UploadGrades() {
           title: "Processing Complete",
           text: `Processed ${totalRecords} records. Check the logs for details.`,
         });
-        resetState();
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
