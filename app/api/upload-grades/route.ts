@@ -130,6 +130,19 @@ function areNamesSimilar(name1: string, name2: string): boolean {
   return matches >= shorter.length;
 }
 
+function normalizeTitleForMatch(title: string) {
+  let normalized = normalizeName(title);
+
+  // Replace Roman Numerals (1-10) with Arabic
+  // We check for isolated words "i", "ii", "iii" etc (since normalizeName lowercases)
+  const romans: { [key: string]: string } = {
+    "i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5",
+    "vi": "6", "vii": "7", "viii": "8", "ix": "9", "x": "10"
+  };
+
+  return normalized.split(" ").map(word => romans[word] || word).join(" ");
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   const user = await currentUser();
@@ -389,13 +402,6 @@ export async function POST(req: Request) {
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
 
-      // DEBUG: Log instructor values
-      console.log(`[DEBUG] Row for ${firstName} ${lastName}:`, {
-        rawInstructor: instructor,
-        sanitizedInstructor: sanitizedInstructor,
-        isEmpty: sanitizedInstructor === ""
-      });
-
       // --- Student Identification Logic ---
 
       const fileFullName = normalizeName((firstName || "") + " " + (lastName || ""));
@@ -586,6 +592,7 @@ export async function POST(req: Request) {
 
         if (bestMatch && (bestDist <= 1 || (bestDist <= 2 && ratio >= 0.8))) {
           checklistSubject = bestMatch;
+          sanitizedCourseCode = bestMatch.courseCode; // Auto-correct code
           isFuzzyCode = true;
         }
       }
@@ -602,32 +609,79 @@ export async function POST(req: Request) {
         );
 
         // Normalize the file title using our robust name normalizer (removes punct, lowers case)
-        const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
+        const normalizedFileTitle = normalizeTitleForMatch(sanitizedCourseTitle);
 
-        // Try to find a match
-        const titleMatch = studentCurriculum.find(cs =>
-          normalizeName(cs.courseTitle) === normalizedFileTitle
-        );
+        let bestTitleMatch = null;
+        let bestTitleDist = Infinity;
 
-        if (titleMatch) {
-          checklistSubject = titleMatch;
-          sanitizedCourseCode = titleMatch.courseCode; // Auto-correct code
-          isTitleFallback = true;
+        // Iterate and find best fuzzy match
+        for (const cand of studentCurriculum) {
+          const dbTitle = normalizeTitleForMatch(cand.courseTitle);
+          // Optimization: Exact match check first
+          if (dbTitle === normalizedFileTitle) {
+            bestTitleMatch = cand;
+            bestTitleDist = 0;
+            break;
+          }
+
+          const dist = levenshteinDistance(dbTitle, normalizedFileTitle);
+          if (dist < bestTitleDist) {
+            bestTitleDist = dist;
+            bestTitleMatch = cand;
+          }
+        }
+
+        // Evaluate Best Match
+        // Titles are long, so allow more distance but high ratio
+        if (bestTitleMatch) {
+          const dbTitleNorm = normalizeTitleForMatch(bestTitleMatch.courseTitle);
+          const len = Math.max(normalizedFileTitle.length, dbTitleNorm.length);
+          const ratio = 1 - (bestTitleDist / len);
+
+          // Allow:
+          // 1. Exact match (dist 0)
+          // 2. Very high similarity (>0.9) - e.g. "Programming 1" vs "Programming I" (len ~13, dist 1 => 0.92)
+          // 3. Or small distance (<=3) for longer strings provided ratio is decent
+          if (bestTitleDist === 0 || (ratio >= 0.9 && bestTitleDist <= 3)) {
+            checklistSubject = bestTitleMatch;
+            sanitizedCourseCode = bestTitleMatch.courseCode;
+            isTitleFallback = true;
+          }
         }
       }
 
       // Priority 6: Fallback by Course Title (Global)
       // If not in student's curriculum, check if it exists globally (risky if titles duplicate, but taking first match)
       if (!checklistSubject && sanitizedCourseTitle) {
-        const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
-        const globalTitleMatch = curriculumSubjects.find(cs =>
-          normalizeName(cs.courseTitle) === normalizedFileTitle
-        );
+        const normalizedFileTitle = normalizeTitleForMatch(sanitizedCourseTitle);
 
-        if (globalTitleMatch) {
-          checklistSubject = globalTitleMatch;
-          sanitizedCourseCode = globalTitleMatch.courseCode;
-          isTitleFallback = true;
+        let bestGlobalMatch = null;
+        let bestGlobalDist = Infinity;
+
+        for (const cand of curriculumSubjects) {
+          const dbTitle = normalizeTitleForMatch(cand.courseTitle);
+          if (dbTitle === normalizedFileTitle) {
+            bestGlobalMatch = cand;
+            bestGlobalDist = 0;
+            break;
+          }
+          const dist = levenshteinDistance(dbTitle, normalizedFileTitle);
+          if (dist < bestGlobalDist) {
+            bestGlobalDist = dist;
+            bestGlobalMatch = cand;
+          }
+        }
+
+        if (bestGlobalMatch) {
+          const dbTitleNorm = normalizeTitleForMatch(bestGlobalMatch.courseTitle);
+          const len = Math.max(normalizedFileTitle.length, dbTitleNorm.length);
+          const ratio = 1 - (bestGlobalDist / len);
+
+          if (bestGlobalDist === 0 || (ratio >= 0.9 && bestGlobalDist <= 3)) {
+            checklistSubject = bestGlobalMatch;
+            sanitizedCourseCode = bestGlobalMatch.courseCode;
+            isTitleFallback = true;
+          }
         }
       }
 
@@ -711,13 +765,6 @@ export async function POST(req: Request) {
           finalInstructor = existingGrade.instructor;
         }
 
-        // DEBUG: Log comparison values
-        console.log(`[DEBUG EXISTING] ${sanitizedCourseCode} - ${firstName} ${lastName}:`, {
-          existingInstructor: existingGrade.instructor,
-          finalInstructor: finalInstructor,
-          willUpdate: existingGrade.instructor !== finalInstructor
-        });
-
         // Force Keep Existing Grade (User Request)
         standardizedGrade = existingGrade.grade;
         // Keep existing reExam if present, otherwise allow new one (though usually we shouldn't change it either if we are strictly preserving)
@@ -746,12 +793,6 @@ export async function POST(req: Request) {
         statusMsg = "Legacy Grade uploaded";
         statusPrefix = "⚠️";
       }
-
-      // DEBUG: Log what we're about to upsert
-      console.log(`[DEBUG UPSERT] ${sanitizedCourseCode}:`, {
-        instructor: finalInstructor,
-        grade: standardizedGrade
-      });
 
       gradesToUpsert.push({
         studentNumber: targetStudent.studentNumber,
