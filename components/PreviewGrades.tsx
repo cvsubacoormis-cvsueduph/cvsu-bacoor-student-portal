@@ -25,6 +25,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -502,12 +512,18 @@ export function PreviewGrades({
                   <TableRow key={index}>
                     <TableCell>
                       {editingRows[index] ? (
-                        <Popover
+                        <Combobox
                           open={openComboboxIndex === index}
                           onOpenChange={(isOpen) => setOpenComboboxIndex(isOpen ? index : null)}
+                          // Pass the currently selected value (combined string) to make the checkmark work
+                          value={
+                            editedGrades[index].courseCode && availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)
+                              ? `${availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)?.courseCode} ${availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)?.courseTitle}`
+                              : ""
+                          }
                           modal={true}
                         >
-                          <PopoverTrigger asChild>
+                          <ComboboxTrigger asChild>
                             <Button
                               variant="outline"
                               role="combobox"
@@ -519,40 +535,28 @@ export function PreviewGrades({
                                 : "Select Course..."}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0">
-                            <Command>
-                              <CommandInput placeholder="Search course..." />
-                              <CommandList>
-                                <CommandEmpty>No course found.</CommandEmpty>
-                                <CommandGroup>
-                                  {availableSubjects.map((subject) => (
-                                    <CommandItem
-                                      key={subject.courseCode} // Use unique key
-                                      value={`${subject.courseCode} ${subject.courseTitle}`} // Make search work for both code and title
-                                      onSelect={(currentValue) => {
-                                        // When searching by title, the value might not be exact courseCode anymore due to our custom value
-                                        // So we use the subject from map closure or find by matching parts
-                                        handleCourseChange(index, subject.courseCode);
-                                        setOpenComboboxIndex(null);
-                                      }}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          editedGrades[index].courseCode === subject.courseCode
-                                            ? "opacity-100"
-                                            : "opacity-0"
-                                        )}
-                                      />
-                                      {subject.courseCode} - {subject.courseTitle}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                          </ComboboxTrigger>
+                          <ComboboxContent className="w-[300px] p-0">
+                            <ComboboxInput placeholder="Search course..." />
+                            <ComboboxList>
+                              <ComboboxEmpty>No course found.</ComboboxEmpty>
+                              <ComboboxGroup>
+                                {availableSubjects.map((subject) => (
+                                  <ComboboxItem
+                                    key={subject.courseCode}
+                                    value={`${subject.courseCode} ${subject.courseTitle}`}
+                                    onSelect={() => {
+                                      handleCourseChange(index, subject.courseCode);
+                                      setOpenComboboxIndex(null);
+                                    }}
+                                  >
+                                    {subject.courseCode} - {subject.courseTitle}
+                                  </ComboboxItem>
+                                ))}
+                              </ComboboxGroup>
+                            </ComboboxList>
+                          </ComboboxContent>
+                        </Combobox>
                       ) : (
                         grade.courseCode
                       )}
@@ -698,6 +702,6 @@ export function PreviewGrades({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }
