@@ -20,6 +20,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 import {
   Table,
@@ -39,6 +41,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
+  bulkApproveStudents,
+  bulkRejectStudents,
+} from "@/actions/student/student-actions-for-approval";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -58,6 +75,7 @@ export function DataTable<TData, TValue>({
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [loading, setLoading] = React.useState(false);
+  const router = useRouter();
 
   const table = useReactTable({
     data,
@@ -78,9 +96,45 @@ export function DataTable<TData, TValue>({
     },
   });
 
+  const handleBulkApprove = async () => {
+    setLoading(true);
+    try {
+      const selectedRows = table.getFilteredSelectedRowModel().rows;
+      const studentIds = selectedRows.map((row) => (row.original as any).id);
+
+      await bulkApproveStudents(studentIds);
+      toast.success(`Successfully approved ${studentIds.length} student(s)`);
+      setRowSelection({});
+      router.refresh();
+    } catch (error) {
+      toast.error("Failed to approve students");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkReject = async () => {
+    setLoading(true);
+    try {
+      const selectedRows = table.getFilteredSelectedRowModel().rows;
+      const studentIds = selectedRows.map((row) => (row.original as any).id);
+
+      await bulkRejectStudents(studentIds);
+      toast.error(`Rejected ${studentIds.length} student(s)`);
+      setRowSelection({});
+      router.refresh();
+    } catch (error) {
+      toast.error("Failed to reject students");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+
   return (
     <div>
-      <div className="flex items-center py-4">
+      <div className="flex items-center py-4 gap-2">
         <Input
           placeholder="Search students..."
           value={(table.getState().globalFilter as string) ?? ""}
@@ -89,6 +143,71 @@ export function DataTable<TData, TValue>({
           }}
           className="w-full sm:max-w-xs"
         />
+
+        {selectedCount > 0 && (
+          <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="default"
+                  className="bg-blue-700 hover:bg-blue-500"
+                  disabled={loading}
+                >
+                  Approve ({selectedCount})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Approve {selectedCount} student(s)?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will approve all selected students and grant them access to the system.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-blue-700 hover:bg-blue-500"
+                    onClick={handleBulkApprove}
+                  >
+                    Yes, Approve All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={loading}
+                >
+                  Reject ({selectedCount})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Reject {selectedCount} student(s)?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all selected students. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-700 hover:bg-red-500"
+                    onClick={handleBulkReject}
+                  >
+                    Yes, Reject All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto">
@@ -127,9 +246,9 @@ export function DataTable<TData, TValue>({
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   );
                 })}
