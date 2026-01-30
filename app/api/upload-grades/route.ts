@@ -258,9 +258,33 @@ export async function POST(req: Request) {
   studentsByName.forEach(addToNameMap);
 
 
-  // 2. Fetch only relevant curriculum subjects
+  // 2. Fetch relevant curriculum subjects (Broadened for Fuzzy Match)
+  // We need to fetch NOT ONLY the exact codes in the file, but also the ENTIRE curriculum 
+  // for the students we found. This allows us to fuzzy match "ITEC 50" -> "ITEC 50A" within their valid subjects.
+
+  const allFoundStudents = [...studentsByNumber, ...studentsByName];
+  const uniqueCurricula = new Set(
+    allFoundStudents
+      .filter(s => s.course) // Ensure course is present
+      .map(s => JSON.stringify({ course: s.course, major: s.major || Major.NONE }))
+  );
+
+  const curriculumConditions = Array.from(uniqueCurricula).map(str => {
+    const parsed = JSON.parse(str);
+    return {
+      course: parsed.course,
+      major: parsed.major === Major.NONE ? null : parsed.major
+    };
+  });
+
+  // Query: (Course + Major matches) OR (Code is in our explicit list - for global lookup fallback)
   const curriculumSubjects = await prisma.curriculumChecklist.findMany({
-    where: { courseCode: { in: uniqueCourseCodes } },
+    where: {
+      OR: [
+        ...curriculumConditions,
+        { courseCode: { in: uniqueCourseCodes } }
+      ]
+    },
     select: { id: true, courseCode: true, course: true, major: true },
   });
 
@@ -506,6 +530,40 @@ export async function POST(req: Request) {
         );
       }
 
+      // Priority 4: Fuzzy Match in Student's Curriculum (Course/Major)
+      let isFuzzyCode = false;
+      if (!checklistSubject) {
+        // Filter to student's curriculum
+        const candidates = curriculumSubjects.filter(cs =>
+          cs.course === targetStudent.course &&
+          cs.major === (targetStudent.major || Major.NONE)
+        );
+
+        let bestMatch = null;
+        let bestDist = Infinity;
+
+        for (const cand of candidates) {
+          const dist = levenshteinDistance(cand.courseCode, sanitizedCourseCode);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestMatch = cand;
+          }
+        }
+
+        // Threshold: Allow distance 1 for short codes, maybe 2 for longer?
+        // Or simple Ratio. 
+        // "ITEC 50" (7 chars) vs "ITEC 50A" (8 chars) -> dist 1.
+        // "ITEC 50" vs "ITEC 55" -> dist 1.
+        // Let's be conservative: Distance <= 2 AND Similarity > 0.8
+        const len = Math.max(sanitizedCourseCode.length, bestMatch?.courseCode.length || 0);
+        const ratio = 1 - (bestDist / len);
+
+        if (bestMatch && (bestDist <= 1 || (bestDist <= 2 && ratio >= 0.8))) {
+          checklistSubject = bestMatch;
+          isFuzzyCode = true;
+        }
+      }
+
       let subjectOfferingId: string | null = null;
       let isLegacyUpload = false;
 
@@ -562,6 +620,9 @@ export async function POST(req: Request) {
       } else if (identificationMethod === "NAME_RECOVERY") {
         const reason = normalizedStudentNumber ? "ID invalid" : "ID missing";
         statusMsg = `Grade uploaded (Found by Name, ${reason})`;
+        statusPrefix = "⚠️";
+      } else if (isFuzzyCode && checklistSubject) {
+        statusMsg = `Grade uploaded (Fuzzy Match: ${sanitizedCourseCode} -> ${checklistSubject.courseCode})`;
         statusPrefix = "⚠️";
       }
 
