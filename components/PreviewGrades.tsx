@@ -495,6 +495,7 @@ export function PreviewGrades({
                         <Popover
                           open={openComboboxIndex === index}
                           onOpenChange={(isOpen) => setOpenComboboxIndex(isOpen ? index : null)}
+                          modal={true}
                         >
                           <PopoverTrigger asChild>
                             <Button
