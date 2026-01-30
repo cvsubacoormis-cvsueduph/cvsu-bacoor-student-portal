@@ -79,6 +79,7 @@ export function PreviewGrades({
   );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [availableSubjects, setAvailableSubjects] = useState<{ id: string; courseCode: string; courseTitle: string; creditUnit: number }[]>([]);
 
   // Fetch academic terms when dialog opens.
   useEffect(() => {
@@ -101,6 +102,8 @@ export function PreviewGrades({
     }
   }, [isDialogOpen, academicTerms.length]);
 
+
+
   // Extract unique academic years for the first Select.
   const uniqueAcademicYears = Array.from(
     new Set(academicTerms.map((term) => term.academicYear))
@@ -112,6 +115,23 @@ export function PreviewGrades({
       .filter((term) => term.academicYear === academicYear)
       .map((term) => term.semester)
     : [];
+
+  // Fetch subject offerings when AY/Sem changes
+  useEffect(() => {
+    if (academicYear && semester) {
+      async function fetchSubjects() {
+        try {
+          const res = await fetch(`/api/subject-offerings?academicYear=${academicYear}&semester=${semester}`);
+          if (res.ok) {
+            setAvailableSubjects(await res.json());
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      fetchSubjects();
+    }
+  }, [academicYear, semester]);
 
   // Fetch student grades when both academicYear and semester are selected.
   useEffect(() => {
@@ -159,6 +179,18 @@ export function PreviewGrades({
     updatedGrades[index] = {
       ...updatedGrades[index],
       [field]: field === "creditUnit" ? Number(value) : value,
+    };
+    setEditedGrades(updatedGrades);
+  };
+
+  const handleCourseChange = (index: number, courseCode: string) => {
+    const subject = availableSubjects.find(s => s.courseCode === courseCode);
+    const updatedGrades = [...editedGrades];
+    updatedGrades[index] = {
+      ...updatedGrades[index],
+      courseCode,
+      courseTitle: subject?.courseTitle || "",
+      creditUnit: subject?.creditUnit || 0,
     };
     setEditedGrades(updatedGrades);
   };
@@ -445,17 +477,21 @@ export function PreviewGrades({
                   <TableRow key={index}>
                     <TableCell>
                       {editingRows[index] ? (
-                        <Input
+                        <Select
                           value={editedGrades[index].courseCode}
-                          onChange={(e) =>
-                            handleGradeChange(
-                              index,
-                              "courseCode",
-                              e.target.value
-                            )
-                          }
-                          className="border p-1 rounded"
-                        />
+                          onValueChange={(value) => handleCourseChange(index, value)}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select Course" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableSubjects.map((subject) => (
+                              <SelectItem key={subject.id} value={subject.courseCode}>
+                                {subject.courseCode}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
                         grade.courseCode
                       )}
