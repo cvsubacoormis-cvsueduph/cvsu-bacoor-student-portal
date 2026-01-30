@@ -11,8 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { EyeIcon, PencilIcon, CheckIcon } from "lucide-react";
-
+import { EyeIcon, PencilIcon, CheckIcon, TrashIcon, PlusIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
   Table,
   TableBody,
@@ -165,20 +163,87 @@ export function PreviewGrades({
     setEditedGrades(updatedGrades);
   };
 
+  const handleAddRow = () => {
+    const newGrade: Grade = {
+      id: "new",
+      studentNumber,
+      firstName,
+      lastName,
+      courseCode: "",
+      creditUnit: 0,
+      courseTitle: "",
+      grade: "",
+      reExam: "",
+      remarks: "",
+      instructor: "",
+      academicYear,
+      semester,
+    };
+    setGrades([...grades, newGrade]);
+    setEditedGrades([...editedGrades, newGrade]);
+    // Set editing for the last item (newly added)
+    setEditingRows({ ...editingRows, [grades.length]: true });
+  };
+
+  const handleDeleteRow = async (index: number) => {
+    const gradeToDelete = grades[index];
+    if (gradeToDelete.id === "new") {
+      const newGrades = grades.filter((_, i) => i !== index);
+      const newEditedGrades = editedGrades.filter((_, i) => i !== index);
+      setGrades(newGrades);
+      setEditedGrades(newEditedGrades);
+      // Clean up editing rows
+      const newEditingRows = { ...editingRows };
+      delete newEditingRows[index];
+      setEditingRows(newEditingRows);
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this grade?")) return;
+
+    try {
+      const res = await fetch(`/api/preview-grades?id=${gradeToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete grade");
+      }
+
+      const newGrades = grades.filter((_, i) => i !== index);
+      const newEditedGrades = editedGrades.filter((_, i) => i !== index);
+      setGrades(newGrades);
+      setEditedGrades(newEditedGrades);
+      // Clean up editing rows
+      const newEditingRows = { ...editingRows };
+      delete newEditingRows[index];
+      setEditingRows(newEditingRows);
+
+      toast.success("Grade deleted successfully");
+    } catch (error) {
+      console.error("Error deleting grade", error);
+      toast.error("Failed to delete grade");
+    }
+  };
+
   // Toggle edit mode for a given row.
   const toggleEditRow = async (index: number) => {
     if (editingRows[index]) {
       // If we're exiting edit mode, save the changes
       try {
-        const res = await fetch(
-          `/api/preview-grades?id=${editedGrades[index].id}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(editedGrades[index]),
-          }
+        const gradeToSave = editedGrades[index];
+        const isNew = gradeToSave.id === "new";
+
+        const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${gradeToSave.id}`;
+        const method = isNew ? "POST" : "PATCH";
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(gradeToSave),
+        }
         );
 
         if (!res.ok) {
@@ -197,23 +262,35 @@ export function PreviewGrades({
           prev.map((g, i) => (i === index ? updatedGrade : g))
         );
 
-        toast.success("Grade updated successfully");
+        toast.success(isNew ? "Grade added successfully" : "Grade updated successfully");
       } catch (error) {
         console.error("Error updating grade", error);
         toast.error("Failed to update grade");
+        // Keep in edit mode if error
+        return;
       }
     }
 
     // Toggle edit mode
-    setEditingRows((prev) => ({ ...prev, [index]: !prev[index] }));
+    setEditingRows((prev) => {
+      const newRows = { ...prev };
+      if (newRows[index]) {
+        delete newRows[index];
+      } else {
+        newRows[index] = true;
+      }
+      return newRows;
+    });
   };
 
   // Persist the updated grades by sending a PATCH request for each updated row.
   const handleSaveChanges = async () => {
     try {
-      // Filter out grades that haven't changed
       const changedGrades = editedGrades.filter((editedGrade, index) => {
         const originalGrade = grades[index];
+        // If it's new, it's considered changed
+        if (editedGrade.id === "new") return true;
+
         return (
           editedGrade.grade !== originalGrade.grade ||
           editedGrade.courseCode !== originalGrade.courseCode ||
@@ -233,8 +310,12 @@ export function PreviewGrades({
       }
 
       const updatePromises = changedGrades.map(async (grade) => {
-        const res = await fetch(`/api/preview-grades?id=${grade.id}`, {
-          method: "PATCH",
+        const isNew = grade.id === "new";
+        const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${grade.id}`;
+        const method = isNew ? "POST" : "PATCH";
+
+        const res = await fetch(url, {
+          method,
           headers: {
             "Content-Type": "application/json",
           },
@@ -248,8 +329,16 @@ export function PreviewGrades({
 
       await Promise.all(updatePromises);
 
-      // Refresh local state with the edits we just saved
-      setGrades(editedGrades);
+      // Refresh data
+      const response = await fetch(
+        `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setGrades(data);
+        setEditedGrades(data);
+      }
+
       setEditingRows({});
 
       toast.success("Grades updated successfully");
@@ -275,39 +364,47 @@ export function PreviewGrades({
               Select an academic year and semester to view student grades.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-start gap-3 mb-4">
-            <Select
-              onValueChange={(value) => {
-                setAcademicYear(value);
-                setSemester("");
-              }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Academic Year" />
-              </SelectTrigger>
-              <SelectContent>
-                {uniqueAcademicYears.map((year) => (
-                  <SelectItem key={year} value={year}>
-                    {year.replace("AY_", "").replace("_", "-")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              onValueChange={(value) => setSemester(value)}
-              disabled={!academicYear}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Semester" />
-              </SelectTrigger>
-              <SelectContent>
-                {semesterOptions.map((sem) => (
-                  <SelectItem key={sem} value={sem}>
-                    {sem}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-start gap-3">
+              {/* Selects */}
+              <Select
+                onValueChange={(value) => {
+                  setAcademicYear(value);
+                  setSemester("");
+                }}
+              >
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Academic Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueAcademicYears.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year.replace("AY_", "").replace("_", "-")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                onValueChange={(value) => setSemester(value)}
+                disabled={!academicYear}
+              >
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semesterOptions.map((sem) => (
+                    <SelectItem key={sem} value={sem}>
+                      {sem}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {role !== "faculty" && academicYear && semester && (
+              <Button onClick={handleAddRow} size="sm" className="bg-green-600 hover:bg-green-700">
+                <PlusIcon className="w-4 h-4 mr-2" /> Add Grade
+              </Button>
+            )}
           </div>
           {loading && (
             <div className="flex items-center justify-center">
@@ -339,7 +436,7 @@ export function PreviewGrades({
                   <TableHead className="text-sm">Instructor</TableHead>
                   <TableHead className="text-sm">Uploaded by</TableHead>
                   {role !== "faculty" && (
-                    <TableHead className="text-sm">Edit</TableHead>
+                    <TableHead className="text-sm">Actions</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -464,16 +561,26 @@ export function PreviewGrades({
                     <TableCell>{grade.uploadedBy || "System"}</TableCell>
                     <TableCell>
                       {role !== "faculty" && (
-                        <Button
-                          onClick={() => toggleEditRow(index)}
-                          className="bg-blue-700 hover:bg-blue-500"
-                        >
-                          {editingRows[index] ? (
-                            <CheckIcon className="w-4 h-4" />
-                          ) : (
-                            <PencilIcon className="w-4 h-4" />
-                          )}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => toggleEditRow(index)}
+                            className="bg-blue-700 hover:bg-blue-500"
+                            size="icon"
+                          >
+                            {editingRows[index] ? (
+                              <CheckIcon className="w-4 h-4" />
+                            ) : (
+                              <PencilIcon className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteRow(index)}
+                            variant="destructive"
+                            size="icon"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

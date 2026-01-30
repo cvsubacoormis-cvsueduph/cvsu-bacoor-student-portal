@@ -227,3 +227,151 @@ export async function PATCH(request: Request) {
     );
   }
 }
+
+const postBodySchema = patchBodySchema.extend({
+  studentNumber: z.string().min(1, "Student number is required"),
+  academicYear: z.nativeEnum(AcademicYear, {
+    errorMap: () => ({ message: "Invalid academic year" }),
+  }),
+  semester: z.nativeEnum(Semester, {
+    errorMap: () => ({ message: "Invalid semester" }),
+  }),
+});
+
+export async function POST(request: Request) {
+  try {
+    const { userId, sessionClaims } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    if (role === "student") {
+      return NextResponse.json(
+        { error: "Forbidden: Students cannot add grades" },
+        { status: 403 }
+      );
+    }
+
+    try {
+      await checkRateLimit({
+        action: "preview-grades-post",
+        limit: 30,
+        windowSeconds: 60,
+      });
+    } catch (error: any) {
+      if (error.code === "RATE_LIMIT_EXCEEDED") {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 429 }
+        );
+      }
+      throw error;
+    }
+
+    const body = await request.json();
+    const validationResult = postBodySchema.safeParse(body);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+          details: validationResult.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      studentNumber,
+      academicYear,
+      semester,
+      courseCode,
+      creditUnit,
+      courseTitle,
+      grade,
+      reExam,
+      remarks,
+      instructor,
+    } = validationResult.data;
+
+    const user = await currentUser();
+    const editorIdentifier = user?.fullName ?? "";
+
+    const newGrade = await prisma.grade.create({
+      data: {
+        studentNumber,
+        academicYear,
+        semester,
+        courseCode,
+        creditUnit,
+        courseTitle,
+        grade,
+        reExam: reExam === "" ? null : reExam,
+        remarks,
+        instructor,
+        uploadedBy: editorIdentifier,
+      },
+    });
+
+    return NextResponse.json(newGrade, { status: 201 });
+  } catch (error) {
+    console.error("Error creating grade:", error);
+    return NextResponse.json(
+      { error: "Failed to create grade" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { userId, sessionClaims } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    if (role === "student") {
+      return NextResponse.json(
+        { error: "Forbidden: Students cannot delete grades" },
+        { status: 403 }
+      );
+    }
+
+    try {
+      await checkRateLimit({
+        action: "preview-grades-delete",
+        limit: 30,
+        windowSeconds: 60,
+      });
+    } catch (error: any) {
+      if (error.code === "RATE_LIMIT_EXCEEDED") {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 429 }
+        );
+      }
+      throw error;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    await prisma.grade.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ message: "Grade deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting grade:", error);
+    return NextResponse.json(
+      { error: "Failed to delete grade" },
+      { status: 500 }
+    );
+  }
+}
