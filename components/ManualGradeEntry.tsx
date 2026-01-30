@@ -633,7 +633,7 @@ export default function ManualGradeEntry() {
                 <Button
                   onClick={handleSearch}
                   disabled={isSearching || !searchQuery.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 min-w-[100px]"
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
                 </Button>
@@ -643,7 +643,7 @@ export default function ManualGradeEntry() {
 
           {/* Search Results Table */}
           {searchResults.length > 0 && (
-            <div className="border rounded-md overflow-hidden">
+            <div className="border rounded-md">
               <Table>
                 <TableHeader className="bg-gray-50">
                   <TableRow>
@@ -965,7 +965,7 @@ export default function ManualGradeEntry() {
           Wait, existing code had it as a conditional render.  */}
       {showStudentDetails && studentDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-2xl bg-white shadow-xl max-h-[90vh]">
             <CardHeader className="bg-blue-50 border-b">
               <div className="flex items-center justify-between">
                 <CardTitle className=" text-blue-800 flex items-center gap-2">
