@@ -380,6 +380,13 @@ export async function POST(req: Request) {
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
 
+      // DEBUG: Log instructor values
+      console.log(`[DEBUG] Row for ${firstName} ${lastName}:`, {
+        rawInstructor: instructor,
+        sanitizedInstructor: sanitizedInstructor,
+        isEmpty: sanitizedInstructor === ""
+      });
+
       // --- Student Identification Logic ---
 
       const fileFullName = normalizeName((firstName || "") + " " + (lastName || ""));
@@ -628,6 +635,7 @@ export async function POST(req: Request) {
       let action = "CREATED";
       let statusPrefix = "✅";
       let statusMsg = "Grade uploaded";
+      let finalInstructor = sanitizedInstructor;
 
       if (identificationMethod === "NAME_CORRECTION") {
         statusMsg = `Grade uploaded (Corrected ID by Name match)`;
@@ -642,10 +650,32 @@ export async function POST(req: Request) {
       }
 
       if (existingGrade) {
+        // Resolve Instructor: New one takes precedence usually, UNLESS it's empty and we have an existing one.
+        // User wants to "map the instructor... without changing my grades".
+        // If the new file has an instructor, we update it.
+        // If the new file has NO instructor, we keep the existing one.
+        if (!finalInstructor && existingGrade.instructor) {
+          finalInstructor = existingGrade.instructor;
+        }
+
+        // DEBUG: Log comparison values
+        console.log(`[DEBUG EXISTING] ${sanitizedCourseCode} - ${firstName} ${lastName}:`, {
+          existingInstructor: existingGrade.instructor,
+          finalInstructor: finalInstructor,
+          willUpdate: existingGrade.instructor !== finalInstructor
+        });
+
+        // Force Keep Existing Grade (User Request)
+        standardizedGrade = existingGrade.grade;
+        // Keep existing reExam if present, otherwise allow new one (though usually we shouldn't change it either if we are strictly preserving)
+        // Let's assume strict preservation for integrity
+        if (existingGrade.reExam) {
+          standardizedReExam = existingGrade.reExam;
+        }
+
         if (
-          existingGrade.grade === standardizedGrade &&
           existingGrade.remarks === sanitizedRemarks &&
-          existingGrade.instructor === sanitizedInstructor
+          existingGrade.instructor === finalInstructor
         ) {
           results.push({
             studentNumber: targetStudent.studentNumber,
@@ -656,13 +686,6 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // Hierarchy check - DEACTIVATED for this mode (Preserve Existing)
-        // User requested: "want to upload... without changing the grades... if ever"
-        // So we Force Keeping Existing Grade
-        standardizedGrade = existingGrade.grade;
-        standardizedReExam = existingGrade.reExam ?? standardizedReExam; // Keep existing reExam if present, else use new? Or just keep existing?
-        // Let's keep existing ReExam if it's not null, otherwise take new.
-
         action = "UPDATED";
         statusMsg = "Instructor/Metadata updated (Grade preserved)";
       } else if (isLegacyMode && !subjectOfferingId) {
@@ -670,6 +693,12 @@ export async function POST(req: Request) {
         statusMsg = "Legacy Grade uploaded";
         statusPrefix = "⚠️";
       }
+
+      // DEBUG: Log what we're about to upsert
+      console.log(`[DEBUG UPSERT] ${sanitizedCourseCode}:`, {
+        instructor: finalInstructor,
+        grade: standardizedGrade
+      });
 
       gradesToUpsert.push({
         studentNumber: targetStudent.studentNumber,
@@ -679,7 +708,7 @@ export async function POST(req: Request) {
         grade: standardizedGrade,
         reExam: standardizedReExam,
         remarks: sanitizedRemarks,
-        instructor: sanitizedInstructor,
+        instructor: finalInstructor,
         academicYear,
         semester,
         subjectOfferingId: subjectOfferingId, // Can be null now
@@ -693,7 +722,7 @@ export async function POST(req: Request) {
         courseTitle: resolvedCourseTitle,
         creditUnit: resolvedCreditUnit,
         remarks: sanitizedRemarks,
-        instructor: sanitizedInstructor,
+        instructor: finalInstructor,
         academicYear,
         semester,
         action: action,
