@@ -40,6 +40,7 @@ import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@clerk/nextjs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- Validation Schema ---
 const gradeRowSchema = z.object({
@@ -574,75 +575,101 @@ export function UploadGrades() {
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden min-h-[400px]">
                 {isUploading || uploadResults.length > 0 ? (
-                  // Results Table
+                  // Results Tabs
                   <div className="h-full flex flex-col">
-                    <div className="overflow-auto border rounded-md flex-1 relative">
-                      <Table>
-                        <TableHeader className="bg-gray-50 sticky top-0">
-                          <TableRow>
-                            <TableHead>Student</TableHead>
-                            <TableHead>Course</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {uploadResults.slice().reverse().slice((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage).map((res, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-medium">
-                                {res.studentName || res.identifier || res.studentNumber || "Unknown"}
-                                <div className="text-xs text-gray-500">{res.studentNumber || "No Student #"}</div>
-                              </TableCell>
-                              <TableCell>{res.courseCode}</TableCell>
-                              <TableCell>
-                                {res.status.includes("✅") ? (
-                                  <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
-                                ) : res.status.includes("⚠️") ? (
-                                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200">Warning</Badge>
-                                ) : (
-                                  <div className="flex items-center text-red-600 gap-1 text-sm font-medium">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {res.status.replace("❌", "").trim()}
-                                  </div>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {uploadResults.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={3} className="text-center py-8 text-gray-500">
-                                Waiting for results...
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {/* Results Pagination */}
-                    {uploadResults.length > 0 && (
-                      <div className="flex items-center justify-between pt-4">
-                        <span className="text-sm text-gray-500">
-                          Page {currentPage} of {Math.max(1, totalResultPages)}
-                        </span>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            disabled={currentPage === totalResultPages || totalResultPages === 0}
-                            onClick={() => setCurrentPage(prev => Math.min(totalResultPages, prev + 1))}
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </Button>
-                        </div>
+                    <Tabs defaultValue="all" className="h-full flex flex-col">
+                      <div className="flex items-center justify-between mb-4">
+                        <TabsList>
+                          <TabsTrigger value="all">All ({uploadResults.length})</TabsTrigger>
+                          <TabsTrigger value="success">Success ({uploadResults.filter(r => !r.status.includes("❌")).length})</TabsTrigger>
+                          <TabsTrigger value="failed" className="text-red-600 data-[state=active]:text-red-700">Failed ({uploadResults.filter(r => r.status.includes("❌")).length})</TabsTrigger>
+                        </TabsList>
                       </div>
-                    )}
+
+                      {["all", "success", "failed"].map((tabInfo) => {
+                        const filtered = uploadResults.filter(r => {
+                          if (tabInfo === "success") return !r.status.includes("❌");
+                          if (tabInfo === "failed") return r.status.includes("❌");
+                          return true;
+                        });
+
+                        const tabTotalPages = Math.ceil(filtered.length / recordsPerPage);
+                        const currentTabRes = filtered.slice().reverse().slice((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage);
+
+                        return (
+                          <TabsContent key={tabInfo} value={tabInfo} className="flex-1 flex flex-col overflow-hidden data-[state=inactive]:hidden mt-0">
+                            <div className="overflow-auto border rounded-md flex-1 relative">
+                              <Table>
+                                <TableHeader className="bg-gray-50 sticky top-0">
+                                  <TableRow>
+                                    <TableHead>Student</TableHead>
+                                    <TableHead>Course</TableHead>
+                                    <TableHead>Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {currentTabRes.map((res, i) => (
+                                    <TableRow key={i}>
+                                      <TableCell className="font-medium">
+                                        {res.studentName || res.identifier || res.studentNumber || "Unknown"}
+                                        <div className="text-xs text-gray-500">{res.studentNumber || "No Student #"}</div>
+                                      </TableCell>
+                                      <TableCell>{res.courseCode}</TableCell>
+                                      <TableCell>
+                                        {res.status.includes("✅") ? (
+                                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
+                                        ) : res.status.includes("⚠️") ? (
+                                          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200">Warning</Badge>
+                                        ) : (
+                                          <div className="flex items-center text-red-600 gap-1 text-sm font-medium">
+                                            <AlertCircle className="w-4 h-4" />
+                                            {res.status.replace("❌", "").trim()}
+                                          </div>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                  {filtered.length === 0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                                        No results in this category.
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </div>
+
+                            {/* Pagination for this tab */}
+                            {filtered.length > 0 && (
+                              <div className="flex items-center justify-between pt-4">
+                                <span className="text-sm text-gray-500">
+                                  Page {currentPage} of {Math.max(1, tabTotalPages)}
+                                </span>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                  >
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    disabled={currentPage >= tabTotalPages}
+                                    onClick={() => setCurrentPage(prev => Math.min(tabTotalPages, prev + 1))}
+                                  >
+                                    <ChevronRight className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </TabsContent>
+                        );
+                      })}
+                    </Tabs>
                   </div>
                 ) : (
                   // Preview Table
