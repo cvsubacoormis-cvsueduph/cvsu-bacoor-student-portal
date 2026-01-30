@@ -213,11 +213,12 @@ export async function POST(req: Request) {
   // We can use OR conditions for the batch.
 
   const nameConditions = grades
-    .filter((g) => g.firstName && g.lastName)
-    .map((g) => ({
-      firstName: { equals: g.firstName, mode: 'insensitive' as const },
-      lastName: { equals: g.lastName, mode: 'insensitive' as const }
-    }));
+    .flatMap((g) => {
+      const conditions = [];
+      if (g.lastName) conditions.push({ lastName: { equals: g.lastName, mode: 'insensitive' as const } });
+      if (g.firstName) conditions.push({ firstName: { equals: g.firstName, mode: 'insensitive' as const } });
+      return conditions;
+    });
 
   // Dedup name conditions to avoid too large query
   // Actually, 'contains' or 'mode: insensitive' is good. 
@@ -355,7 +356,17 @@ export async function POST(req: Request) {
       const studentByNum = normalizedStudentNumber ? mapByNumber.get(normalizedStudentNumber) : undefined;
 
       // Attempt 2: Look up by Name
-      const studentByName = mapByName.get(fileFullName);
+      let studentByName = mapByName.get(fileFullName);
+
+      // Attempt 3: Scanner Fallback (if Map failed)
+      // Iterate over our 'studentsByName' (which now contains everyone with matching LastName)
+      // and check for fuzzy match on First Name.
+      if (!studentByName && studentsByName.length > 0 && fileFullName) {
+        studentByName = studentsByName.find(s => {
+          const dbName = normalizeName(s.firstName + " " + s.lastName);
+          return areNamesSimilar(dbName, fileFullName);
+        });
+      }
 
       if (studentByNum) {
         // We found a student with this number. Does the name match?
@@ -363,14 +374,14 @@ export async function POST(req: Request) {
 
         if (fileFullName && dbFullName !== fileFullName) {
           // Mismatch! The student number points to "John", but the file says "Jane".
-          if (studentByName) {
-            // We found "Jane" under a different ID. Trust the Name if it's an EXACT/Normal match elsewhere.
-            resolvedStudent = studentByName;
-            identificationMethod = "NAME_CORRECTION";
-          } else if (areNamesSimilar(dbFullName, fileFullName)) {
+          if (areNamesSimilar(dbFullName, fileFullName)) {
             // Fuzzy match confirmed it's likely the same person (typo/middle name)
             resolvedStudent = studentByNum;
             identificationMethod = "ID_MATCH_FUZZY";
+          } else if (studentByName) {
+            // We found "Jane" under a different ID. Trust the Name if it's an EXACT/Normal match elsewhere.
+            resolvedStudent = studentByName;
+            identificationMethod = "NAME_CORRECTION";
           } else {
             // We didn't find "Jane" anywhere else, and it's not fuzzy similar to "John".
             // Name mismatch and target not found. Fail.
