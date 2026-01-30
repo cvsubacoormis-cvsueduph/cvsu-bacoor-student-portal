@@ -22,7 +22,14 @@ function sanitizeString(value: any): string | null {
 }
 
 function normalizeName(name: string) {
-  return name.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+  if (!name) return "";
+  // Normalize accents: NFD separates accents from letters, regex removes them
+  // e.g. "Peña" -> "Pena", "NUNO" -> "NUNO"
+  const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Remove dots, commas, and other common punctuation, replace with space to avoid merging words
+  const noPunctuation = normalized.replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ");
+  // Collapse multiple spaces into one and lower case
+  return noPunctuation.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 export async function POST(req: Request) {
@@ -66,6 +73,16 @@ export async function POST(req: Request) {
     ),
   ];
 
+  // Prepare names for lookup
+  const namesToLookup = new Set<string>();
+  grades.forEach(g => {
+    if (g.firstName && g.lastName) {
+      namesToLookup.add(normalizeName(g.firstName + " " + g.lastName));
+      // Also add reverse order just in case (Last First)
+      namesToLookup.add(normalizeName(g.lastName + " " + g.firstName));
+    }
+  });
+
   const { academicYear, semester } = grades[0] || {};
   if (!academicYear || !semester) {
     return NextResponse.json(
@@ -74,8 +91,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // 1. Fetch only relevant students
-  const students = await prisma.student.findMany({
+  // 1. Fetch students by Number AND by Name
+  // We fetch all potential matches to cross-reference in memory
+  const studentsByNumber = await prisma.student.findMany({
     where: { studentNumber: { in: uniqueStudentNumbers } },
     select: {
       studentNumber: true,
@@ -85,7 +103,62 @@ export async function POST(req: Request) {
       major: true,
     },
   });
-  const studentMap = new Map(students.map((s) => [s.studentNumber, s]));
+
+  // We can't easily do a "OR" with normalized names in SQL without raw query or unwanted complexity
+  // So we fetch by studentNumber first (most common), and if we need names, we might need a broader search 
+  // OR we rely on the fact that if the student number is wrong, the correct student MIGHT not be in 'studentsByNumber'
+  // Strategy: Fetch ALL students that match the names? That might be too many if names are common (e.g. John Smith).
+  // Better Strategy: 
+  // Since we are processing a batch (e.g. 50 items), it is safe to try to fetch students matching these names logic wise.
+  // Prisma doesn't support computed column filtering easily.
+  // Let's rely on fetching by studentNumber FIRST. If that fails or mismatches, we need to find the student by name.
+  // To avoid N+1, let's try to fetch students that match the First/Last names in the batch.
+  // We can use OR conditions for the batch.
+
+  const nameConditions = grades
+    .filter((g) => g.firstName && g.lastName)
+    .map((g) => ({
+      firstName: { equals: g.firstName, mode: 'insensitive' as const },
+      lastName: { equals: g.lastName, mode: 'insensitive' as const }
+    }));
+
+  // Dedup name conditions to avoid too large query
+  // Actually, 'contains' or 'mode: insensitive' is good. 
+  // Let's construct a findMany with OR.
+
+  let studentsByName: typeof studentsByNumber = [];
+  if (nameConditions.length > 0) {
+    // Chunking name queries if too many? Batch is 50, so 50 ORs is acceptable for Postgres.
+    studentsByName = await prisma.student.findMany({
+      where: {
+        OR: nameConditions
+      },
+      select: {
+        studentNumber: true,
+        firstName: true,
+        lastName: true,
+        course: true,
+        major: true,
+      }
+    });
+  }
+
+  // Indexing
+  const mapByNumber = new Map(studentsByNumber.map((s) => [s.studentNumber, s]));
+  const mapByName = new Map<string, typeof studentsByNumber[0]>();
+
+  // Helper to store in mapByName
+  const addToNameMap = (s: typeof studentsByNumber[0]) => {
+    const n1 = normalizeName(s.firstName + " " + s.lastName);
+    const n2 = normalizeName(s.lastName + " " + s.firstName); // Last First support
+    // We store both permutations to be safe, prioritizing First Last
+    if (!mapByName.has(n1)) mapByName.set(n1, s);
+    if (!mapByName.has(n2)) mapByName.set(n2, s);
+  };
+
+  studentsByNumber.forEach(addToNameMap);
+  studentsByName.forEach(addToNameMap);
+
 
   // 2. Fetch only relevant curriculum subjects
   const curriculumSubjects = await prisma.curriculumChecklist.findMany({
@@ -98,7 +171,6 @@ export async function POST(req: Request) {
     where: { academicYear_semester: { academicYear, semester } },
   });
   if (!academicTerm) {
-    // If term not found, fail the whole batch (client should ensure term exists)
     return NextResponse.json(
       {
         error: `Academic term not found for Year: ${academicYear}, Semester: ${semester}. Please contact the administrator to initialize this term.`
@@ -112,7 +184,7 @@ export async function POST(req: Request) {
     where: {
       academicYear,
       semester,
-      isActive: true, // Only active offerings?
+      isActive: true,
       curriculumId: { in: curriculumSubjects.map((cs) => cs.id) },
     },
     select: { id: true, curriculumId: true },
@@ -122,9 +194,14 @@ export async function POST(req: Request) {
   );
 
   // 5. Fetch existing grades for conflict checking
+  // We need to know who the student IS first before checking conflicts.
+  // Actually, we can fetch existing grades based on the resolved student numbers LATER 
+  // OR we fetch based on the student numbers we found in step 1.
+  const allFoundStudentNumbers = [...new Set([...studentsByNumber, ...studentsByName].map(s => s.studentNumber))];
+
   const existingGrades = await prisma.grade.findMany({
     where: {
-      studentNumber: { in: uniqueStudentNumbers },
+      studentNumber: { in: allFoundStudentNumbers },
       courseCode: { in: uniqueCourseCodes },
       academicYear,
       semester,
@@ -171,14 +248,71 @@ export async function POST(req: Request) {
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
 
-      let resolvedStudentNumber = normalizedStudentNumber;
-      let student = resolvedStudentNumber ? studentMap.get(resolvedStudentNumber) : undefined;
+      // --- Student Identification Logic ---
 
-      if (!student) {
+      const fileFullName = normalizeName((firstName || "") + " " + (lastName || ""));
+      let resolvedStudent: typeof studentsByNumber[0] | undefined;
+      let identificationMethod = "";
+
+      // Attempt 1: Look up by Student Number
+      const studentByNum = normalizedStudentNumber ? mapByNumber.get(normalizedStudentNumber) : undefined;
+
+      // Attempt 2: Look up by Name
+      const studentByName = mapByName.get(fileFullName);
+
+      if (studentByNum) {
+        // We found a student with this number. Does the name match?
+        const dbFullName = normalizeName(studentByNum.firstName + " " + studentByNum.lastName);
+
+        if (fileFullName && dbFullName !== fileFullName) {
+          // Mismatch! The student number points to "John", but the file says "Jane".
+          if (studentByName) {
+            // We found "Jane" under a different ID. Trust the Name (User Requirement).
+            resolvedStudent = studentByName;
+            identificationMethod = "NAME_CORRECTION"; // Found by name, ignored wrong ID
+          } else {
+            // We didn't find "Jane" anywhere.
+            // This is dangerous. The user said "one student number owns by 5 to 8 students".
+            // Use case: The ID in file is "123". DB has "123" -> "John". File says "123" -> "Jane".
+            // If we accept "John", we give "Jane's" grade to "John". BAD.
+            // We MUST reject if names don't match and we can't find the real student.
+            // UNLESS the file has no name columns? But schema requires them now implicitly for this logic.
+
+            // If name in file is empty/missing, we have to trust ID?
+            if (!fileFullName) {
+              resolvedStudent = studentByNum;
+              identificationMethod = "ID_OññNLY";
+            } else {
+              // Name mismatch and target not found. Fail.
+              resolvedStudent = undefined;
+            }
+          }
+        } else {
+          // Name matches (or fuzzy match passed), or file name is missing.
+          resolvedStudent = studentByNum;
+          identificationMethod = "ID_MATCH";
+        }
+      } else {
+        // Number not found in DB.
+        if (studentByName) {
+          // But we found the student by Name!
+          resolvedStudent = studentByName;
+          identificationMethod = "NAME_RECOVERY"; // Recovered by name
+        }
+      }
+
+      if (!resolvedStudent) {
+        let errorMsg = "Student not found";
+        if (studentByNum && fileFullName) {
+          errorMsg = `Name mismatch: ID belongs to ${studentByNum.firstName} ${studentByNum.lastName}, but file says ${firstName} ${lastName}`;
+        } else if (normalizedStudentNumber && !studentByNum && !studentByName) {
+          errorMsg = `Student # ${normalizedStudentNumber} not found, and name search failed`;
+        }
+
         results.push({
           identifier: `${firstName} ${lastName}`,
           courseCode: sanitizedCourseCode,
-          status: "❌ Student not found (Check Student Number)",
+          status: `❌ ${errorMsg}`,
         });
         failedLogsToCreate.push({
           studentNumber: normalizedStudentNumber || "UNKNOWN",
@@ -186,7 +320,7 @@ export async function POST(req: Request) {
           courseTitle: sanitizedCourseTitle || "",
           creditUnit: Number(creditUnit) || 0,
           grade: String(grade) || "",
-          remarks: "Student not found in batch lookup",
+          remarks: errorMsg,
           instructor: sanitizedInstructor,
           academicYear,
           semester,
@@ -196,20 +330,22 @@ export async function POST(req: Request) {
         continue;
       }
 
+      const targetStudent = resolvedStudent; // Validated student
+
       // Ensure required fields
-      if (!resolvedStudentNumber || !sanitizedCourseCode || grade == null) {
+      if (!sanitizedCourseCode || grade == null) {
         results.push({
-          identifier: resolvedStudentNumber || `${firstName} ${lastName}`,
+          identifier: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode,
           status: "❌ Missing required fields",
         });
         failedLogsToCreate.push({
-          studentNumber: normalizedStudentNumber || "UNKNOWN",
+          studentNumber: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode || "",
           courseTitle: sanitizedCourseTitle || "",
           creditUnit: Number(creditUnit) || 0,
           grade: String(grade) || "",
-          remarks: "Missing required fields (Student Number, Course Code, or Grade)",
+          remarks: "Missing required fields (Course Code or Grade)",
           instructor: sanitizedInstructor,
           academicYear,
           semester,
@@ -223,12 +359,12 @@ export async function POST(req: Request) {
       const standardizedReExam = normalizeGrade(reExam);
       if (!standardizedGrade) {
         results.push({
-          identifier: resolvedStudentNumber,
+          identifier: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode,
           status: "❌ Invalid grade value",
         });
         failedLogsToCreate.push({
-          studentNumber: resolvedStudentNumber,
+          studentNumber: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode || "",
           courseTitle: sanitizedCourseTitle || "",
           creditUnit: Number(creditUnit) || 0,
@@ -247,15 +383,12 @@ export async function POST(req: Request) {
       const checklistSubject = curriculumSubjects.find(
         (cs) =>
           cs.courseCode === sanitizedCourseCode &&
-          cs.course === student!.course &&
-          cs.major === (student!.major || Major.NONE)
+          cs.course === targetStudent.course &&
+          cs.major === (targetStudent.major || Major.NONE)
       );
 
       let subjectOfferingId: string | null = null;
       let isLegacyUpload = false;
-
-      // Logic: Only stricter 'Existing' mode matches both. 
-      // Legacy mode ignores checklist/offering if missing.
 
       if (checklistSubject) {
         const offering = offeringMap.get(checklistSubject.id);
@@ -269,16 +402,16 @@ export async function POST(req: Request) {
         if (!isLegacyMode) {
           const statusMsg = checklistSubject
             ? "❌ Subject not offered in selected term"
-            : `❌ Subject not in curriculum for ${student.course}`;
+            : `❌ Subject not in curriculum for ${targetStudent.course}`;
 
           results.push({
-            studentNumber: student.studentNumber,
+            studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
             status: statusMsg,
           });
 
           failedLogsToCreate.push({
-            studentNumber: student.studentNumber,
+            studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
             courseTitle: sanitizedCourseTitle || "",
             creditUnit: Number(creditUnit) || 0,
@@ -299,10 +432,20 @@ export async function POST(req: Request) {
 
       // Check existing grade
       const existingGrade = existingGradeMap.get(
-        `${resolvedStudentNumber}-${sanitizedCourseCode}`
+        `${targetStudent.studentNumber}-${sanitizedCourseCode}`
       );
 
       let action = "CREATED";
+      let statusPrefix = "✅";
+      let statusMsg = "Grade uploaded";
+
+      if (identificationMethod === "NAME_CORRECTION") {
+        statusMsg = `Grade uploaded (Corrected ID by Name match)`;
+        statusPrefix = "⚠️"; // Warn user we changed the ID
+      } else if (identificationMethod === "NAME_RECOVERY") {
+        statusMsg = `Grade uploaded (Found by Name, ID invalid)`;
+        statusPrefix = "⚠️";
+      }
 
       if (existingGrade) {
         if (
@@ -311,9 +454,10 @@ export async function POST(req: Request) {
           existingGrade.instructor === sanitizedInstructor
         ) {
           results.push({
-            studentNumber: student.studentNumber,
+            studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
             status: "✅ Grade already exists, no changes",
+            studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
           });
           continue;
         }
@@ -324,19 +468,23 @@ export async function POST(req: Request) {
 
         if (existingIndex !== -1 && newIndex !== -1 && existingIndex < newIndex) {
           results.push({
-            studentNumber: student.studentNumber,
+            studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
             status: "⚠️ Existing grade is better - kept existing",
+            studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
           });
           continue;
         }
         action = "UPDATED";
+        statusMsg = "Grade updated";
       } else if (isLegacyMode && !subjectOfferingId) {
         action = "LEGACY_ENTRY";
+        statusMsg = "Legacy Grade uploaded";
+        statusPrefix = "⚠️";
       }
 
       gradesToUpsert.push({
-        studentNumber: resolvedStudentNumber,
+        studentNumber: targetStudent.studentNumber,
         courseCode: sanitizedCourseCode,
         courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
         creditUnit: Number(creditUnit),
@@ -351,7 +499,7 @@ export async function POST(req: Request) {
       });
 
       logsToCreate.push({
-        studentNumber: resolvedStudentNumber,
+        studentNumber: targetStudent.studentNumber,
         grade: standardizedGrade,
         courseCode: sanitizedCourseCode,
         courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
@@ -365,10 +513,10 @@ export async function POST(req: Request) {
       });
 
       results.push({
-        studentNumber: student.studentNumber,
+        studentNumber: targetStudent.studentNumber,
         courseCode: sanitizedCourseCode,
-        status: action === "UPDATED" ? "✅ Grade updated" : (isLegacyMode && !subjectOfferingId ? "⚠️ Legacy Grade uploaded" : "✅ Grade uploaded"),
-        studentName: `${student.firstName} ${student.lastName}`,
+        status: `${statusPrefix} ${statusMsg}`,
+        studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
       });
 
     } catch (error) {
