@@ -138,7 +138,17 @@ export function PreviewGrades({
         try {
           const res = await fetch(`/api/subject-offerings?academicYear=${academicYear}&semester=${semester}`);
           if (res.ok) {
-            setAvailableSubjects(await res.json());
+            const data = await res.json();
+            // Deduplicate based on courseCode
+            const uniqueSubjects = data.reduce((acc: any[], current: any) => {
+              const x = acc.find(item => item.courseCode === current.courseCode);
+              if (!x) {
+                return acc.concat([current]);
+              } else {
+                return acc;
+              }
+            }, []);
+            setAvailableSubjects(uniqueSubjects);
           }
         } catch (e) {
           console.error(e);
@@ -518,11 +528,12 @@ export function PreviewGrades({
                                 <CommandGroup>
                                   {availableSubjects.map((subject) => (
                                     <CommandItem
-                                      key={subject.id}
-                                      value={subject.courseCode}
+                                      key={subject.courseCode} // Use unique key
+                                      value={`${subject.courseCode} ${subject.courseTitle}`} // Make search work for both code and title
                                       onSelect={(currentValue) => {
-                                        const selected = availableSubjects.find(s => s.courseCode.toLowerCase() === currentValue.toLowerCase()) || subject;
-                                        handleCourseChange(index, selected.courseCode);
+                                        // When searching by title, the value might not be exact courseCode anymore due to our custom value
+                                        // So we use the subject from map closure or find by matching parts
+                                        handleCourseChange(index, subject.courseCode);
                                         setOpenComboboxIndex(null);
                                       }}
                                     >
