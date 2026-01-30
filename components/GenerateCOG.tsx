@@ -141,18 +141,26 @@ export default function GenerateCOG() {
       generatePDF(data as StudentData, filteredGrades as Grade[]);
       setIsDialogOpen(false);
     } catch (error) {
+      // Log the full error for debugging
+      console.error("COG Generation Error:", error);
+
       const err = error as { message: string };
+
+      // Check for rate limit error (corrected message)
       if (
         err.message ===
-        "Too many requests. Please wait a minute before trying again."
+        "Too many requests. Please try again in a minute."
       ) {
         toast.error(
           "You have reached the limit for generating this document. Please wait a minute and try again."
         );
       } else {
+        // Show more detailed error message
+        const errorMessage = err.message || "Unknown error occurred";
         toast.error(
-          "Something went wrong while generating your COG. Please try again."
+          `Something went wrong while generating your COG: ${errorMessage}`
         );
+        console.error("Detailed error:", errorMessage);
       }
     } finally {
       setIsLoading(false);

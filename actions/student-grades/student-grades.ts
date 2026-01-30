@@ -66,12 +66,6 @@ export async function getStudentGradesWithReExam(studentId?: string) {
     throw new Error("Forbidden");
   }
 
-  await checkRateLimit({
-    action: "getStudentGradesWithReExam",
-    limit: 7,
-    windowSeconds: 60,
-  });
-
   const student = await prisma.student.findUnique({
     where: { id: studentId || userId },
     select: {
