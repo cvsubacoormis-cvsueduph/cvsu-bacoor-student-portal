@@ -77,6 +77,7 @@ function levenshteinDistance(a: string, b: string): number {
         );
       }
     }
+
   }
 
   return matrix[b.length][a.length];
@@ -273,7 +274,7 @@ export async function POST(req: Request) {
     const parsed = JSON.parse(str);
     return {
       course: parsed.course,
-      major: parsed.major === Major.NONE ? null : parsed.major
+      major: parsed.major // Major is required in schema, use NONE not null
     };
   });
 
