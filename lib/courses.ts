@@ -85,7 +85,8 @@ export function coursePositionMap(coursePositionAbbreviation: string) {
   }
 }
 
-export function formatMajor(major: string) {
+export function formatMajor(major: string | null | undefined) {
+  if (!major) return "NONE";
   //HUMAN_RESOURCE_MANAGEMENT
   return major
     .replace(/_/g, " ")

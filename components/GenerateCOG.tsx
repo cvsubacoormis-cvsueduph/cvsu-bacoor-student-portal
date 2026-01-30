@@ -201,7 +201,7 @@ export default function GenerateCOG() {
       }`;
     const studentNo = student.studentNumber;
     const course = student.course;
-    const major = student.major !== "NONE" ? student.major : "";
+    const major = student.major !== "NONE" && student.major ? student.major : "NONE";
 
     doc.setFontSize(7);
     doc.setTextColor(139, 0, 0);
