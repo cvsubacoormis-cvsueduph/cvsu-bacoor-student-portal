@@ -11,7 +11,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { EyeIcon, PencilIcon, CheckIcon, TrashIcon, PlusIcon } from "lucide-react";
+import { EyeIcon, PencilIcon, CheckIcon, TrashIcon, PlusIcon, Check, ChevronsUpDown } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -80,6 +94,7 @@ export function PreviewGrades({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [availableSubjects, setAvailableSubjects] = useState<{ id: string; courseCode: string; courseTitle: string; creditUnit: number }[]>([]);
+  const [openComboboxIndex, setOpenComboboxIndex] = useState<number | null>(null);
 
   // Fetch academic terms when dialog opens.
   useEffect(() => {
@@ -477,21 +492,55 @@ export function PreviewGrades({
                   <TableRow key={index}>
                     <TableCell>
                       {editingRows[index] ? (
-                        <Select
-                          value={editedGrades[index].courseCode}
-                          onValueChange={(value) => handleCourseChange(index, value)}
+                        <Popover
+                          open={openComboboxIndex === index}
+                          onOpenChange={(isOpen) => setOpenComboboxIndex(isOpen ? index : null)}
                         >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select Course" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableSubjects.map((subject) => (
-                              <SelectItem key={subject.id} value={subject.courseCode}>
-                                {subject.courseCode}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openComboboxIndex === index}
+                              className="w-[180px] justify-between"
+                            >
+                              {editedGrades[index].courseCode
+                                ? availableSubjects.find((subject) => subject.courseCode === editedGrades[index].courseCode)?.courseCode
+                                : "Select Course..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0">
+                            <Command>
+                              <CommandInput placeholder="Search course..." />
+                              <CommandList>
+                                <CommandEmpty>No course found.</CommandEmpty>
+                                <CommandGroup>
+                                  {availableSubjects.map((subject) => (
+                                    <CommandItem
+                                      key={subject.id}
+                                      value={subject.courseCode}
+                                      onSelect={(currentValue) => {
+                                        const selected = availableSubjects.find(s => s.courseCode.toLowerCase() === currentValue.toLowerCase()) || subject;
+                                        handleCourseChange(index, selected.courseCode);
+                                        setOpenComboboxIndex(null);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          editedGrades[index].courseCode === subject.courseCode
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      {subject.courseCode} - {subject.courseTitle}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       ) : (
                         grade.courseCode
                       )}
