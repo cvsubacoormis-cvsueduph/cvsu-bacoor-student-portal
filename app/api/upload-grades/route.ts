@@ -400,12 +400,29 @@ export async function POST(req: Request) {
       }
 
       // Match curriculum & subject offering
-      const checklistSubject = curriculumSubjects.find(
+      // Priority 1: Match Specific Course & Major
+      let checklistSubject = curriculumSubjects.find(
         (cs) =>
           cs.courseCode === sanitizedCourseCode &&
           cs.course === targetStudent.course &&
           cs.major === (targetStudent.major || Major.NONE)
       );
+
+      // Priority 2: Match Specific Course (Ignore Major)
+      if (!checklistSubject) {
+        checklistSubject = curriculumSubjects.find(
+          (cs) =>
+            cs.courseCode === sanitizedCourseCode &&
+            cs.course === targetStudent.course
+        );
+      }
+
+      // Priority 3: Global Match (Any Course) - "Make sure it exists in course curriculum no matter what course"
+      if (!checklistSubject) {
+        checklistSubject = curriculumSubjects.find(
+          (cs) => cs.courseCode === sanitizedCourseCode
+        );
+      }
 
       let subjectOfferingId: string | null = null;
       let isLegacyUpload = false;
@@ -417,17 +434,15 @@ export async function POST(req: Request) {
         }
       }
 
-      if (!subjectOfferingId) {
+      // Validation: Must exist in curriculum (unless Legacy Mode)
+      // We no longer fail if !subjectOfferingId, provided it exists in curriculum.
+      if (!checklistSubject) {
         // If strict mode, fail
         if (!isLegacyMode) {
-          const statusMsg = checklistSubject
-            ? "❌ Subject not offered in selected term"
-            : `❌ Subject not in curriculum for ${targetStudent.course}`;
-
           results.push({
             studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
-            status: statusMsg,
+            status: `❌ Subject not found in any curriculum`,
           });
 
           failedLogsToCreate.push({
@@ -436,7 +451,7 @@ export async function POST(req: Request) {
             courseTitle: sanitizedCourseTitle || "",
             creditUnit: Number(creditUnit) || 0,
             grade: standardizedGrade,
-            remarks: checklistSubject ? "Subject not offered" : "Subject not in curriculum",
+            remarks: "Subject not in any curriculum",
             instructor: sanitizedInstructor,
             academicYear,
             semester,
@@ -463,7 +478,8 @@ export async function POST(req: Request) {
         statusMsg = `Grade uploaded (Corrected ID by Name match)`;
         statusPrefix = "⚠️"; // Warn user we changed the ID
       } else if (identificationMethod === "NAME_RECOVERY") {
-        statusMsg = `Grade uploaded (Found by Name, ID invalid)`;
+        const reason = normalizedStudentNumber ? "ID invalid" : "ID missing";
+        statusMsg = `Grade uploaded (Found by Name, ${reason})`;
         statusPrefix = "⚠️";
       }
 
