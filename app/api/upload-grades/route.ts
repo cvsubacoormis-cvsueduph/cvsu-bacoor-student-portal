@@ -171,6 +171,14 @@ export async function POST(req: Request) {
     ),
   ];
 
+  const uniqueCourseTitles = [
+    ...new Set(
+      grades
+        .map((g) => sanitizeString(g.courseTitle))
+        .filter((t) => t && t !== "")
+    ),
+  ];
+
   // Prepare names for lookup
   const namesToLookup = new Set<string>();
   grades.forEach(g => {
@@ -283,7 +291,8 @@ export async function POST(req: Request) {
     where: {
       OR: [
         ...curriculumConditions,
-        { courseCode: { in: uniqueCourseCodes } }
+        { courseCode: { in: uniqueCourseCodes } },
+        { courseTitle: { in: uniqueCourseTitles as string[] } }
       ]
     },
     select: {
@@ -374,7 +383,7 @@ export async function POST(req: Request) {
       const normalizedStudentNumber = studentNumber
         ? String(studentNumber).replace(/-/g, "")
         : null;
-      const sanitizedCourseCode = normalizeCourseCode(courseCode);
+      let sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
       const sanitizedInstructor =
@@ -581,6 +590,47 @@ export async function POST(req: Request) {
         }
       }
 
+      // Priority 5: Fallback by Course Title (Contextual - Student's Curriculum)
+      // "Course Code is wrong, but Title is correct"
+      // We check if the TITLE exists in the student's calculated curriculum.
+      let isTitleFallback = false;
+      if (!checklistSubject && sanitizedCourseTitle) {
+        // Filter to student's curriculum first
+        const studentCurriculum = curriculumSubjects.filter(cs =>
+          cs.course === targetStudent.course &&
+          cs.major === (targetStudent.major || Major.NONE)
+        );
+
+        // Normalize the file title using our robust name normalizer (removes punct, lowers case)
+        const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
+
+        // Try to find a match
+        const titleMatch = studentCurriculum.find(cs =>
+          normalizeName(cs.courseTitle) === normalizedFileTitle
+        );
+
+        if (titleMatch) {
+          checklistSubject = titleMatch;
+          sanitizedCourseCode = titleMatch.courseCode; // Auto-correct code
+          isTitleFallback = true;
+        }
+      }
+
+      // Priority 6: Fallback by Course Title (Global)
+      // If not in student's curriculum, check if it exists globally (risky if titles duplicate, but taking first match)
+      if (!checklistSubject && sanitizedCourseTitle) {
+        const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
+        const globalTitleMatch = curriculumSubjects.find(cs =>
+          normalizeName(cs.courseTitle) === normalizedFileTitle
+        );
+
+        if (globalTitleMatch) {
+          checklistSubject = globalTitleMatch;
+          sanitizedCourseCode = globalTitleMatch.courseCode;
+          isTitleFallback = true;
+        }
+      }
+
       let subjectOfferingId: string | null = null;
       let isLegacyUpload = false;
       let resolvedCreditUnit = Number(creditUnit);
@@ -646,6 +696,9 @@ export async function POST(req: Request) {
         statusPrefix = "⚠️";
       } else if (isFuzzyCode && checklistSubject) {
         statusMsg = `Grade uploaded (Fuzzy Match: ${sanitizedCourseCode} -> ${checklistSubject.courseCode})`;
+        statusPrefix = "⚠️";
+      } else if (isTitleFallback && checklistSubject) {
+        statusMsg = `Grade uploaded (Corrected Code by Title: ${entry.courseCode || "MISSING"} -> ${checklistSubject.courseCode})`;
         statusPrefix = "⚠️";
       }
 
