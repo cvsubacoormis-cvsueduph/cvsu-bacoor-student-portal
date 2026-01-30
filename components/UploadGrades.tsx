@@ -619,7 +619,10 @@ export function UploadGrades() {
                                         {res.status.includes("✅") ? (
                                           <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
                                         ) : res.status.includes("⚠️") ? (
-                                          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-yellow-200">Warning</Badge>
+                                          <div className="flex items-center text-yellow-700 gap-1 text-sm font-medium">
+                                            <AlertCircle className="w-4 h-4" />
+                                            {res.status.replace("⚠️", "").trim()}
+                                          </div>
                                         ) : (
                                           <div className="flex items-center text-red-600 gap-1 text-sm font-medium">
                                             <AlertCircle className="w-4 h-4" />
