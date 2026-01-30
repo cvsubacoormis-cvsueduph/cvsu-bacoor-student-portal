@@ -286,7 +286,15 @@ export async function POST(req: Request) {
         { courseCode: { in: uniqueCourseCodes } }
       ]
     },
-    select: { id: true, courseCode: true, course: true, major: true },
+    select: {
+      id: true,
+      courseCode: true,
+      course: true,
+      major: true,
+      courseTitle: true,
+      creditLec: true,
+      creditLab: true
+    },
   });
 
   // 3. Verify Academic Term
@@ -333,6 +341,7 @@ export async function POST(req: Request) {
       studentNumber: true,
       courseCode: true,
       grade: true,
+      reExam: true,
       remarks: true,
       instructor: true,
     },
@@ -482,8 +491,8 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const standardizedGrade = normalizeGrade(grade);
-      const standardizedReExam = normalizeGrade(reExam);
+      let standardizedGrade = normalizeGrade(grade);
+      let standardizedReExam = normalizeGrade(reExam);
       if (!standardizedGrade) {
         results.push({
           identifier: targetStudent.studentNumber,
@@ -567,12 +576,17 @@ export async function POST(req: Request) {
 
       let subjectOfferingId: string | null = null;
       let isLegacyUpload = false;
+      let resolvedCreditUnit = Number(creditUnit);
+      let resolvedCourseTitle = sanitizedCourseTitle?.toUpperCase() ?? "";
 
       if (checklistSubject) {
         const offering = offeringMap.get(checklistSubject.id);
         if (offering) {
           subjectOfferingId = offering.id;
         }
+        // Use checklist data if available
+        resolvedCreditUnit = (checklistSubject.creditLec || 0) + (checklistSubject.creditLab || 0);
+        resolvedCourseTitle = checklistSubject.courseTitle || resolvedCourseTitle;
       }
 
       // Validation: Must exist in curriculum (unless Legacy Mode)
@@ -642,21 +656,15 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // Hierarchy check
-        const existingIndex = GRADE_HIERARCHY.indexOf(existingGrade.grade);
-        const newIndex = GRADE_HIERARCHY.indexOf(standardizedGrade);
+        // Hierarchy check - DEACTIVATED for this mode (Preserve Existing)
+        // User requested: "want to upload... without changing the grades... if ever"
+        // So we Force Keeping Existing Grade
+        standardizedGrade = existingGrade.grade;
+        standardizedReExam = existingGrade.reExam ?? standardizedReExam; // Keep existing reExam if present, else use new? Or just keep existing?
+        // Let's keep existing ReExam if it's not null, otherwise take new.
 
-        if (existingIndex !== -1 && newIndex !== -1 && existingIndex < newIndex) {
-          results.push({
-            studentNumber: targetStudent.studentNumber,
-            courseCode: sanitizedCourseCode,
-            status: "⚠️ Existing grade is better - kept existing",
-            studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
-          });
-          continue;
-        }
         action = "UPDATED";
-        statusMsg = "Grade updated";
+        statusMsg = "Instructor/Metadata updated (Grade preserved)";
       } else if (isLegacyMode && !subjectOfferingId) {
         action = "LEGACY_ENTRY";
         statusMsg = "Legacy Grade uploaded";
@@ -666,8 +674,8 @@ export async function POST(req: Request) {
       gradesToUpsert.push({
         studentNumber: targetStudent.studentNumber,
         courseCode: sanitizedCourseCode,
-        courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
-        creditUnit: Number(creditUnit),
+        courseTitle: resolvedCourseTitle,
+        creditUnit: resolvedCreditUnit,
         grade: standardizedGrade,
         reExam: standardizedReExam,
         remarks: sanitizedRemarks,
@@ -682,8 +690,8 @@ export async function POST(req: Request) {
         studentNumber: targetStudent.studentNumber,
         grade: standardizedGrade,
         courseCode: sanitizedCourseCode,
-        courseTitle: sanitizedCourseTitle?.toUpperCase() ?? "",
-        creditUnit: Number(creditUnit),
+        courseTitle: resolvedCourseTitle,
+        creditUnit: resolvedCreditUnit,
         remarks: sanitizedRemarks,
         instructor: sanitizedInstructor,
         academicYear,
