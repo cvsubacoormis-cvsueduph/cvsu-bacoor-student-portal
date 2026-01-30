@@ -32,6 +32,26 @@ function normalizeName(name: string) {
   return noPunctuation.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function normalizeCourseCode(code: string | null) {
+  if (!code) return "";
+  const cleanStr = String(code).replace(/['"]+,/g, "").trim();
+  const noPunctuation = cleanStr.replace(/[-_.]/g, " ").replace(/\s+/g, " ");
+
+  // Collapse spaces for regex matching
+  const collapsed = noPunctuation.replace(/\s+/g, "");
+
+  // Pattern: (Letters)(Numbers)(OptionalLetters)
+  const match = collapsed.match(/^([A-Za-z]+)(\d+)([A-Za-z]*)$/);
+
+  if (match) {
+    const [_, prefix, num, suffix] = match;
+    return `${prefix.toUpperCase()} ${num}${suffix.toLowerCase()}`;
+  }
+
+  // Fallback
+  return noPunctuation.replace(/\s+/g, " ").trim().toUpperCase();
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   const user = await currentUser();
@@ -68,8 +88,8 @@ export async function POST(req: Request) {
   const uniqueCourseCodes = [
     ...new Set(
       grades
-        .map((g) => sanitizeString(g.courseCode))
-        .filter((code) => code !== null)
+        .map((g) => normalizeCourseCode(g.courseCode))
+        .filter((code) => code !== "")
     ),
   ];
 
@@ -242,7 +262,7 @@ export async function POST(req: Request) {
       const normalizedStudentNumber = studentNumber
         ? String(studentNumber).replace(/-/g, "")
         : null;
-      const sanitizedCourseCode = sanitizeString(courseCode);
+      const sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
       const sanitizedInstructor =
@@ -535,7 +555,7 @@ export async function POST(req: Request) {
       const normalizedStudentNumber = studentNumber
         ? String(studentNumber).replace(/-/g, "")
         : null;
-      const sanitizedCourseCode = sanitizeString(courseCode);
+      const sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedInstructor = sanitizeString(instructor)?.toUpperCase() ?? "";
 
