@@ -310,16 +310,21 @@ export default function GenerateCOG() {
     });
 
     const totalSubjectsEnrolled = grades.length;
+
+    // Total units enrolled - includes ALL courses (even with S, P, etc.)
+    const totalUnitsEnrolled = grades.reduce((acc, g) => {
+      return acc + g.creditUnit;
+    }, 0);
+
+    // For GPA calculation - only courses with numeric grades
     const totalCreditsEnrolled = grades.reduce((acc, g) => {
-      if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(g.courseCode)) return acc;
       const final = getFinalGradeToUse(g);
-      return final !== null ? acc + g.creditUnit : acc;
+      return final !== null && !isNaN(final) ? acc + g.creditUnit : acc;
     }, 0);
 
     const totalCreditsEarned = grades.reduce((acc, g) => {
-      if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(g.courseCode)) return acc;
       const final = getFinalGradeToUse(g);
-      return final !== null ? acc + g.creditUnit * final : acc;
+      return final !== null && !isNaN(final) ? acc + g.creditUnit * final : acc;
     }, 0);
 
     const gpa =
@@ -336,7 +341,7 @@ export default function GenerateCOG() {
       (doc as any).lastAutoTable.finalY + 10
     );
     doc.text(
-      `Total Credits Enrolled: ${totalCreditsEnrolled}`,
+      `Total Credits Enrolled: ${totalUnitsEnrolled}`,
       150,
       (doc as any).lastAutoTable.finalY + 10
     );
