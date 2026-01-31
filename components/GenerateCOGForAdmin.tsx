@@ -319,8 +319,8 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     }, 0);
 
     const gpa =
-      totalCreditsEnrolled > 0 && !isNaN(totalCreditsEarned)
-        ? (totalCreditsEarned / totalCreditsEnrolled).toFixed(2)
+      totalUnitsEnrolled > 0 && !isNaN(totalCreditsEarned)
+        ? (totalCreditsEarned / totalUnitsEnrolled).toFixed(2)
         : "0.00";
 
     doc.setFont("helvetica", "bold");
