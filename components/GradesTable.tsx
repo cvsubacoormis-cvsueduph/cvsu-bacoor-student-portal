@@ -102,14 +102,19 @@ export default function Grades({
   });
 
   const totalSubjectsEnrolled = filteredGrades.length;
+
+  // Total units enrolled - includes ALL courses (even with S, P, etc.)
+  const totalUnitsEnrolled = filteredGrades.reduce((acc, cur) => {
+    return acc + cur.creditUnit;
+  }, 0);
+
+  // For GPA calculation - only courses with numeric grades
   const totalCreditsEnrolled = filteredGrades.reduce((acc, cur) => {
-    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit;
   }, 0);
   const totalCreditsEarned = filteredGrades.reduce((acc, cur) => {
-    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit * finalGrade;
@@ -322,7 +327,7 @@ export default function Grades({
                   <TableRow>
                     <TableCell colSpan={2}>Totals</TableCell>
                     <TableCell className="text-center">
-                      {totalCreditsEnrolled}
+                      {totalUnitsEnrolled}
                     </TableCell>
                     <TableCell colSpan={4} className="text-right">
                       GPA: <span className="text-lg font-bold">{gpa}</span>
@@ -333,13 +338,17 @@ export default function Grades({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
               <p className="text-sm text-muted-foreground">Subjects Enrolled</p>
               <p className="text-2xl font-bold">{totalSubjectsEnrolled}</p>
             </div>
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
-              <p className="text-sm text-muted-foreground">Credits Earned</p>
+              <p className="text-sm text-muted-foreground">Total Credits Enrolled</p>
+              <p className="text-2xl font-bold">{totalUnitsEnrolled}</p>
+            </div>
+            <div className="bg-muted/30 p-4 rounded-lg border text-center">
+              <p className="text-sm text-muted-foreground">Total Credits Earned</p>
               <p className="text-2xl font-bold">{totalCreditsEarned.toFixed(2)}</p>
             </div>
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
