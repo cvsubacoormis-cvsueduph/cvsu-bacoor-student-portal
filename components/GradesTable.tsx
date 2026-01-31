@@ -262,11 +262,9 @@ export default function Grades({
                 </TableHeader>
                 <TableBody>
                   {filteredGrades.map((grade) => {
-                    const displayGrade = ["INC", "DRP"].includes(grade.grade)
-                      ? grade.grade
-                      : !isNaN(parseFloat(grade.grade))
-                        ? parseFloat(grade.grade).toFixed(2)
-                        : "";
+                    const displayGrade = !isNaN(parseFloat(grade.grade))
+                      ? parseFloat(grade.grade).toFixed(2)
+                      : grade.grade;
 
                     const isFailing = [
                       "INC",
