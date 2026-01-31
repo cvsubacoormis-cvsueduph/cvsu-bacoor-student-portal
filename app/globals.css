@@ -2,17 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-
-    html,
-    body {
-        height: 100%;
-        overflow: hidden;
-    }
-
-    /* ... existing styles ... */
-}
-
 .react-calendar {
     width: 100% !important;
     border: none !important;
