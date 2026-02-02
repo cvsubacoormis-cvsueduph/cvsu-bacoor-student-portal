@@ -103,20 +103,56 @@ export default function Grades({
 
   const totalSubjectsEnrolled = filteredGrades.length;
   const totalCreditsEnrolled = filteredGrades.reduce((acc, cur) => {
-    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
+    // 1. Strict Exclusion Rule: INC, DRP, 4.00, 5.00 are ALWAYS 0 units.
+    const gradeStr = String(cur.grade);
+    if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+
+    // 2. CVSU 101 Rule: Included in total ONLY if grade is "S".
+    if (cur.courseCode === "CVSU 101") {
+      return cur.grade === "S" ? acc + cur.creditUnit : acc;
+    }
+
+    const finalGrade = getFinalGradeToUse(cur);
+    // If it's a valid numeric grade, include it.
+    if (finalGrade !== null && !isNaN(finalGrade)) return acc + cur.creditUnit;
+
+    // Also include if it's "S" for other subjects? (Assuming yes based on CVSU 101 logic, but keeping safe default)
+    // If "S" is a valid passing grade for regular subjects handled by getFinalGradeToUse returning non-null?
+    // Actually getFinalGradeToUse currently returns null for non-numeric. 
+    // If we want to include "S" generally in enrolled credits, we need to check strictly.
+    // Let's stick to the specific CVSU 101 rule for "S" as requested.
+    // Regular numeric grades:
+    return acc;
+  }, 0);
+
+  // Separate calculation for GPA Denominator (only items that contribute to GPA)
+  const totalGPAUnits = filteredGrades.reduce((acc, cur) => {
+    const gradeStr = String(cur.grade);
+    if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+
+    // CVSU 101 "S" (or any "S") does NOT contribute to GPA calculation (numeric).
+    if (cur.courseCode === "CVSU 101") return acc;
+
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
+
     return acc + cur.creditUnit;
   }, 0);
+
   const totalCreditsEarned = filteredGrades.reduce((acc, cur) => {
-    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
+    // Earned points for GPA Numerator
+    const gradeStr = String(cur.grade);
+    if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+    if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
+
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit * finalGrade;
   }, 0);
+
   const gpa =
-    totalCreditsEnrolled > 0 && !isNaN(totalCreditsEarned)
-      ? (totalCreditsEarned / totalCreditsEnrolled).toFixed(2)
+    totalGPAUnits > 0 && !isNaN(totalCreditsEarned)
+      ? (totalCreditsEarned / totalGPAUnits).toFixed(2)
       : "N/A";
 
   return (
