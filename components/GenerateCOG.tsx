@@ -324,8 +324,10 @@ export default function GenerateCOG() {
       const gradeStr = String(cur.grade);
       if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
 
-      // CVSU 101 "S" (or any "S") does NOT contribute to GPA calculation (numeric).
-      if (cur.courseCode === "CVSU 101") return acc;
+      // Include CVSU 101 "S" in the GPA denominator
+      if (cur.courseCode === "CVSU 101" && cur.grade === "S") {
+        return acc + cur.creditUnit;
+      }
 
       const finalGrade = getFinalGradeToUse(cur);
       if (finalGrade === null || isNaN(finalGrade)) return acc;
