@@ -287,9 +287,9 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       ],
       body: grades.map((g) => [
         g.courseCode,
-        g.creditUnit.toString(),
+        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade) ? "0" : g.creditUnit.toString(),
         g.courseTitle,
-        ["DRP", "INC", "4.00", "5.00"].includes(g.grade)
+        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
           ? { content: g.grade || "-", styles: { textColor: [255, 0, 0] } }
           : { content: g.grade || "-", styles: { textColor: [0, 0, 0] } },
         g.reExam || "",
@@ -303,14 +303,17 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     const totalSubjectsEnrolled = grades.length;
 
     // Total units enrolled - includes ALL courses (even with S, P, etc.)
+    // BUT treats DRP, INC, 4.00, 5.00, US as 0 units
     const totalUnitsEnrolled = grades.reduce((acc, g) => {
+      const gradeStr = String(g.grade);
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
       return acc + g.creditUnit;
     }, 0);
 
     // Separate calculation for GPA Denominator (only items that contribute to GPA)
     const totalGPAUnits = grades.reduce((acc, cur) => {
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
 
       // CVSU 101 "S" (or any "S") does NOT contribute to GPA calculation (numeric).
       if (cur.courseCode === "CVSU 101") return acc;
@@ -324,7 +327,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     const totalCreditsEarned = grades.reduce((acc, cur) => {
       // Earned points for GPA Numerator
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
       if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
 
       const finalGrade = getFinalGradeToUse(cur);
