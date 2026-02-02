@@ -110,18 +110,23 @@ export default function Grades({
 
   // For GPA calculation - only courses with numeric grades
   const totalCreditsEnrolled = filteredGrades.reduce((acc, cur) => {
+    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
+
     return acc + cur.creditUnit;
   }, 0);
+
   const totalCreditsEarned = filteredGrades.reduce((acc, cur) => {
+    if (["NSTP 1", "CVSU 101", "NSTP 2"].includes(cur.courseCode)) return acc;
     const finalGrade = getFinalGradeToUse(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
     return acc + cur.creditUnit * finalGrade;
   }, 0);
+
   const gpa =
-    totalUnitsEnrolled > 0 && !isNaN(totalCreditsEarned)
-      ? (totalCreditsEarned / totalUnitsEnrolled).toFixed(2)
+    totalCreditsEnrolled > 0 && !isNaN(totalCreditsEarned)
+      ? (totalCreditsEarned / totalCreditsEnrolled).toFixed(2)
       : "N/A";
 
   return (
