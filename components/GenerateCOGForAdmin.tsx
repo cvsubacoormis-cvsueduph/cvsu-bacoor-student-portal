@@ -307,20 +307,34 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       return acc + g.creditUnit;
     }, 0);
 
-    // For GPA calculation - only courses with numeric grades
-    const totalCreditsEnrolled = grades.reduce((acc, g) => {
-      const final = getFinalGradeToUse(g);
-      return final !== null && !isNaN(final) ? acc + g.creditUnit : acc;
+    // Separate calculation for GPA Denominator (only items that contribute to GPA)
+    const totalGPAUnits = grades.reduce((acc, cur) => {
+      const gradeStr = String(cur.grade);
+      if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+
+      // CVSU 101 "S" (or any "S") does NOT contribute to GPA calculation (numeric).
+      if (cur.courseCode === "CVSU 101") return acc;
+
+      const finalGrade = getFinalGradeToUse(cur);
+      if (finalGrade === null || isNaN(finalGrade)) return acc;
+
+      return acc + cur.creditUnit;
     }, 0);
 
-    const totalCreditsEarned = grades.reduce((acc, g) => {
-      const final = getFinalGradeToUse(g);
-      return final !== null && !isNaN(final) ? acc + g.creditUnit * final : acc;
+    const totalCreditsEarned = grades.reduce((acc, cur) => {
+      // Earned points for GPA Numerator
+      const gradeStr = String(cur.grade);
+      if (["DRP", "INC", "FAILED", "4.00", "5.00"].includes(gradeStr)) return acc;
+      if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
+
+      const finalGrade = getFinalGradeToUse(cur);
+      if (finalGrade === null || isNaN(finalGrade)) return acc;
+      return acc + cur.creditUnit * finalGrade;
     }, 0);
 
     const gpa =
-      totalUnitsEnrolled > 0 && !isNaN(totalCreditsEarned)
-        ? (totalCreditsEarned / totalUnitsEnrolled).toFixed(2)
+      totalGPAUnits > 0 && !isNaN(totalCreditsEarned)
+        ? (totalCreditsEarned / totalGPAUnits).toFixed(2)
         : "0.00";
 
     doc.setFont("helvetica", "bold");
