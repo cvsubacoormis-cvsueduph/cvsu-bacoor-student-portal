@@ -234,6 +234,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.setTextColor(139, 0, 0);
     doc.setFont("helvetica", "bold");
     doc.text("Major:", 20, 75);
+    doc.setTextColor(0, 0, 139);
     doc.text(formatMajor(major) || "", 35, 75);
     doc.setTextColor(139, 0, 0);
     doc.text("Date:", 120, 70);
