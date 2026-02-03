@@ -31,6 +31,13 @@ export async function getStudents() {
 }
 
 export async function createStudent(data: CreateStudentSchema) {
+  const { userId, sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+
+  if (!userId || role !== "admin") {
+    return { student: null, error: "Unauthorized" };
+  }
+
   try {
     const result = createStudentSchema.safeParse(data);
 
@@ -46,13 +53,11 @@ export async function createStudent(data: CreateStudentSchema) {
 
     const clerk = await clerkClient();
     const user = await clerk.users.createUser({
-      username: `${
-        studentData.studentNumber
-      }${studentData.firstName.toLowerCase()}`,
-      password: `cvsubacoor${studentData.firstName.toLowerCase()}${
-        studentData.studentNumber
-      }`,
-      emailAddress: [studentData.email] as string[] | undefined,
+      username: `${studentData.studentNumber
+        }${studentData.firstName.toLowerCase()}`,
+      password: `cvsubacoor${studentData.firstName.toLowerCase()}${studentData.studentNumber
+        }`,
+      emailAddress: studentData.email ? [studentData.email] : undefined,
       firstName: studentData.firstName.toUpperCase(),
       lastName: studentData.lastName.toUpperCase(),
       publicMetadata: { role: "student" },
@@ -88,6 +93,13 @@ export async function createStudent(data: CreateStudentSchema) {
 }
 
 export async function deleteStudent(id: string) {
+  const { userId, sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+
+  if (!userId || role !== "admin") {
+    return { success: false, error: "Unauthorized" };
+  }
+
   try {
     if (!id) {
       return { success: false, error: "Student id is required" };
@@ -96,15 +108,11 @@ export async function deleteStudent(id: string) {
     const clerk = await clerkClient();
     await clerk.users.deleteUser(id);
 
-    const deleteStudent = await prisma.student.delete({
+    await prisma.student.delete({
       where: {
         id,
       },
     });
-
-    if (!deleteStudent) {
-      return { success: false, error: "Student not found" };
-    }
 
     revalidatePath("/students");
     return { success: true, error: null };
@@ -117,6 +125,13 @@ export async function deleteStudent(id: string) {
 export async function updateStudent(
   data: { id: string } & UpdateStudentSchema
 ) {
+  const { userId, sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+
+  if (!userId || role !== "admin") {
+    return { student: null, error: "Unauthorized" };
+  }
+
   try {
     // Validate the ENTIRE data object including id
     const validationResult = updateStudentSchema.safeParse(data);
@@ -163,6 +178,13 @@ export async function updateStudent(
 }
 
 export async function getStudentById(id: string) {
+  const { userId, sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+
+  if (!userId || (role !== "student" && role !== "admin")) {
+    return { student: null, error: "Unauthorized" };
+  }
+
   try {
     const student = await prisma.student.findUnique({
       where: { id },
