@@ -23,8 +23,8 @@ const baseStudentSchema = z
   .object({
     studentNumber: z
       .string()
-      .min(1, "Student number is required")
-      .max(15, "Max 15 characters")
+      .min(9, "Student number is required")
+      .max(9, "Max 9 characters")
       .regex(/^[0-9]+$/, "Student number can only contain numbers"),
     username: z
       .string()
