@@ -24,33 +24,14 @@ function sanitizeString(value: any): string | null {
 
 function normalizeName(name: string) {
   if (!name) return "";
-  // Normalize accents: NFD separates accents from letters, regex removes them
-  // e.g. "Peña" -> "Pena", "NUNO" -> "NUNO"
+
   const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // Remove dots, commas, HYPHENS, and other common punctuation
-  // Replaced hyphen with space? No, usually hyphenated names like "Anne-Marie" are one name "AnneMarie" or "Anne Marie".
-  // User case: "CRIS-JOY" -> "CRISJOY". So we should remove hyphen entirely or replace with nothing?
-  // Let's replace hyphen with SPACE first to avoid merging words incorrectly, BUT for "CRIS-JOY" -> "CRISJOY" we want merge.
-  // Actually, standardizing to "CRIS JOY" vs "CRISJOY" is handled by token logic.
-  // Let's replace hyphen with space. "CRIS-JOY" -> "CRIS JOY". "CRISJOY" -> "CRISJOY".
-  // Token match: ["CRIS", "JOY"] vs ["CRISJOY"]. 
-  // If we simply remove non-alphanumeric, "CRIS-JOY" becomes "CRISJOY".
-  // Let's try removing specific chars.
-
   const noPunctuation = normalized.replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ");
-  // Collapse multiple spaces into one and lower case
   let clean = noPunctuation.replace(/\s+/g, " ").trim().toLowerCase();
 
-  // Remove common suffixes for comparison purposes
-  // jr, sr, iii, iv, etc.
-  // We need to be careful not to remove "Iv" from "Ivan". So match whole words.
   const suffixes = [" jr", " sr", " iii", " iv", " v", " vi", " vii", " viii", " ix", " x"];
 
-  // Special case: Fused suffixes e.g. "RYANJR"
-  // If the word ends with "jr" but not " jr", we might want to strip it if strict check allows?
-  // Or just rely on fuzzy match? "RYANJR" vs "RYAN". Distance 2. Length 6. Ratio 0.66. Fails 0.70.
-  // Let's protect against common fusions.
   const fusedSuffixes = ["jr", "sr", "iii", "iv"];
 
   // Check if string ends with a fused suffix that isn't the whole word (e.g. not "sr" itself)
@@ -106,9 +87,6 @@ function areNamesSimilar(name1: string, name2: string, relaxed = false): boolean
   const threshold = relaxed ? 0.70 : 0.85;
 
   if (score >= threshold) return true;
-
-  // 2. Token Subset Check for ID-confirmed (relaxed) cases
-  // Handles missing middle names: "KRISTINE NICOLE ALIT" vs "KRISTINE ALIT"
   if (relaxed) {
     const tokens1 = name1.split(" ").filter(t => t.length > 1);
     const tokens2 = name2.split(" ").filter(t => t.length > 1);
@@ -120,8 +98,6 @@ function areNamesSimilar(name1: string, name2: string, relaxed = false): boolean
     const [shorter, longer] = tokens1.length < tokens2.length ? [tokens1, tokens2] : [tokens2, tokens1];
 
     const allFound = shorter.every(sToken => {
-      // Find sToken in longer array (fuzzy match allowed for individual words)
-      // Lowered threshold to 0.80 to allow 1 char typo in 5-6 letter words (e.g. CIERVO vs CIERVP => 0.83)
       return longer.some(lToken => fuzzy(sToken, lToken) >= 0.75);
     });
 
@@ -221,17 +197,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // We can't easily do a "OR" with normalized names in SQL without raw query or unwanted complexity
-  // So we fetch by studentNumber first (most common), and if we need names, we might need a broader search 
-  // OR we rely on the fact that if the student number is wrong, the correct student MIGHT not be in 'studentsByNumber'
-  // Strategy: Fetch ALL students that match the names? That might be too many if names are common (e.g. John Smith).
-  // Better Strategy: 
-  // Since we are processing a batch (e.g. 50 items), it is safe to try to fetch students matching these names logic wise.
-  // Prisma doesn't support computed column filtering easily.
-  // Let's rely on fetching by studentNumber FIRST. If that fails or mismatches, we need to find the student by name.
-  // To avoid N+1, let's try to fetch students that match the First/Last names in the batch.
-  // We can use OR conditions for the batch.
-
   const nameConditions = grades
     .flatMap((g) => {
       const conditions = [];
@@ -239,10 +204,6 @@ export async function POST(req: Request) {
       if (g.firstName) conditions.push({ firstName: { equals: g.firstName, mode: 'insensitive' as const } });
       return conditions;
     });
-
-  // Dedup name conditions to avoid too large query
-  // Actually, 'contains' or 'mode: insensitive' is good. 
-  // Let's construct a findMany with OR.
 
   let studentsByName: typeof studentsByNumber = [];
   if (nameConditions.length > 0) {
@@ -268,19 +229,13 @@ export async function POST(req: Request) {
   // Helper to store in mapByName
   const addToNameMap = (s: typeof studentsByNumber[0]) => {
     const n1 = normalizeName(s.firstName + " " + s.lastName);
-    const n2 = normalizeName(s.lastName + " " + s.firstName); // Last First support
-    // We store both permutations to be safe, prioritizing First Last
+    const n2 = normalizeName(s.lastName + " " + s.firstName);
     if (!mapByName.has(n1)) mapByName.set(n1, s);
     if (!mapByName.has(n2)) mapByName.set(n2, s);
   };
 
   studentsByNumber.forEach(addToNameMap);
   studentsByName.forEach(addToNameMap);
-
-
-  // 2. Fetch relevant curriculum subjects (Broadened for Fuzzy Match)
-  // We need to fetch NOT ONLY the exact codes in the file, but also the ENTIRE curriculum 
-  // for the students we found. This allows us to fuzzy match "ITEC 50" -> "ITEC 50A" within their valid subjects.
 
   const allFoundStudents = [...studentsByNumber, ...studentsByName];
   const uniqueCurricula = new Set(
@@ -330,7 +285,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. Fetch Offering for these subjects in this term
   const subjectOfferings = await prisma.subjectOffering.findMany({
     where: {
       academicYear,
@@ -344,10 +298,6 @@ export async function POST(req: Request) {
     subjectOfferings.map((so) => [so.curriculumId, so])
   );
 
-  // 5. Fetch existing grades for conflict checking
-  // We need to know who the student IS first before checking conflicts.
-  // Actually, we can fetch existing grades based on the resolved student numbers LATER 
-  // OR we fetch based on the student numbers we found in step 1.
   const allFoundStudentNumbers = [...new Set([...studentsByNumber, ...studentsByName].map(s => s.studentNumber))];
 
   const existingGrades = await prisma.grade.findMany({
@@ -400,25 +350,18 @@ export async function POST(req: Request) {
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
 
-      // --- Student Identification Logic ---
-
       const fileFullName = normalizeName((firstName || "") + " " + (lastName || ""));
       let resolvedStudent: typeof studentsByNumber[0] | undefined;
       let identificationMethod = "";
 
-      // Attempt 1: Look up by Student Number
+
       const studentByNum = normalizedStudentNumber ? mapByNumber.get(normalizedStudentNumber) : undefined;
 
-      // Attempt 2: Look up by Name
-      let studentByName = mapByName.get(fileFullName);
 
-      // Attempt 3: Scanner Fallback (if Map failed)
-      // Iterate over our 'studentsByName' (which now contains everyone with matching LastName)
-      // and check for fuzzy match on First Name.
+      let studentByName = mapByName.get(fileFullName);
       if (!studentByName && studentsByName.length > 0 && fileFullName) {
         studentByName = studentsByName.find(s => {
           const dbName = normalizeName(s.firstName + " " + s.lastName);
-          // Strict name search (no ID anchor) -> High threshold 0.85
           return fuzzy(dbName, fileFullName) >= 0.85;
         });
       }
@@ -428,10 +371,7 @@ export async function POST(req: Request) {
         const dbFullName = normalizeName(studentByNum.firstName + " " + studentByNum.lastName);
 
         if (fileFullName && dbFullName !== fileFullName) {
-          // Mismatch! The student number points to "John", but the file says "Jane".
-          // Pass "true" for relaxed mode because we have a Student ID match
-          // Relaxed threshold for ID matching -> 0.70 inside areNamesSimilar
-          // Also enables Token Subset Matching (handling missing middle names)
+
           if (areNamesSimilar(dbFullName, fileFullName, true)) {
             // Fuzzy match confirmed it's likely the same person (typo/middle name)
             resolvedStudent = studentByNum;
@@ -557,14 +497,14 @@ export async function POST(req: Request) {
         );
       }
 
-      // Priority 3: Global Match (Any Course) - "Make sure it exists in course curriculum no matter what course"
+
       if (!checklistSubject) {
         checklistSubject = curriculumSubjects.find(
           (cs) => cs.courseCode === sanitizedCourseCode
         );
       }
 
-      // Priority 4: Fuzzy Match in Student's Curriculum (Course/Major)
+
       let isFuzzyCode = false;
       if (!checklistSubject) {
         // Filter to student's curriculum
@@ -572,17 +512,6 @@ export async function POST(req: Request) {
           cs.course === targetStudent.course &&
           cs.major === (targetStudent.major || Major.NONE)
         );
-
-        // reused bestMatch and bestScore from outer scope? No, they were defined inside the fuzzy code block above (lines 585).
-        // Actually, looking at the code, `bestMatch` and `bestDist` were defined at line 583 in the PREVIOUS implementation.
-        // In the NEW implementation I pasted, I introduced `bestMatch` and `bestScore` at line 630-631.
-        // Wait, line 630-631 in the VIEWED file shows:
-        // 630:         let bestMatch = null;
-        // 631:         let bestDist = Infinity; <-- Old variable!
-        // 633:         let bestMatch = null; <-- DUPLICATE!
-        // 634:         let bestScore = 0;
-
-        // I need to clean this up.
 
         let bestMatch = null;
         let bestScore = 0;
@@ -594,22 +523,12 @@ export async function POST(req: Request) {
             bestMatch = cand;
           }
         }
-
-        // Threshold: fast-fuzzy returns 0-1.
-        // Damerau-Levenshtein allows swaps.
-        // "ITEC 50" (7) vs "ITEC 50A" (8) -> 1 edit (insertion). Score ~0.875
-        // "ITEC 50" vs "ITEC 55". Score ~0.85
-        // Let's use 0.85 as safe threshold for codes
         if (bestMatch && bestScore >= 0.85) {
           checklistSubject = bestMatch;
           sanitizedCourseCode = bestMatch.courseCode; // Auto-correct code
           isFuzzyCode = true;
         }
       }
-
-      // Priority 5: Fallback by Course Title (Contextual - Student's Curriculum)
-      // "Course Code is wrong, but Title is correct"
-      // We check if the TITLE exists in the student's calculated curriculum.
       let isTitleFallback = false;
       if (!checklistSubject && sanitizedCourseTitle) {
         // Filter to student's curriculum first
@@ -617,14 +536,6 @@ export async function POST(req: Request) {
           cs.course === targetStudent.course &&
           cs.major === (targetStudent.major || Major.NONE)
         );
-
-        // Normalize the file title
-        // We can just use standard normalization since we don't have normalizeTitleForMatch anymore
-        // Actually we might want `normalizeTitleForMatch` logic (roman numerals) but maybe fast-fuzzy handles "I" vs "1" nicely?
-        // No, "I" vs "1" is totally different chars.
-        // Let's trust fast-fuzzy on raw strings, or re-implement roman numeral norm if needed.
-        // User didn't ask to remove it, but I removed the function in the big block above. 
-        // Let's just use `normalizeName` which handles accents/punct.
         const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
 
         let bestTitleMatch = null;
@@ -639,13 +550,6 @@ export async function POST(req: Request) {
             bestTitleMatch = cand;
           }
         }
-
-
-        // Evaluate Best Match
-        // Titles are long. 
-        // "Introduction to Computing" vs "Intro to Computing". fast-fuzzy is good at substring/abbrev? 
-        // No, standard Sellers/Damerau.
-        // Let's set a slightly relaxed threshold for titles, e.g. 0.8
         if (bestTitleMatch && bestTitleScore >= 0.8) {
           checklistSubject = bestTitleMatch;
           sanitizedCourseCode = bestTitleMatch.courseCode;
@@ -653,8 +557,6 @@ export async function POST(req: Request) {
         }
       }
 
-      // Priority 6: Fallback by Course Title (Global)
-      // If not in student's curriculum, check if it exists globally (risky if titles duplicate, but taking first match)
       if (!checklistSubject && sanitizedCourseTitle) {
         const normalizedFileTitle = normalizeName(sanitizedCourseTitle);
 
@@ -692,8 +594,6 @@ export async function POST(req: Request) {
         resolvedCourseTitle = checklistSubject.courseTitle || resolvedCourseTitle;
       }
 
-      // Validation: Must exist in curriculum (unless Legacy Mode)
-      // We no longer fail if !subjectOfferingId, provided it exists in curriculum.
       if (!checklistSubject) {
         // If strict mode, fail
         if (!isLegacyMode) {
@@ -749,10 +649,6 @@ export async function POST(req: Request) {
       }
 
       if (existingGrade) {
-        // Resolve Instructor: New one takes precedence usually, UNLESS it's empty and we have an existing one.
-        // User wants to "map the instructor... without changing my grades".
-        // If the new file has an instructor, we update it.
-        // If the new file has NO instructor, we keep the existing one.
         if (!finalInstructor && existingGrade.instructor) {
           finalInstructor = existingGrade.instructor;
         }
@@ -926,8 +822,6 @@ export async function POST(req: Request) {
 
   // If validation only, we just return results. We might want to indicate success.
   if (validateOnly) {
-    // We don't save failed logs in validation mode either?
-    // Actually, we shouldn't save ANYTHING in validation mode.
   } else {
     // Save failed logs separately (outside transaction so they persist even if grades fail)
     if (failedLogsToCreate.length > 0) {
