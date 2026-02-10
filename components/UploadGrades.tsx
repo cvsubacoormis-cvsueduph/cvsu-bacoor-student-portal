@@ -74,6 +74,8 @@ export function UploadGrades() {
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [hasValidated, setHasValidated] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
 
   // Legacy Mode State
@@ -114,6 +116,8 @@ export function UploadGrades() {
     setProcessedCount(0);
     setTotalRecords(0);
     setIsUploading(false);
+    setIsValidating(false);
+    setHasValidated(false);
     setAllowLegacy(false);
   };
 
@@ -150,6 +154,7 @@ export function UploadGrades() {
     setIsParsing(true);
     setUploadResults([]);
     setLogs([]);
+    setHasValidated(false);
 
     try {
       const data = await selectedFile.arrayBuffer();
@@ -185,18 +190,42 @@ export function UploadGrades() {
     setLogs(prev => [{ type, message, timestamp: new Date() }, ...prev]);
   };
 
+  const handleDownloadLogs = () => {
+    if (uploadResults.length === 0) return;
+
+    const dataToExport = uploadResults.map(r => ({
+      "Student Number": r.studentNumber || "",
+      "Student Name": r.studentName || r.identifier || "",
+      "Course Code": r.courseCode,
+      "Status": r.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Upload Logs");
+    XLSX.writeFile(wb, `Upload_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const cancelUpload = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current.abort();
       setIsUploading(false);
+      setIsValidating(false);
       addLog("warning", "Upload cancelled by user.");
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (isDryRun = false) => {
     if (!file || !academicYear || !semester || !previewData) return;
 
-    setIsUploading(true);
+    if (isDryRun) {
+      setIsValidating(true);
+      setHasValidated(false); // Reset until done
+    } else {
+      setIsUploading(true);
+    }
+
     setProgress(0);
     setProcessedCount(0);
     setUploadResults([]);
@@ -236,6 +265,7 @@ export function UploadGrades() {
 
       if (!proceed.isConfirmed) {
         setIsUploading(false);
+        setIsValidating(false);
         return;
       }
     }
@@ -256,7 +286,10 @@ export function UploadGrades() {
           const res = await fetch("/api/upload-grades", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+              grades: payload,
+              validateOnly: isDryRun
+            }),
             signal: controller.signal,
           });
 
@@ -306,11 +339,20 @@ export function UploadGrades() {
       }
 
       if (!controller.signal.aborted) {
-        await Swal.fire({
-          icon: "success",
-          title: "Processing Complete",
-          text: `Processed ${totalRecords} records. Check the logs for details.`,
-        });
+        if (isDryRun) {
+          setHasValidated(true);
+          await Swal.fire({
+            icon: "info",
+            title: "Validation Complete",
+            text: `checked ${totalRecords} records. Check the results tab for errors/warnings. No changes were made.`,
+          });
+        } else {
+          await Swal.fire({
+            icon: "success",
+            title: "Processing Complete",
+            text: `Processed ${totalRecords} records. Check the logs for details.`,
+          });
+        }
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
@@ -325,6 +367,7 @@ export function UploadGrades() {
       }
     } finally {
       setIsUploading(false);
+      setIsValidating(false);
       abortControllerRef.current = null;
     }
   };
@@ -500,7 +543,7 @@ export function UploadGrades() {
       {/* File Preview & Action Area */}
       {file && previewData && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: File Info & Actions */}
+          {/* File Info & Actions */}
           <div className="lg:col-span-1 space-y-6">
             <Card>
               <CardHeader>
@@ -515,10 +558,11 @@ export function UploadGrades() {
                   </div>
                 </div>
 
-                {isUploading ? (
+                {isUploading || isValidating ? (
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span>Progress</span>
+                      <span>{isValidating ? "Validating..." : "Uploading..."}</span>
+
                       <span className="font-medium">{progress}%</span>
                     </div>
                     <Progress value={progress} className="h-2" />
@@ -531,12 +575,31 @@ export function UploadGrades() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleUpload}>
-                      <Upload className="w-4 h-4 mr-2" /> Start Upload
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
+                        onClick={() => handleUpload(true)}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" /> Validate
+                      </Button>
+                      <Button
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                        onClick={() => handleUpload(false)}
+                      >
+                        <Upload className="w-4 h-4 mr-2" /> Upload
+                      </Button>
+                    </div>
+
                     <Button variant="outline" className="w-full" onClick={resetState}>
                       <RefreshCcw className="w-4 h-4 mr-2" /> Reset / New File
                     </Button>
+
+                    {uploadResults.length > 0 && (
+                      <Button variant="secondary" className="w-full" onClick={handleDownloadLogs}>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" /> Download Logs
+                      </Button>
+                    )}
                   </div>
                 )}
 
@@ -577,6 +640,9 @@ export function UploadGrades() {
                 {isUploading || uploadResults.length > 0 ? (
                   // Results Tabs
                   <div className="h-full flex flex-col">
+                    <div className="bg-blue-50/50 p-2 mb-2 rounded text-xs text-center border border-blue-100 text-blue-800">
+                      {hasValidated && !isUploading ? "Validation Mode: No changes were made to the database." : "Displaying latest results."}
+                    </div>
                     <Tabs defaultValue="all" className="h-full flex flex-col">
                       <div className="flex items-center justify-between mb-4">
                         <TabsList>
