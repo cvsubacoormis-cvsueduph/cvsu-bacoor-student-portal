@@ -33,13 +33,30 @@ export default function ConnectivityIndicator() {
     if (isOnline && !showReconnected) return null;
 
     return (
-        <div
-            className={`fixed bottom-4 right-4 z-[9999] flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-all duration-300 ${!isOnline
-                ? "bg-red-500 text-white"
-                : "bg-green-500 text-white"
-                }`}
-        >
-            {!isOnline ? <WifiOff className="h-5 w-5" /> : <Wifi className="h-5 w-5" />}
-        </div>
+        <>
+            {!isOnline && (
+                <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm text-center p-6">
+                    <WifiOff className="h-16 w-16 text-gray-400 mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">No Internet Connection</h2>
+                    <p className="text-gray-500 mb-6">
+                        It looks like you're offline. Please check your internet connection.
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="rounded-lg bg-blue-700 px-6 py-2 text-white hover:bg-blue-600 transition-colors"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            )}
+            <div
+                className={`fixed bottom-4 right-4 z-[9999] flex h-10 w-10 items-center justify-center rounded-full shadow-lg transition-all duration-300 ${!isOnline
+                    ? "bg-red-500 text-white"
+                    : "bg-green-500 text-white"
+                    }`}
+            >
+                {!isOnline ? <WifiOff className="h-5 w-5" /> : <Wifi className="h-5 w-5" />}
+            </div>
+        </>
     );
 }
