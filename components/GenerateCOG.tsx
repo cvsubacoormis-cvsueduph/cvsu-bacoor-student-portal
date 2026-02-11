@@ -461,7 +461,77 @@ export default function GenerateCOG() {
     doc.setFontSize(10);
     doc.text("ELECTRONIC COPY", 20, (doc as any).lastAutoTable.finalY + 15);
 
+    addWatermark(doc, "ELECTRONIC COPY", {
+      backgroundImage: "/ec.png", // Place your watermark image in the public folder
+      imageOpacity: 0.15, // Adjust opacity (0.0-1.0)
+      imageWidth: 210, // A4 width in mm
+      imageHeight: 297, // A4 height in mm
+      centered: true, // Center the watermark
+    });
     doc.save("Certificate-of-Grades.pdf");
+  };
+
+  const addWatermark = (
+    doc: jsPDF,
+    watermarkText: string,
+    options?: {
+      backgroundImage?: string;
+      imageOpacity?: number;
+      imageWidth?: number;
+      imageHeight?: number;
+      centered?: boolean;
+    }
+  ) => {
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    const pageWidth = (doc as any).internal.pageSize.width;
+    const pageHeight = (doc as any).internal.pageSize.height;
+
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+
+      // Add background image watermark if provided
+      if (options?.backgroundImage) {
+        const opacity = options.imageOpacity ?? 0.1;
+        const imgWidth = options.imageWidth ?? 406;
+        const imgHeight = options.imageHeight ?? 100;
+
+        // Set opacity for the background image
+        doc.setGState(new (doc as any).GState({ opacity }));
+
+        if (options.centered) {
+          // Centered watermark
+          const xPos = (pageWidth - imgWidth) / 2;
+          const yPos = (pageHeight - imgHeight) / 2;
+          doc.addImage(
+            options.backgroundImage,
+            "PNG",
+            xPos,
+            yPos,
+            imgWidth,
+            imgHeight
+          );
+        } else {
+          // Tiled background (optional - can be removed if not needed)
+          const xPos = (pageWidth - imgWidth) / 2;
+          const yPos = (pageHeight - imgHeight) / 2;
+          doc.addImage(
+            options.backgroundImage,
+            "PNG",
+            xPos,
+            yPos,
+            imgWidth,
+            imgHeight
+          );
+        }
+
+        // Reset opacity for text watermark
+        doc.setGState(new (doc as any).GState({ opacity: 1 }));
+      }
+    }
+
+    // Reset opacity back to normal for any subsequent content
+    doc.setGState(new (doc as any).GState({ opacity: 1 }));
+    return doc;
   };
 
   return (
