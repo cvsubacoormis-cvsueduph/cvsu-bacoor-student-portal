@@ -144,9 +144,7 @@ export function NewsAndUpdates() {
           category: newAnnouncementCategory,
           important: newAnnouncementImportant,
           date: currentDate,
-          author: user
-            ? `${user.firstName?.charAt(0).toUpperCase()}${user.firstName?.slice(1).toLowerCase()} ${user.lastName?.charAt(0).toUpperCase()}${user.lastName?.slice(1).toLowerCase()}`
-            : "Admin User",
+          author: role === "admin" ? "Admin" : "Admin",
         }),
       });
 
@@ -207,7 +205,7 @@ export function NewsAndUpdates() {
           description: editAnnouncementContent,
           category: editAnnouncementCategory,
           important: editAnnouncementImportant,
-          author: user?.firstName + " " + user?.lastName || "Admin User",
+          author: role === "admin" ? "Admin" : "Admin",
         }),
       });
 
