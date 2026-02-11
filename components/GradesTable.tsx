@@ -120,15 +120,7 @@ export default function Grades({
     }
 
     const finalGrade = getFinalGradeToUse(cur);
-    // If it's a valid numeric grade, include it.
     if (finalGrade !== null && !isNaN(finalGrade)) return acc + cur.creditUnit;
-
-    // Also include if it's "S" for other subjects? (Assuming yes based on CVSU 101 logic, but keeping safe default)
-    // If "S" is a valid passing grade for regular subjects handled by getFinalGradeToUse returning non-null?
-    // Actually getFinalGradeToUse currently returns null for non-numeric. 
-    // If we want to include "S" generally in enrolled credits, we need to check strictly.
-    // Let's stick to the specific CVSU 101 rule for "S" as requested.
-    // Regular numeric grades:
     return acc;
   }, 0);
 
@@ -166,7 +158,7 @@ export default function Grades({
 
   return (
     <div className="p-4 w-full">
-      <Card className="w-full shadow-md">
+      <Card className="w-full border-none shadow-none">
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
