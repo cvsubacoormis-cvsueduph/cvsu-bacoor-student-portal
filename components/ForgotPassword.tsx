@@ -46,6 +46,7 @@ export default function ForgotPasswordDialog() {
   const [isLoading, setIsLoading] = useState(false);
   const [isResendLoading, setIsResendLoading] = useState(false);
   const [isResetLoading, setIsResetLoading] = useState(false);
+  const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
 
   const router = useRouter();
   const { isSignedIn } = useAuth();
@@ -143,7 +144,7 @@ export default function ForgotPasswordDialog() {
         setError("");
       } else if (result.status === "complete") {
         if (result.createdSessionId) {
-          setActive({ session: result.createdSessionId });
+          setCreatedSessionId(result.createdSessionId);
         }
         setCurrentStep("success");
         setError("");
@@ -178,6 +179,13 @@ export default function ForgotPasswordDialog() {
       setIsResendLoading(false);
     }
   }
+
+  const handleReturnToDashboard = () => {
+    if (createdSessionId && setActive) {
+      setActive({ session: createdSessionId });
+    }
+    handleClose();
+  };
 
   const handleClose = () => {
     setOpen(false);
@@ -460,7 +468,7 @@ export default function ForgotPasswordDialog() {
             </div>
             <DialogFooter>
               <Button
-                onClick={handleClose}
+                onClick={handleReturnToDashboard}
                 className="w-full bg-blue-700 hover:bg-blue-600 text-white"
               >
                 Return to Dashboard

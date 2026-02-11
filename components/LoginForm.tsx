@@ -147,7 +147,7 @@ export default function LoginForm({
                       <MoonLoader size={15} color="white" />
                     </div>
                   ) : (
-                    "Login"
+                    "Submit"
                   )
                 }
               </Clerk.Loading>

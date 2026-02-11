@@ -668,9 +668,9 @@ export default function StudentSignup() {
         Already have an account?{" "}
         <Link href="/sign-in">
           {" "}
-          <p className="no-underline font-medium hover:underline text-blue-600">
-            Login
-          </p>{" "}
+          <button className="no-underline font-medium hover:underline text-blue-600">
+            Log In
+          </button>
         </Link>
       </div>
     </div>

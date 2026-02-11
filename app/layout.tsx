@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 import { Toaster } from "react-hot-toast";
 import { ClerkProvider } from "@clerk/nextjs";
 import Script from "next/script";
+import ConnectivityIndicator from "@/components/ConnectivityIndicator";
 
 export default function RootLayout({
   children,
@@ -40,6 +41,7 @@ export default function RootLayout({
         >
           {children}
           <Toaster position="top-right" />
+          <ConnectivityIndicator />
         </body>
       </html>
     </ClerkProvider>
