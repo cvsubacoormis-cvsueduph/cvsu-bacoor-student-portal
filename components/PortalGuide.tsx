@@ -227,9 +227,8 @@ export default function PortalGuide() {
               {steps.map((_, index) => (
                 <button
                   key={index}
-                  className={`h-2 rounded-full transition-all ${
-                    currentStep === index ? "w-8 bg-blue-700" : "w-2 bg-muted"
-                  }`}
+                  className={`h-2 rounded-full transition-all ${currentStep === index ? "w-8 bg-blue-700" : "w-2 bg-muted"
+                    }`}
                   onClick={() => setCurrentStep(index)}
                   aria-label={`Go to step ${index + 1}`}
                 />
@@ -277,10 +276,6 @@ export default function PortalGuide() {
                   width={2000}
                   height={2000}
                 />
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                This is where the full-size {previewImage.toLowerCase()} preview
-                image would appear.
               </p>
             </div>
           </div>
