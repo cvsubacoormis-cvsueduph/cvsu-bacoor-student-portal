@@ -517,7 +517,7 @@ export default function ManualGradeEntry() {
   const isAdminOrRegistrar = ["admin", "registrar"].includes(role);
   const startYear = isAdminOrRegistrar ? 2014 : 2025;
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear() - 1;
   // Ensure we go at least up to next year or a bit more
   const endYear = currentYear + 1;
   const numberOfYears = (endYear - startYear) + 2; // +2 buffer
@@ -549,11 +549,13 @@ export default function ManualGradeEntry() {
                   <SelectValue placeholder="Select academic year" />
                 </SelectTrigger>
                 <SelectContent>
-                  {academicYears.map((year: string) => (
-                    <SelectItem key={year} value={year}>
-                      {year.replace('AY_', 'AY ').replace('_', '-')}
-                    </SelectItem>
-                  ))}
+                  {academicYears
+                    .filter((year) => role !== "faculty" || year === `AY_${currentYear}_${currentYear + 1}`)
+                    .map((year: string) => (
+                      <SelectItem key={year} value={year}>
+                        {year.replace("AY_", "AY ").replace("_", "-")}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

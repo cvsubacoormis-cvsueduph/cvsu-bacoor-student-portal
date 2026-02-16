@@ -43,7 +43,7 @@ export default async function Menu() {
           icon: "/student.png",
           label: "Students",
           href: "/list/students",
-          visible: ["admin", "superuser", "registrar"],
+          visible: ["admin", "superuser", "registrar", "faculty"],
         },
         {
           icon: "/student.png",
@@ -91,7 +91,7 @@ export default async function Menu() {
           icon: "/calendar.png",
           label: "Grades Lists",
           href: "/list/grades-lists",
-          visible: ["admin", "superuser", "registrar", "faculty"],
+          visible: ["admin", "superuser", "registrar"],
         },
         {
           icon: "/assignment.png",

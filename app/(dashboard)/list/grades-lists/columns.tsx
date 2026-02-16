@@ -4,10 +4,8 @@ import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { PreviewGrades } from "@/components/PreviewGrades";
 import GenerateCOGAdmin from "@/components/GenerateCOGForAdmin";
-import { useUser } from "@clerk/nextjs";
 
 export type Grades = {
   id: string;
@@ -26,12 +24,12 @@ export type Grades = {
 function ActionsCell({ student, role }: { student: Grades; role?: string }) {
   return (
     <div className="flex items-center space-x-2">
-      <PreviewGrades
+      {<PreviewGrades
         studentNumber={String(student.studentNumber)}
         firstName={student.firstName}
         lastName={student.lastName}
         role={role}
-      />
+      />}
       {role !== "faculty" && <GenerateCOGAdmin studentId={student.id} />}
     </div>
   );
@@ -39,30 +37,7 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
 
 // Create columns with role passed as parameter
 export function createColumns(role?: string): ColumnDef<Grades>[] {
-  return [
-    {
-      accessorKey: "select",
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    },
+  const allColumns: ColumnDef<Grades>[] = [
     {
       accessorKey: "studentNumber",
       header: ({ column }) => {
@@ -156,6 +131,8 @@ export function createColumns(role?: string): ColumnDef<Grades>[] {
       cell: ({ row }) => <ActionsCell student={row.original} role={role} />,
     },
   ];
+
+  return allColumns;
 }
 
 // Default export for backward compatibility

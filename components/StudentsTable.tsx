@@ -96,13 +96,13 @@ export default function StudentsTable({
             <TableHead className="hidden md:table-cell text-center">
               Status
             </TableHead>
-            <TableHead className="hidden lg:table-cell text-center">
+            {role === "admin" || role === "registrar" && <TableHead className="hidden lg:table-cell text-center">
               Phone
-            </TableHead>
-            <TableHead className="hidden lg:table-cell text-center">
+            </TableHead>}
+            {role === "admin" || role === "registrar" && <TableHead className="hidden lg:table-cell text-center">
               Address
-            </TableHead>
-            <TableHead>Actions</TableHead>
+            </TableHead>}
+            {role === "admin" || role === "superuser" || role === "registrar" && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -156,12 +156,12 @@ export default function StudentsTable({
                 <TableCell className="hidden md:table-cell text-center">
                   {student.status}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-center">
+                {role === "admin" || role === "registrar" ? <TableCell className="hidden lg:table-cell text-center">
                   {student.phone}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-center">
+                </TableCell> : null}
+                {role === "admin" || role === "registrar" ? <TableCell className="hidden lg:table-cell text-center">
                   {student.address}
-                </TableCell>
+                </TableCell> : null}
                 <TableCell className="text-right">
                   {(role === "admin" || role === "superuser") && (
                     <div className="flex items-center gap-2">

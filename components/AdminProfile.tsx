@@ -251,7 +251,7 @@ export default function AdminProfileComp() {
               <Label htmlFor="id">User ID</Label>
               <Input
                 id="id"
-                value={admin.id.slice(0, -18) + "*****"}
+                value={admin.id.slice(0, -21) + "*****"}
                 disabled
                 className="bg-muted"
               />
