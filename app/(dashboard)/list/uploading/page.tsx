@@ -10,7 +10,7 @@ import { UploadGrades } from "@/components/UploadGrades";
 
 export default function GradeUploader() {
   return (
-    <>
+    <div className="">
       <SignedIn>
         <div className="bg-white p-4 rounded-md m-4 mt-0">
           <h2 className="text-lg font-semibold">
@@ -40,6 +40,6 @@ export default function GradeUploader() {
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
-    </>
+    </div>
   );
 }

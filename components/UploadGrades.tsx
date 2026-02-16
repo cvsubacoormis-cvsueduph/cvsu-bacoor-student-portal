@@ -399,8 +399,15 @@ export function UploadGrades() {
     for (let y = startYear; y <= currentAyStartYear; y++) {
       years.push(`AY_${y}_${y + 1}`);
     }
+
+    // Faculty Restriction: Only Current Academic Year
+    if (role === 'faculty') {
+      const currentAyString = `AY_${currentAyStartYear}_${currentAyStartYear + 1}`;
+      return [currentAyString];
+    }
+
     return years.reverse(); // Show newest first
-  }, [allowLegacy, currentAyStartYear]);
+  }, [allowLegacy, currentAyStartYear, role]);
 
   // Reset selection if it becomes invalid
   useEffect(() => {
@@ -410,7 +417,7 @@ export function UploadGrades() {
   }, [allowLegacy, academicYears, academicYear]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-6 mx-auto">
       {/* Configuration Card */}
       <Card className="border-t-4 border-t-blue-600 shadow-sm">
         <CardHeader>
@@ -480,7 +487,7 @@ export function UploadGrades() {
       <UploadGradeNotice />
 
       {/* Upload Area */}
-      {!file && (
+      {(!file || isParsing) && (
         <div
           className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${!academicYear || !semester
             ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
@@ -513,7 +520,7 @@ export function UploadGrades() {
                   Configuration Required
                 </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Please select an Academic Year and Semester above to unlock upload.
+                  Please select an Academic Year and Semester above to proceed with upload.
                 </p>
               </div>
             </div>
@@ -625,7 +632,7 @@ export function UploadGrades() {
 
           {/* Right Column: Data Preview / Results */}
           <div className="lg:col-span-2">
-            <Card className="h-full flex flex-col">
+            <Card className="flex flex-col">
               <CardHeader>
                 <CardTitle>
                   {isUploading || uploadResults.length > 0 ? "Upload Results" : "Data Preview"}
@@ -636,14 +643,14 @@ export function UploadGrades() {
                     : `Previewing first ${Math.min(previewData.length, 50)} records of ${previewData.length}.`}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex-1 overflow-hidden min-h-[400px]">
+              <CardContent className="min-h-[400px]">
                 {isUploading || uploadResults.length > 0 ? (
                   // Results Tabs
-                  <div className="h-full flex flex-col">
+                  <div className="flex flex-col">
                     <div className="bg-blue-50/50 p-2 mb-2 rounded text-xs text-center border border-blue-100 text-blue-800">
                       {hasValidated && !isUploading ? "Validation Mode: No changes were made to the database." : "Displaying latest results."}
                     </div>
-                    <Tabs defaultValue="all" className="h-full flex flex-col">
+                    <Tabs defaultValue="all" className="flex flex-col">
                       <div className="flex items-center justify-between mb-4">
                         <TabsList>
                           <TabsTrigger value="all">All ({uploadResults.length})</TabsTrigger>
@@ -659,12 +666,16 @@ export function UploadGrades() {
                           return true;
                         });
 
-                        const tabTotalPages = Math.ceil(filtered.length / recordsPerPage);
-                        const currentTabRes = filtered.slice().reverse().slice((currentPage - 1) * recordsPerPage, currentPage * recordsPerPage);
+                        // Calculate pagination for this specific tab
+                        const totalPages = Math.ceil(filtered.length / recordsPerPage);
+                        // Ensure current page is valid for this tab
+                        const effectivePage = Math.min(Math.max(1, currentPage), totalPages || 1);
+
+                        const currentTabRes = filtered.slice((effectivePage - 1) * recordsPerPage, effectivePage * recordsPerPage);
 
                         return (
-                          <TabsContent key={tabInfo} value={tabInfo} className="flex-1 flex flex-col overflow-hidden data-[state=inactive]:hidden mt-0">
-                            <div className="overflow-auto border rounded-md flex-1 relative">
+                          <TabsContent key={tabInfo} value={tabInfo} className="flex flex-col mt-0">
+                            <div className="border rounded-md flex-1 relative">
                               <Table>
                                 <TableHeader className="bg-gray-50 sticky top-0">
                                   <TableRow>
@@ -676,21 +687,21 @@ export function UploadGrades() {
                                 <TableBody>
                                   {currentTabRes.map((res, i) => (
                                     <TableRow key={i}>
-                                      <TableCell className="font-medium">
+                                      <TableCell className="text-xs font-semibold">
                                         {res.studentName || res.identifier || res.studentNumber || "Unknown"}
                                         <div className="text-xs text-gray-500">{res.studentNumber || "No Student #"}</div>
                                       </TableCell>
-                                      <TableCell>{res.courseCode}</TableCell>
-                                      <TableCell>
+                                      <TableCell className="text-xs font-semibold">{res.courseCode}</TableCell>
+                                      <TableCell className="text-xs font-semibold">
                                         {res.status.includes("✅") ? (
                                           <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
                                         ) : res.status.includes("⚠️") ? (
-                                          <div className="flex items-center text-yellow-700 gap-1 text-sm font-medium">
+                                          <div className="flex items-center text-yellow-700 gap-1 text-xs font-medium">
                                             <AlertCircle className="w-4 h-4" />
                                             {res.status.replace("⚠️", "").trim()}
                                           </div>
                                         ) : (
-                                          <div className="flex items-center text-red-600 gap-1 text-sm font-medium">
+                                          <div className="flex items-center text-red-600 gap-1 text-xs font-medium">
                                             <AlertCircle className="w-4 h-4" />
                                             {res.status.replace("❌", "").trim()}
                                           </div>
@@ -711,30 +722,83 @@ export function UploadGrades() {
 
                             {/* Pagination for this tab */}
                             {filtered.length > 0 && (
-                              <div className="flex items-center justify-between pt-4">
-                                <span className="text-sm text-gray-500">
-                                  Page {currentPage} of {Math.max(1, tabTotalPages)}
+                              <div className="flex justify-between items-center bg-gray-50 px-2 py-2 border-t">
+                                <span className="text-xs text-gray-500">
+                                  Total: {filtered.length}
                                 </span>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-1">
                                   <Button
                                     variant="outline"
-                                    size="icon"
-                                    disabled={currentPage === 1}
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setCurrentPage(1)}
+                                    disabled={effectivePage === 1}
                                   >
-                                    <ChevronLeft className="w-4 h-4" />
+                                    <ChevronLeft className="w-3 h-3" />
+                                    <span className="sr-only">First</span>
                                   </Button>
                                   <Button
                                     variant="outline"
-                                    size="icon"
-                                    disabled={currentPage >= tabTotalPages}
-                                    onClick={() => setCurrentPage(prev => Math.min(tabTotalPages, prev + 1))}
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={effectivePage === 1}
                                   >
-                                    <ChevronRight className="w-4 h-4" />
+                                    <ChevronLeft className="w-3 h-3" />
+                                    <span className="sr-only">Previous</span>
+                                  </Button>
+
+                                  {/* Numbered Pages */
+                                    (() => {
+                                      let start = Math.max(1, effectivePage - 2);
+                                      let end = Math.min(totalPages, start + 4);
+
+                                      if (end - start < 4) {
+                                        start = Math.max(1, end - 4);
+                                      }
+
+                                      const pages = [];
+                                      for (let i = start; i <= end; i++) {
+                                        pages.push(i);
+                                      }
+
+                                      return pages.map((p) => (
+                                        <Button
+                                          key={p}
+                                          variant={effectivePage === p ? "default" : "outline"}
+                                          size="sm"
+                                          className="h-7 w-7 p-0 text-xs"
+                                          onClick={() => setCurrentPage(p)}
+                                        >
+                                          {p}
+                                        </Button>
+                                      ));
+                                    })()}
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={effectivePage === totalPages}
+                                  >
+                                    <ChevronRight className="w-3 h-3" />
+                                    <span className="sr-only">Next</span>
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    disabled={effectivePage === totalPages}
+                                  >
+                                    <ChevronRight className="w-3 h-3" />
+                                    <span className="sr-only">Last</span>
                                   </Button>
                                 </div>
                               </div>
                             )}
+
                           </TabsContent>
                         );
                       })}
@@ -742,21 +806,21 @@ export function UploadGrades() {
                   </div>
                 ) : (
                   // Preview Table
-                  <div className="h-full flex flex-col">
-                    <div className="overflow-auto border rounded-md flex-1">
+                  <div className="flex flex-col">
+                    <div className="border rounded-md flex-1">
                       <Table>
                         <TableHeader className="bg-gray-50">
                           <TableRow>
-                            {previewData.length > 0 && Object.keys(previewData[0]).slice(0, 5).map(header => (
-                              <TableHead key={header}>{header}</TableHead>
+                            {previewData.length > 0 && Object.keys(previewData[0]).map(header => (
+                              <TableHead key={header} className="text-xs px-2 py-1 h-8 whitespace-nowrap font-semibold">{header}</TableHead>
                             ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {paginatedData?.map((row, i) => (
-                            <TableRow key={i}>
-                              {Object.values(row).slice(0, 5).map((val: any, j) => (
-                                <TableCell key={j}>{val}</TableCell>
+                            <TableRow key={i} className="hover:bg-gray-50">
+                              {Object.values(row).map((val: any, j) => (
+                                <TableCell key={j} className="text-xs px-2 py-1 whitespace-nowrap">{val}</TableCell>
                               ))}
                             </TableRow>
                           ))}
@@ -764,27 +828,80 @@ export function UploadGrades() {
                       </Table>
                     </div>
 
-                    {/* Pagination */}
-                    <div className="flex items-center justify-between pt-4">
-                      <span className="text-sm text-gray-500">
-                        Page {currentPage} of {totalPages}
+                    {/* Pagination Controls */}
+                    <div className="flex justify-between items-center bg-gray-50 px-2 py-2 border-b">
+                      <span className="text-xs text-gray-500">
+                        Total Rows: {previewData.length}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="outline"
-                          size="icon"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setCurrentPage(1)}
                           disabled={currentPage === 1}
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                         >
-                          <ChevronLeft className="w-4 h-4" />
+                          <ChevronLeft className="w-3 h-3" />
+                          <span className="sr-only">First</span>
                         </Button>
                         <Button
                           variant="outline"
-                          size="icon"
-                          disabled={currentPage === totalPages}
-                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
                         >
-                          <ChevronRight className="w-4 h-4" />
+                          <ChevronLeft className="w-3 h-3" />
+                          <span className="sr-only">Previous</span>
+                        </Button>
+
+                        {/* Numbered Pages */
+                          (() => {
+                            let start = Math.max(1, currentPage - 2);
+                            let end = Math.min(totalPages, start + 4);
+
+                            // If close to end, adjust start to show up to 5 items
+                            if (end - start < 4) {
+                              start = Math.max(1, end - 4);
+                            }
+
+                            const pages = [];
+                            for (let i = start; i <= end; i++) {
+                              pages.push(i);
+                            }
+
+                            return pages.map((p) => (
+                              <Button
+                                key={p}
+                                variant={currentPage === p ? "default" : "outline"}
+                                size="sm"
+                                className="h-7 w-7 p-0 text-xs"
+                                onClick={() => setCurrentPage(p)}
+                              >
+                                {p}
+                              </Button>
+                            ));
+                          })()}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          <ChevronRight className="w-3 h-3" />
+                          <span className="sr-only">Next</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setCurrentPage(totalPages)}
+                          disabled={currentPage === totalPages}
+                        >
+                          <ChevronRight className="w-3 h-3" />
+                          <span className="sr-only">Last</span>
                         </Button>
                       </div>
                     </div>

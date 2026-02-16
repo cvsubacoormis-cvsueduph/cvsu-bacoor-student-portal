@@ -529,10 +529,11 @@ export default function ManualGradeEntry() {
   }).reverse();
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 mx-auto">
       {/* 1. Academic Configuration */}
       <Card className="border-t-4 border-t-amber-500 shadow-sm">
         <CardHeader>
+
           <CardTitle className="flex items-center gap-2 text-xl">
             <BookOpen className="w-5 h-5 text-amber-500" />
             Configuration

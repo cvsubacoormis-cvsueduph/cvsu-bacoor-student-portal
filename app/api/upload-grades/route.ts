@@ -108,6 +108,22 @@ function areNamesSimilar(name1: string, name2: string, relaxed = false): boolean
 }
 
 
+
+function normalizeInstructorName(name: string) {
+  if (!name) return "";
+  const cleaned = String(name).replace(/['.,]/g, "").toUpperCase();
+  const tokens = cleaned.split(/\s+/);
+
+  const ignoredWords = new Set([
+    "MR", "MS", "MRS", "DR", "PROF", "ENGR", "ARCH", "ATTY", "REV", "FR", "HON",
+    "LPT", "MIT", "MSCS", "MAED", "PHD", "EDD", "MAT", "MBA", "MPA", "RN", "CPA", "MD", "JD", "DMD", "DBA", "DPA",
+    "INSTRUCTOR", "FACULTY", "PROFESSOR"
+  ]);
+
+  const filtered = tokens.filter(t => !ignoredWords.has(t));
+  return filtered.join(" ");
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   const user = await currentUser();
@@ -314,6 +330,7 @@ export async function POST(req: Request) {
       reExam: true,
       remarks: true,
       instructor: true,
+      uploadedBy: true,
     },
   });
   const existingGradeMap = new Map(
@@ -349,6 +366,47 @@ export async function POST(req: Request) {
       const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
+
+      const isFaculty = userRole === "faculty";
+      let finalInstructorName = sanitizedInstructor;
+
+      if (isFaculty) {
+        // 1. Verify Instructor Name Match
+        // Allow empty instructor in file (assume it's theirs)
+        if (sanitizedInstructor) {
+          const normalizedExcelInstructor = normalizeInstructorName(sanitizedInstructor);
+          const userFullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+          const normalizedUserInstructor = normalizeInstructorName(userFullName);
+
+          const score = fuzzy(normalizedExcelInstructor, normalizedUserInstructor);
+
+          if (score < 0.8) {
+            results.push({
+              identifier: `${firstName} ${lastName}`,
+              courseCode: sanitizedCourseCode,
+              status: `❌ Upload rejected: Instructor name '${sanitizedInstructor}' does not match your account.`,
+            });
+            failedLogsToCreate.push({
+              studentNumber: normalizedStudentNumber || "UNKNOWN",
+              courseCode: sanitizedCourseCode || "",
+              courseTitle: sanitizedCourseTitle || "",
+              creditUnit: Number(creditUnit) || 0,
+              grade: String(grade) || "",
+              remarks: `Instructor Mismatch: File says '${sanitizedInstructor}', User is '${userFullName}'`,
+              instructor: sanitizedInstructor,
+              academicYear,
+              semester,
+              action: "FAILED",
+              importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+            });
+            continue;
+          }
+        }
+
+        // 2. Force Instructor Name to be the current user
+        finalInstructorName = `${user.firstName || ""} ${user.lastName || ""}`.trim().toUpperCase();
+      }
+
 
       const fileFullName = normalizeName((firstName || "") + " " + (lastName || ""));
       let resolvedStudent: typeof studentsByNumber[0] | undefined;
@@ -649,8 +707,24 @@ export async function POST(req: Request) {
       }
 
       if (existingGrade) {
-        if (!finalInstructor && existingGrade.instructor) {
-          finalInstructor = existingGrade.instructor;
+        // Overwrite Protection for Faculty
+        if (isFaculty) {
+          const currentUserFullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+          // Strict check: Can only overwrite if uploaded by SELF.
+          // Note: This relies on the uploadedBy string matching.
+          if (existingGrade.uploadedBy && existingGrade.uploadedBy !== currentUserFullName) {
+            results.push({
+              studentNumber: targetStudent.studentNumber,
+              courseCode: sanitizedCourseCode,
+              status: `❌ Cannot overwrite grade uploaded by '${existingGrade.uploadedBy}'`,
+              studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
+            });
+            continue;
+          }
+        }
+
+        if (!finalInstructorName && existingGrade.instructor) {
+          finalInstructorName = existingGrade.instructor;
         }
 
         // Force Keep Existing Grade (User Request)
@@ -663,7 +737,7 @@ export async function POST(req: Request) {
 
         if (
           existingGrade.remarks === sanitizedRemarks &&
-          existingGrade.instructor === finalInstructor
+          existingGrade.instructor === finalInstructorName
         ) {
           results.push({
             studentNumber: targetStudent.studentNumber,
@@ -690,7 +764,7 @@ export async function POST(req: Request) {
         grade: standardizedGrade,
         reExam: standardizedReExam,
         remarks: sanitizedRemarks,
-        instructor: finalInstructor,
+        instructor: finalInstructorName,
         academicYear,
         semester,
         subjectOfferingId: subjectOfferingId, // Can be null now
@@ -704,7 +778,7 @@ export async function POST(req: Request) {
         courseTitle: resolvedCourseTitle,
         creditUnit: resolvedCreditUnit,
         remarks: sanitizedRemarks,
-        instructor: finalInstructor,
+        instructor: finalInstructorName,
         academicYear,
         semester,
         action: action,
