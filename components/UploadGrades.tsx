@@ -451,9 +451,9 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">First Semester</SelectItem>
+                  <SelectItem value="FIRST" disabled>First Semester</SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
+                  <SelectItem value="MIDYEAR" disabled>Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -593,6 +593,7 @@ export function UploadGrades() {
                       <Button
                         className="w-full bg-blue-600 hover:bg-blue-700"
                         onClick={() => handleUpload(false)}
+                        disabled={!hasValidated}
                       >
                         <Upload className="w-4 h-4 mr-2" /> Upload
                       </Button>

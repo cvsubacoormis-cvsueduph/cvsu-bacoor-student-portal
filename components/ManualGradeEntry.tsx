@@ -569,9 +569,9 @@ export default function ManualGradeEntry() {
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">First Semester</SelectItem>
+                  <SelectItem value="FIRST" disabled>First Semester</SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
+                  <SelectItem value="MIDYEAR" disabled>Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
