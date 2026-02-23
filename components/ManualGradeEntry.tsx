@@ -546,7 +546,7 @@ export default function ManualGradeEntry() {
               <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
               <Select value={academicYear} onValueChange={handleAcademicYearChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select academic year" />
+                  <SelectValue placeholder="Select Academic Year" />
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears
@@ -566,7 +566,7 @@ export default function ManualGradeEntry() {
                 onValueChange={handleSemesterChange}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select semester" />
+                  <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="FIRST" disabled={role === "faculty"}>

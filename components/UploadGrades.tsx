@@ -433,7 +433,7 @@ export function UploadGrades() {
               <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
               <Select value={academicYear} onValueChange={setAcademicYear} disabled={isUploading}>
                 <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Select Year" />
+                  <SelectValue placeholder="Select Academic Year" />
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears.map((year: string) => (
