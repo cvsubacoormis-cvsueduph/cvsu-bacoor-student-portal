@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import {
-  getAvailableAcademicOptions,
   getStudentGradesWithReExam,
 } from "@/actions/student-grades/student-grades";
 import {
@@ -30,9 +29,14 @@ import {
   formatMajor,
 } from "@/lib/courses";
 import toast from "react-hot-toast";
-import { PrinterIcon } from "lucide-react";
+import { PrinterIcon, AlertCircleIcon } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
+const purposes = [
+  "Enrollment/Evaluation Purposes Only",
+  "Personal Copy",
+];
 
 type AcademicOption = {
   academicYear: string;
@@ -72,16 +76,37 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
   const [purpose, setPurpose] = useState("");
 
   useEffect(() => {
-    if (isDialogOpen && academicOptions.length === 0) {
-      const fetchOptions = async () => {
-        const options = await getAvailableAcademicOptions();
-        setAcademicOptions(
-          options as { academicYear: string; semester: string }[]
-        );
+    if (isDialogOpen && !studentData) {
+      const fetchData = async () => {
+        try {
+          const { student } = await getStudentGradesWithReExam(studentId);
+          const data = student as StudentData;
+          const formattedData = {
+            ...data,
+            grades: data.grades.map((grade) => ({
+              ...grade,
+              remarks: grade.remarks || "",
+            })),
+            major: data.major || "",
+            middleInit: data.middleInit || "",
+          };
+          setStudentData(formattedData);
+
+          const optionsMap = new Map<string, AcademicOption>();
+          formattedData.grades.forEach(g => {
+            const key = `${g.academicYear}-${g.semester}`;
+            if (!optionsMap.has(key)) {
+              optionsMap.set(key, { academicYear: g.academicYear, semester: g.semester });
+            }
+          });
+          setAcademicOptions(Array.from(optionsMap.values()));
+        } catch (error) {
+          toast.error("Failed to load student data.");
+        }
       };
-      fetchOptions();
+      fetchData();
     }
-  }, [isDialogOpen, academicOptions.length]);
+  }, [isDialogOpen, studentId, studentData]);
 
   const getFinalGradeToUse = (grade: Grade): number | null => {
     if (["INC", "DRP"].includes(grade.grade)) {
@@ -119,30 +144,28 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       toast.error("Please fill in all fields before generating.");
       return;
     }
+    if (!studentData) return;
 
     setIsLoading(true);
     try {
-      const { student } = await getStudentGradesWithReExam(studentId);
-      const data = student as StudentData;
-      setStudentData({
-        ...data,
-        grades: data.grades.map((grade) => ({
-          ...grade,
-          remarks: grade.remarks || "",
-        })),
-        major: data.major || "",
-        middleInit: data.middleInit || "",
-      });
-      const filteredGrades = data.grades.filter(
+      const filteredGrades = studentData.grades.filter(
         (g: { academicYear: string; semester: string }) =>
           g.academicYear === academicYear && g.semester === semester
       );
-      generatePDF(data as StudentData, filteredGrades as Grade[]);
+
+      if (filteredGrades.length === 0) {
+        toast.error("No grades found for this term.");
+        setIsLoading(false);
+        return;
+      }
+
+      generatePDF(studentData, filteredGrades as Grade[]);
       setIsDialogOpen(false);
     } catch (error) {
+      console.error("PDF Generate Error:", error);
       const err = error as { message: string };
       if (
-        err.message ===
+        err?.message ===
         "Too many requests. Please wait a minute before trying again."
       ) {
         toast.error(
@@ -150,7 +173,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         );
       } else {
         toast.error(
-          "Something went wrong while generating your COG. Please try again."
+          err?.message || "Something went wrong while generating your COG. Please try again."
         );
       }
     } finally {
@@ -454,10 +477,10 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text("ELECTRONIC COPY", 20, (doc as any).lastAutoTable.finalY + 15);
 
     addWatermark(doc, "ELECTRONIC COPY", {
-      backgroundImage: "/watermark.png", // Place your watermark image in the public folder
+      backgroundImage: "/ec.png", // Place your watermark image in the public folder
       imageOpacity: 0.15, // Adjust opacity (0.0-1.0)
-      imageWidth: 80, // Adjust size in mm
-      imageHeight: 80,
+      imageWidth: 210, // A4 width in mm
+      imageHeight: 297, // A4 height in mm
       centered: true, // Center the watermark
     });
     doc.save("Certificate-of-Grades.pdf");
@@ -467,11 +490,11 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc: jsPDF,
     watermarkText: string,
     options?: {
-      backgroundImage?: string; // Path to background image (e.g., "/watermark.png")
-      imageOpacity?: number; // 0.0 to 1.0 (default: 0.1)
-      imageWidth?: number; // Width of background image in mm
-      imageHeight?: number; // Height of background image in mm
-      centered?: boolean; // If true, center the image; if false, tile it
+      backgroundImage?: string;
+      imageOpacity?: number;
+      imageWidth?: number;
+      imageHeight?: number;
+      centered?: boolean;
     }
   ) => {
     const totalPages = (doc as any).internal.getNumberOfPages();
@@ -484,7 +507,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       // Add background image watermark if provided
       if (options?.backgroundImage) {
         const opacity = options.imageOpacity ?? 0.1;
-        const imgWidth = options.imageWidth ?? 100;
+        const imgWidth = options.imageWidth ?? 406;
         const imgHeight = options.imageHeight ?? 100;
 
         // Set opacity for the background image
@@ -519,19 +542,6 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         // Reset opacity for text watermark
         doc.setGState(new (doc as any).GState({ opacity: 1 }));
       }
-
-      // Add text watermark
-      doc.setTextColor(240, 240, 240); // Very light gray for subtle watermark
-      doc.setFontSize(50); // Adjust font size as needed
-      doc.text(
-        watermarkText,
-        pageWidth / 2, // X position (center)
-        pageHeight / 2, // Y position (middle)
-        {
-          angle: 45, // Rotate the text
-          align: "center", // Center the text around the coordinates
-        }
-      );
     }
 
     // Reset opacity back to normal for any subsequent content
@@ -540,7 +550,14 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+      setIsDialogOpen(open);
+      if (!open) {
+        setStudentData(null);
+        setAcademicYear(undefined);
+        setSemester(undefined);
+      }
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" className="border-none rounded-full">
           <PrinterIcon />
@@ -575,19 +592,21 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
                 <SelectValue placeholder="Select Semester" />
               </SelectTrigger>
               <SelectContent>
-                {[...new Set(academicOptions.map((o) => o.semester))].map(
-                  (sem) => (
-                    <SelectItem key={sem} value={sem}>
-                      {sem === "FIRST"
-                        ? "First Semester"
-                        : sem === "SECOND"
-                          ? "Second Semester"
-                          : sem === "MIDYEAR"
-                            ? "Midyear"
-                            : sem}
-                    </SelectItem>
-                  )
-                )}
+                {[...new Set(academicOptions
+                  .filter(o => !academicYear || o.academicYear === academicYear)
+                  .map((o) => o.semester))].map(
+                    (sem) => (
+                      <SelectItem key={sem} value={sem}>
+                        {sem === "FIRST"
+                          ? "First Semester"
+                          : sem === "SECOND"
+                            ? "Second Semester"
+                            : sem === "MIDYEAR"
+                              ? "Midyear"
+                              : sem}
+                      </SelectItem>
+                    )
+                  )}
               </SelectContent>
             </Select>
           </div>
@@ -605,17 +624,24 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Note: Year level selection is for year standing only. The grades
-              shown are based on the selected academic year and semester.
-            </p>
+            <div className="grid w-full max-w-xl items-start gap-4 mt-2">
+              <Alert className="border-orange-500 text-orange-700 bg-orange-50">
+                <AlertCircleIcon className="h-4 w-4 !text-orange-700" />
+                <AlertTitle>Note on Year Level</AlertTitle>
+                <AlertDescription>
+                  <p>
+                    Year level is for year standing only. Your grades and academic progress are based on the academic year and semester.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            </div>
           </div>
           <div>
             <label className="text-sm">Purpose</label>
             <Input
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              placeholder="Type purpose here..."
+              placeholder="Type your purpose here (e.g., Board Exam, Scholarship)"
             />
           </div>
           <Button
