@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,31 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { EyeIcon, PencilIcon, CheckIcon, TrashIcon, PlusIcon, Check, ChevronsUpDown } from "lucide-react";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxGroup,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-} from "@/components/ui/combobox";
-import { cn } from "@/lib/utils";
+import { EyeIcon, PencilIcon, CheckIcon, TrashIcon, PlusIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -85,6 +61,87 @@ export type PreviewGradesProps = {
   lastName: string;
   role?: string;
 };
+
+const GRADE_OPTIONS = [
+  "1.0", "1.25", "1.50", "1.75",
+  "2.0", "2.25", "2.50", "2.75",
+  "3.0", "4.0", "5.0",
+  "INC", "S", "US", "DRP",
+];
+
+// Inline course search — renders a plain div dropdown (no Radix portal) so it
+// works correctly inside a Dialog without keyboard-event conflicts.
+function CourseSearchCell({
+  subjects,
+  selectedCode,
+  onSelect,
+}: {
+  subjects: { id: string; courseCode: string; courseTitle: string; creditUnit: number }[];
+  selectedCode: string;
+  onSelect: (courseCode: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim() === ""
+    ? subjects
+    : subjects.filter(
+      (s) =>
+        s.courseCode.toLowerCase().includes(query.toLowerCase()) ||
+        s.courseTitle.toLowerCase().includes(query.toLowerCase())
+    );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-[200px]">
+      <Input
+        value={open ? query : selectedCode || ""}
+        placeholder="Search course..."
+        onFocus={() => {
+          setQuery("");
+          setOpen(true);
+        }}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full border rounded px-2 py-1 text-sm"
+      />
+      {open && (
+        <div className="absolute z-[9999] mt-1 max-h-56 w-[300px] overflow-auto rounded-md border bg-white shadow-lg">
+          {filtered.length === 0 ? (
+            <p className="p-2 text-sm text-gray-500">No course found.</p>
+          ) : (
+            filtered.map((s) => (
+              <button
+                key={s.courseCode}
+                type="button"
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${s.courseCode === selectedCode ? "bg-blue-100 font-medium" : ""
+                  }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(s.courseCode);
+                  setQuery("");
+                  setOpen(false);
+                }}
+              >
+                {s.courseCode} — {s.courseTitle}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PreviewGrades({
   studentNumber,
@@ -204,6 +261,23 @@ export function PreviewGrades({
     }
   }, [academicYear, semester, studentNumber, firstName, lastName]);
 
+  // Auto-compute remarks based on grade value.
+  const computeRemarks = (gradeValue: string): string => {
+    const g = parseFloat(gradeValue);
+    if (isNaN(g)) {
+      const upper = gradeValue.trim().toUpperCase();
+      if (upper === "S") return "PASSED";
+      if (upper === "US") return "UNSATISFACTORY";
+      if (upper === "DRP") return "DROPPED";
+      if (upper === "INC") return "INCOMPLETE";
+      return "";
+    }
+    if (g >= 1.0 && g <= 3.0) return "PASSED";
+    if (g === 4.0) return "CONDITIONAL FAILURE";
+    if (g === 5.0) return "FAILED";
+    return "";
+  };
+
   // Handle changes in the input fields.
   const handleGradeChange = (
     index: number,
@@ -211,21 +285,29 @@ export function PreviewGrades({
     value: string
   ) => {
     const updatedGrades = [...editedGrades];
-    updatedGrades[index] = {
+    const updated = {
       ...updatedGrades[index],
       [field]: field === "creditUnit" ? Number(value) : value,
     };
+    // Auto-fill remarks when grade changes
+    if (field === "grade") {
+      updated.remarks = computeRemarks(value);
+    }
+    updatedGrades[index] = updated;
     setEditedGrades(updatedGrades);
   };
 
   const handleCourseChange = (index: number, courseCode: string) => {
     const subject = availableSubjects.find(s => s.courseCode === courseCode);
     const updatedGrades = [...editedGrades];
+    // Recompute remarks based on the current grade when course changes
+    const currentGrade = updatedGrades[index]?.grade ?? "";
     updatedGrades[index] = {
       ...updatedGrades[index],
       courseCode,
       courseTitle: subject?.courseTitle || "",
       creditUnit: subject?.creditUnit || 0,
+      remarks: computeRemarks(currentGrade),
     };
     setEditedGrades(updatedGrades);
   };
@@ -468,7 +550,7 @@ export function PreviewGrades({
               </Select>
             </div>
             {role !== "faculty" && academicYear && semester && (
-              <Button onClick={handleAddRow} size="sm" className="bg-green-600 hover:bg-green-700">
+              <Button onClick={handleAddRow} size="sm" className="bg-blue-700 hover:bg-blue-600">
                 <PlusIcon className="w-4 h-4 mr-2" /> Add Grade
               </Button>
             )}
@@ -512,51 +594,11 @@ export function PreviewGrades({
                   <TableRow key={index}>
                     <TableCell>
                       {editingRows[index] ? (
-                        <Combobox
-                          open={openComboboxIndex === index}
-                          onOpenChange={(isOpen) => setOpenComboboxIndex(isOpen ? index : null)}
-                          // Pass the currently selected value (combined string) to make the checkmark work
-                          value={
-                            editedGrades[index].courseCode && availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)
-                              ? `${availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)?.courseCode} ${availableSubjects.find((s) => s.courseCode === editedGrades[index].courseCode)?.courseTitle}`
-                              : ""
-                          }
-                          modal={true}
-                        >
-                          <ComboboxTrigger asChild>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={openComboboxIndex === index}
-                              className="w-[180px] justify-between"
-                            >
-                              {editedGrades[index].courseCode
-                                ? availableSubjects.find((subject) => subject.courseCode === editedGrades[index].courseCode)?.courseCode
-                                : "Select Course..."}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </ComboboxTrigger>
-                          <ComboboxContent className="w-[300px] p-0">
-                            <ComboboxInput placeholder="Search course..." />
-                            <ComboboxList>
-                              <ComboboxEmpty>No course found.</ComboboxEmpty>
-                              <ComboboxGroup>
-                                {availableSubjects.map((subject) => (
-                                  <ComboboxItem
-                                    key={subject.courseCode}
-                                    value={`${subject.courseCode} ${subject.courseTitle}`}
-                                    onSelect={() => {
-                                      handleCourseChange(index, subject.courseCode);
-                                      setOpenComboboxIndex(null);
-                                    }}
-                                  >
-                                    {subject.courseCode} - {subject.courseTitle}
-                                  </ComboboxItem>
-                                ))}
-                              </ComboboxGroup>
-                            </ComboboxList>
-                          </ComboboxContent>
-                        </Combobox>
+                        <CourseSearchCell
+                          subjects={availableSubjects}
+                          selectedCode={editedGrades[index].courseCode}
+                          onSelect={(code) => handleCourseChange(index, code)}
+                        />
                       ) : (
                         grade.courseCode
                       )}
@@ -599,14 +641,23 @@ export function PreviewGrades({
                     </TableCell>
                     <TableCell>
                       {editingRows[index] ? (
-                        <Input
-                          type="text"
+                        <Select
                           value={editedGrades[index].grade}
-                          onChange={(e) =>
-                            handleGradeChange(index, "grade", e.target.value)
+                          onValueChange={(value) =>
+                            handleGradeChange(index, "grade", value)
                           }
-                          className="border p-1 rounded"
-                        />
+                        >
+                          <SelectTrigger className="w-[90px]">
+                            <SelectValue placeholder="Grade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GRADE_OPTIONS.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
                         grade.grade
                       )}

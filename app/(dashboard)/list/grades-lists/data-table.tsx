@@ -112,7 +112,6 @@ export function DataTable<TData, TValue>({
             setSearchValue(event.target.value);
           }}
           className="w-full sm:max-w-xs"
-          disabled={isLoading}
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

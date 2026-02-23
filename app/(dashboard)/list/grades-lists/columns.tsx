@@ -1,10 +1,9 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown } from "lucide-react";
-
+import { ArrowUpDown, EyeIcon } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { PreviewGrades } from "@/components/PreviewGrades";
 import GenerateCOGAdmin from "@/components/GenerateCOGForAdmin";
 
 export type Grades = {
@@ -20,16 +19,18 @@ export type Grades = {
   status: "REGULAR" | "IRREGULAR" | "TRANSFEREE" | "NOT_ANNOUNCED" | "RETURNEE";
 };
 
-// Helper component to get user role once
 function ActionsCell({ student, role }: { student: Grades; role?: string }) {
+  const params = new URLSearchParams({
+    firstName: student.firstName,
+    lastName: student.lastName,
+  });
   return (
     <div className="flex items-center space-x-2">
-      {<PreviewGrades
-        studentNumber={String(student.studentNumber)}
-        firstName={student.firstName}
-        lastName={student.lastName}
-        role={role}
-      />}
+      <Link href={`/list/grades-lists/${student.studentNumber}?${params.toString()}`}>
+        <Button variant="outline" className="border-none rounded-full" size="icon">
+          <EyeIcon className="w-4 h-4" />
+        </Button>
+      </Link>
       {role !== "faculty" && <GenerateCOGAdmin studentId={student.id} />}
     </div>
   );

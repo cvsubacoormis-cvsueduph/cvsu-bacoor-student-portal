@@ -96,7 +96,13 @@ export function ComboboxInput({
     placeholder?: string
     className?: string
 }) {
-    return <CommandInput placeholder={placeholder} className={className} />
+    return (
+        <CommandInput
+            placeholder={placeholder}
+            className={className}
+            onKeyDown={(e) => e.stopPropagation()}
+        />
+    )
 }
 
 export function ComboboxList({
