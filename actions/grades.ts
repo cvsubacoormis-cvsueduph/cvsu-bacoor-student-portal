@@ -180,6 +180,17 @@ export async function getStudentDetails(
 
 export async function addManualGrade(gradeData: GradeData): Promise<void> {
   const user = await currentUser();
+  const userRole = (user?.publicMetadata?.role as string) || "";
+  const isAdmin = userRole === "admin" || userRole === "superuser";
+
+  const settingValue = await prisma.systemSettings.findUnique({
+    where: { key: "UPLOAD_GRADES_ENABLED" },
+  });
+  const isUploadEnabled = settingValue?.value !== "false";
+
+  if (!isUploadEnabled && !isAdmin) {
+    throw new Error("Uploading grades is currently disabled by administrators.");
+  }
 
   // Validate required fields
   if (

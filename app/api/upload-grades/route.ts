@@ -1,4 +1,3 @@
-// app/api/upload-grades/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Major } from "@prisma/client";
@@ -132,6 +131,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userRole = (user.publicMetadata?.role as string) || "";
+  const isAdmin = userRole === "admin" || userRole === "superuser";
+
+  // Check if uploads are disabled
+  const settingValue = await prisma.systemSettings.findUnique({
+    where: { key: "UPLOAD_GRADES_ENABLED" },
+  });
+  const isUploadEnabled = settingValue?.value !== "false";
+
+  if (!isUploadEnabled && !isAdmin) {
+    return NextResponse.json({ error: "Uploading grades is currently disabled by administrators." }, { status: 403 });
+  }
+
   // Expecting a batch of grades, not the entire file
   const body = await req.json();
   let grades: any[] = [];
@@ -150,7 +162,6 @@ export async function POST(req: Request) {
 
   // --- Security: Check for Legacy Mode Authorization ---
   const requestLegacyMode = grades[0]?.allowLegacy === true;
-  const userRole = (user.publicMetadata?.role as string) || "";
   const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(userRole);
 
   // Only enable legacy mode if requested AND authorized

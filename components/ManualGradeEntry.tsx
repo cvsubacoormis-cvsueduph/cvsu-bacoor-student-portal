@@ -744,16 +744,16 @@ export default function ManualGradeEntry() {
 
       {/* Selected Student / Entry Form */}
       {selectedStudent && academicYear && semester && (
-        <Card className="border-t-4 border-t-green-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <Card className="border-t-4 border-t-blue-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <GraduationCap className="h-6 w-6 text-green-600" />
+                  <GraduationCap className="h-6 w-6 text-blue-600" />
                   Grade Entry Form
                 </CardTitle>
                 <CardDescription className="my-2">
-                  Entering grades for <span className="font-semibold text-green-700">{selectedStudent.firstName} {selectedStudent.lastName}</span>
+                  Entering grades for <span className="font-semibold text-blue-700">{selectedStudent.firstName} {selectedStudent.lastName}</span>
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="text-lg px-3 py-1">
