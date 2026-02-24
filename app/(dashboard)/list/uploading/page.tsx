@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { getSetting } from "@/actions/settings";
 import { currentUser } from "@clerk/nextjs/server";
 import { AlertCircle } from "lucide-react";
-import AdminUploadToggle from "./AdminUploadToggle";
+import AdminUploadToggle from "@/components/AdminUploadToggle";
+import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 
 export default async function GradeUploader() {
   const user = await currentUser();
@@ -39,17 +40,7 @@ export default async function GradeUploader() {
           </div>
 
           {!isUploadEnabled && !isAdmin ? (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-col md:flex-row gap-4 items-center justify-center my-6">
-              <AlertCircle className="h-8 w-8 text-yellow-500 shrink-0" />
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-800 text-center md:text-left">
-                  Upload System Disabled
-                </h3>
-                <p className="text-sm text-yellow-700 text-center md:text-left">
-                  You cannot upload grades right now because the deadline has exceeded or the system has been locked by an administrator. Please contact the registrar for assistance.
-                </p>
-              </div>
-            </div>
+            <UploadSystemDisabled />
           ) : (
             <Tabs defaultValue="upload" className="w-full mt-4">
               <TabsList className="grid w-full grid-cols-2">

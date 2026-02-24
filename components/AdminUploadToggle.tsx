@@ -41,6 +41,7 @@ export default function AdminUploadToggle({ initialEnabled }: AdminUploadToggleP
                 checked={isEnabled}
                 onCheckedChange={handleToggle}
                 disabled={isUpdating}
+                className="data-[state=checked]:bg-blue-600"
             />
             <Label htmlFor="upload-toggle" className="text-sm font-medium cursor-pointer">
                 {isEnabled ? "Uploads Enabled" : "Uploads Disabled"}
