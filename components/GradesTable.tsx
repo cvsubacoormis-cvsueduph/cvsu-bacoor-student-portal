@@ -316,10 +316,10 @@ export default function Grades({
                         <TableCell className="font-medium">
                           {grade.courseCode}
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={grade.courseTitle}>
+                        <TableCell className="max-w-[200px] truncate font-semibold" title={grade.courseTitle}>
                           {grade.courseTitle}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center font-semibold">
                           {grade.creditUnit}
                         </TableCell>
                         <TableCell
@@ -328,7 +328,7 @@ export default function Grades({
                         >
                           {displayGrade}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center font-bold">
                           {grade.reExam !== null &&
                             !isNaN(parseFloat(grade.reExam))
                             ? parseFloat(grade.reExam).toFixed(2)
@@ -348,7 +348,7 @@ export default function Grades({
                             {grade.remarks}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-sm font-semibold">
                           {grade.instructor}
                         </TableCell>
                       </TableRow>
