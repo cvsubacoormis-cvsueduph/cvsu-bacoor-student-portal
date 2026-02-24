@@ -124,7 +124,7 @@ export default async function Menu() {
         },
         {
           icon: "/profile.png",
-          label: "Admin Profile",
+          label: role === "faculty" ? "Faculty Profile" : "Admin Profile",
           href: "/list/adminprofile",
           visible: ["admin", "superuser", "faculty", "registrar"],
         },

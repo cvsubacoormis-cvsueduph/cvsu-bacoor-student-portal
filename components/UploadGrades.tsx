@@ -13,6 +13,8 @@ import {
   Loader2,
   XCircle,
   RefreshCcw,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -735,7 +737,7 @@ export function UploadGrades() {
                                     onClick={() => setCurrentPage(1)}
                                     disabled={effectivePage === 1}
                                   >
-                                    <ChevronLeft className="w-3 h-3" />
+                                    <ChevronsLeft className="w-3 h-3" />
                                     <span className="sr-only">First</span>
                                   </Button>
                                   <Button
@@ -793,7 +795,7 @@ export function UploadGrades() {
                                     onClick={() => setCurrentPage(totalPages)}
                                     disabled={effectivePage === totalPages}
                                   >
-                                    <ChevronRight className="w-3 h-3" />
+                                    <ChevronsRight className="w-3 h-3" />
                                     <span className="sr-only">Last</span>
                                   </Button>
                                 </div>
@@ -830,40 +832,47 @@ export function UploadGrades() {
                     </div>
 
                     {/* Pagination Controls */}
-                    <div className="flex justify-between items-center bg-gray-50 px-2 py-2 border-b">
-                      <span className="text-xs text-gray-500">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-gray-50 px-2 py-2 border-b">
+
+                      {/* Total Rows */}
+                      <span className="text-xs text-gray-500 text-center sm:text-left">
                         Total Rows: {previewData.length}
                       </span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                          <span className="sr-only">First</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                          <span className="sr-only">Previous</span>
-                        </Button>
 
-                        {/* Numbered Pages */
-                          (() => {
-                            let start = Math.max(1, currentPage - 2);
-                            let end = Math.min(totalPages, start + 4);
+                      {/* Pagination Controls */}
+                      <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
 
-                            // If close to end, adjust start to show up to 5 items
-                            if (end - start < 4) {
-                              start = Math.max(1, end - 4);
+                        {/* Nav Buttons */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 sm:h-7 sm:w-7 p-0"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronsLeft className="w-4 h-4 sm:w-3 sm:h-3" />
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 sm:h-7 sm:w-7 p-0"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="w-4 h-4 sm:w-3 sm:h-3" />
+                          </Button>
+                        </div>
+
+                        {/* Page Numbers */}
+                        <div className="flex flex-wrap justify-center gap-1 max-w-full">
+                          {(() => {
+                            let start = Math.max(1, currentPage - 1);
+                            let end = Math.min(totalPages, start + (window.innerWidth < 640 ? 2 : 4));
+
+                            if (end - start < (window.innerWidth < 640 ? 2 : 4)) {
+                              start = Math.max(1, end - (window.innerWidth < 640 ? 2 : 4));
                             }
 
                             const pages = [];
@@ -876,34 +885,38 @@ export function UploadGrades() {
                                 key={p}
                                 variant={currentPage === p ? "default" : "outline"}
                                 size="sm"
-                                className="h-7 w-7 p-0 text-xs"
+                                className="h-8 min-w-[32px] sm:h-7 sm:min-w-[28px] px-1 text-xs"
                                 onClick={() => setCurrentPage(p)}
                               >
                                 {p}
                               </Button>
                             ));
                           })()}
+                        </div>
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
-                        >
-                          <ChevronRight className="w-3 h-3" />
-                          <span className="sr-only">Next</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                        >
-                          <ChevronRight className="w-3 h-3" />
-                          <span className="sr-only">Last</span>
-                        </Button>
+                        {/* Nav Buttons */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 sm:h-7 sm:w-7 p-0"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            <ChevronRight className="w-4 h-4 sm:w-3 sm:h-3" />
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 sm:h-7 sm:w-7 p-0"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                          >
+                            <ChevronsRight className="w-4 h-4 sm:w-3 sm:h-3" />
+                          </Button>
+                        </div>
+
                       </div>
                     </div>
                   </div>
