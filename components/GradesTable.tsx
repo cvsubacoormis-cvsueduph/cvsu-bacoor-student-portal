@@ -176,7 +176,7 @@ export default function Grades({
         </CardHeader>
         <CardContent>
           <Alert className="mb-6 bg-blue-50 border-blue-200">
-            <TriangleAlert className="h-4 w-4 text-blue-600" />
+            <TriangleAlert className="h-4 w-4" color="blue" />
             <AlertTitle className="text-blue-800">Notice</AlertTitle>
             <AlertDescription className="text-blue-700">
               <p>

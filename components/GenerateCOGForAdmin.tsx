@@ -31,6 +31,7 @@ import {
 import toast from "react-hot-toast";
 import { PrinterIcon, AlertCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { semesterMap } from "@/lib/utils";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
@@ -245,7 +246,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text("Academic Year:", 120, 65);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");
-    doc.text(academicYear ? academicYear.replace(/_/g, "-") : "", 140, 65);
+    doc.text(`${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`, 140, 65);
 
     doc.setTextColor(139, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -255,11 +256,13 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text(courseMap(course).toUpperCase(), 35, 70);
 
     doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica");
+    doc.setFont("helvetica", "bold");
     doc.text("Major:", 20, 75);
     doc.setTextColor(0, 0, 139);
+    doc.setFont("helvetica", "italic");
     doc.text(formatMajor(major) || "", 35, 75);
     doc.setTextColor(139, 0, 0);
+    doc.setFont("helvetica", "bold");
     doc.text("Date:", 120, 70);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");

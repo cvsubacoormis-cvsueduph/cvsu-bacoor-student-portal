@@ -30,7 +30,8 @@ import {
 } from "@/lib/courses";
 import toast from "react-hot-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, PopcornIcon } from "lucide-react";
+import { AlertCircleIcon, Bold, CheckCircle2Icon, PopcornIcon } from "lucide-react";
+import { semesterMap } from "@/lib/utils";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
@@ -231,7 +232,7 @@ export default function GenerateCOG() {
     doc.text("Academic Year:", 120, 65);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");
-    doc.text(academicYear ? academicYear.replace(/_/g, "-") : "", 140, 65);
+    doc.text(`${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`, 140, 65);
 
     doc.setTextColor(139, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -241,12 +242,13 @@ export default function GenerateCOG() {
     doc.text(courseMap(course).toUpperCase(), 35, 70);
 
     doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica");
+    doc.setFont("helvetica", "bold");
     doc.text("Major:", 20, 75);
     doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica");
+    doc.setFont("helvetica", "italic");
     doc.text(formatMajor(major) || "", 35, 75);
     doc.setTextColor(139, 0, 0);
+    doc.setFont("helvetica", "bold");
     doc.text("Date:", 120, 70);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");
@@ -556,7 +558,7 @@ export default function GenerateCOG() {
                 {[...new Set(academicOptions.map((o) => o.academicYear))].map(
                   (year) => (
                     <SelectItem key={year} value={year}>
-                      {year}
+                      {year.replace("_", "-")}
                     </SelectItem>
                   )
                 )}
