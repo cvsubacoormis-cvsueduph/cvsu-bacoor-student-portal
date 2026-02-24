@@ -241,10 +241,10 @@ export default function GenerateCOG() {
     doc.text(courseMap(course).toUpperCase(), 35, 70);
 
     doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica");
     doc.text("Major:", 20, 75);
     doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica");
     doc.text(formatMajor(major) || "", 35, 75);
     doc.setTextColor(139, 0, 0);
     doc.text("Date:", 120, 70);
