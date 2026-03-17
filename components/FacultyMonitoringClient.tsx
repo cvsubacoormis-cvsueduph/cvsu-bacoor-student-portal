@@ -29,7 +29,7 @@ export function FacultyMonitoringClient() {
     const currentYear = currentDate.getFullYear();
     const currentAyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
 
-    const startYear = 2014; // Admin start mapping
+    const startYear = 2018; // Admin start mapping
     const years: string[] = [];
     for (let y = startYear; y <= currentAyStartYear; y++) {
       years.push(`AY_${y}_${y + 1}`);
