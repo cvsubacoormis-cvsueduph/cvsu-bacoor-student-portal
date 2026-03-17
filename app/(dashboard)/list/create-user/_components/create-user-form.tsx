@@ -85,7 +85,7 @@ export function CreateUserForm() {
   };
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
         <CardTitle className="text-lg font-bold">Create New User</CardTitle>
         <CardDescription className="text-sm">

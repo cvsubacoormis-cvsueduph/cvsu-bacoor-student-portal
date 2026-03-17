@@ -161,7 +161,7 @@ export function BulkUploadUsers() {
   };
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
         <CardTitle className="text-lg font-bold">Bulk Upload Users</CardTitle>
         <CardDescription className="text-sm">
