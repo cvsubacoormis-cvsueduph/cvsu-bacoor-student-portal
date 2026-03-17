@@ -243,6 +243,7 @@ export function UploadGrades() {
     }
 
     let completed = 0;
+    let rateLimitExceeded = false;
 
     // Validate first
     // We can do client-side validation for all rows quickly before starting
@@ -296,6 +297,17 @@ export function UploadGrades() {
           });
 
           if (!res.ok) {
+            if (res.status === 429) {
+              const errorData = await res.json().catch(() => ({}));
+              Swal.fire({
+                icon: "warning",
+                title: "Rate Limit Exceeded",
+                text: errorData.error || "Too many upload attempts. Please try again in 15 minutes.",
+              });
+              addLog("error", "Upload aborted: Rate Limit Exceeded Please wait 15 minutes");
+              rateLimitExceeded = true;
+              break; // Abort remaining chunks
+            }
             const errorText = await res.text();
             addLog("error", `Batch ${i + 1} Failed: ${res.statusText}`);
             // Push placeholder errors for this chunk
@@ -340,7 +352,7 @@ export function UploadGrades() {
         setProgress(Math.round((completed / totalRecords) * 100));
       }
 
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !rateLimitExceeded) {
         if (isDryRun) {
           setHasValidated(true);
           await Swal.fire({
@@ -453,7 +465,7 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST" disabled>First Semester</SelectItem>
+                  <SelectItem value="FIRST">First Semester</SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
                   <SelectItem value="MIDYEAR" disabled>Midyear</SelectItem>
                 </SelectContent>
@@ -572,9 +584,9 @@ export function UploadGrades() {
                     <div className="flex justify-between text-sm">
                       <span>{isValidating ? "Validating..." : "Uploading..."}</span>
 
-                      <span className="font-medium">{progress}%</span>
+                      <span className="font-medium text-green-600">{progress}%</span>
                     </div>
-                    <Progress value={progress} className="h-2" />
+                    <Progress value={progress} className="h-2 bg-green-600" />
                     <p className="text-xs text-center text-gray-500">
                       Processed {processedCount} of {totalRecords} rows
                     </p>

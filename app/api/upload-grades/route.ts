@@ -4,9 +4,19 @@ import { Major } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { GRADE_HIERARCHY } from "@/lib/utils";
 import { fuzzy } from "fast-fuzzy";
+import { redis } from "@/lib/redis";
+import { RateLimiterRedis } from "rate-limiter-flexible";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+// Rate limiter: 3 uploads per 15 minutes
+const uploadLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl:upload_grades",
+  points: 15,
+  duration: 15 * 60,
+});
 
 function normalizeGrade(value: any): string | null {
   if (!value) return null;
@@ -132,7 +142,19 @@ export async function POST(req: Request) {
   }
 
   const userRole = (user.publicMetadata?.role as string) || "";
-  const isAdmin = userRole === "admin" || userRole === "superuser";
+  const isAdmin = userRole === "admin" || userRole === "superuser" || userRole === "registrar";
+
+  // Rate Limiting check for faculty
+  if (userRole === "faculty") {
+    try {
+      await uploadLimiter.consume(userId);
+    } catch (rateLimiterRes) {
+      return NextResponse.json(
+        { error: "Too many upload attempts. Please try again in 15 minutes." },
+        { status: 429 }
+      );
+    }
+  }
 
   // Check if uploads are disabled
   const settingValue = await prisma.systemSettings.findUnique({

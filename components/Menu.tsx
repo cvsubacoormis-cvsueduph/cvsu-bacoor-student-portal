@@ -94,6 +94,12 @@ export default async function Menu() {
           visible: ["admin", "superuser", "registrar"],
         },
         {
+          icon: "/student.png",
+          label: "Faculty Upload Monitoring",
+          href: "/list/faculty-monitoring",
+          visible: ["admin", "superuser", "registrar"],
+        },
+        {
           icon: "/assignment.png",
           label: "Checklist",
           href: "/list/checklists",
