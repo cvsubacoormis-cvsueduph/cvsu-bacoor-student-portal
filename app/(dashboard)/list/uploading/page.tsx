@@ -6,11 +6,8 @@ import { Suspense } from "react";
 import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
 import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
 import { UploadGrades } from "@/components/UploadGrades";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { getSetting } from "@/actions/settings";
 import { currentUser } from "@clerk/nextjs/server";
-import { AlertCircle } from "lucide-react";
 import AdminUploadToggle from "@/components/AdminUploadToggle";
 import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 

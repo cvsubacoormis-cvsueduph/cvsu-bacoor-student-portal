@@ -137,6 +137,18 @@ export function UploadGrades() {
   };
 
   const processFile = async (selectedFile: File) => {
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      Swal.fire({
+        icon: "error",
+        title: "File Too Large",
+        text: "Please upload a file smaller than 2MB.",
+      });
+      setFile(null);
+      return;
+    }
+
     const validTypes = [
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -553,7 +565,7 @@ export function UploadGrades() {
                   Click to Upload or Drag & Drop
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Excel files (.xlsx, .xls) only
+                  Excel files (.xlsx, .xls) up to 2MB
                 </p>
               </div>
             </div>

@@ -182,6 +182,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload or empty batch" }, { status: 400 });
   }
 
+  // Guard: Limit batch size to 5000 rows (approx. 2MB file limit)
+  if (grades.length > 5000) {
+    return NextResponse.json(
+      { error: "Batch too large. Please split your file into smaller uploads (max 5,000 rows)." },
+      { status: 413 }
+    );
+  }
+
   // --- Security: Check for Legacy Mode Authorization ---
   const requestLegacyMode = grades[0]?.allowLegacy === true;
   const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(userRole);
