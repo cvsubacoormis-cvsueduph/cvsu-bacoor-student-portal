@@ -5,6 +5,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { UserSex, Role } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
+import { createUserSchema } from "@/schemas/user-schema";
 
 export async function createUser(formData: {
   username: string;
@@ -21,44 +22,55 @@ export async function createUser(formData: {
   if (!userId) {
     throw new Error("Unauthorized");
   }
+
+  const parsed = createUserSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      error: "Invalid input data",
+      details: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const validData = parsed.data;
+
   const clerk = await clerkClient();
   try {
-    const cleanedFirstName = formData.firstName
+    const cleanedFirstName = validData.firstName
       .toLowerCase()
       .replace(/\s+/g, "");
 
     const password =
-      formData.role === "faculty"
+      validData.role === "faculty"
         ? `cvsubacoorfaculty${cleanedFirstName}`
         : `cvsubacoorregistrar${cleanedFirstName}`;
 
     const clerkUser = await clerk.users.createUser({
-      username: formData.username,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      emailAddress: formData.email ? [formData.email] : undefined,
+      username: validData.username,
+      firstName: validData.firstName,
+      lastName: validData.lastName,
+      emailAddress: validData.email ? [validData.email] : undefined,
       password: password,
     });
 
     const user = await prisma.user.create({
       data: {
         id: clerkUser.id,
-        username: formData.username,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        middleInit: formData.middleInit,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        sex: formData.sex,
-        role: formData.role,
+        username: validData.username,
+        firstName: validData.firstName,
+        lastName: validData.lastName,
+        middleInit: validData.middleInit,
+        email: validData.email,
+        phone: validData.phone,
+        address: validData.address,
+        sex: validData.sex,
+        role: validData.role,
         isApproved: true,
       },
     });
 
     await clerk.users.updateUserMetadata(clerkUser.id, {
       publicMetadata: {
-        role: formData.role,
+        role: validData.role,
         isApproved: true,
       },
     });
