@@ -12,6 +12,8 @@ import { Courses, Major, Status, UserSex } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 
+const clerk = await clerkClient();
+
 export async function getStudents() {
   const { userId } = await auth();
   if (!userId) {
@@ -163,6 +165,13 @@ export async function updateStudent(
         major: studentData.major === "NONE" ? null : studentData.major,
         status: studentData.status,
       },
+    });
+
+
+    await clerk.users.updateUser(id, {
+      firstName: studentData.firstName,
+      lastName: studentData.lastName,
+      username: studentData.username,
     });
 
     revalidatePath("/students");
