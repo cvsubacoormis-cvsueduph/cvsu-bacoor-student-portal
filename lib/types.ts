@@ -168,3 +168,35 @@ export type Student = {
   isApproved: boolean;
   avatarUrl?: string;
 };
+
+export type AdminEntry = {
+  source: "admin";
+  id: string;
+  firstName: string;
+  middleInit: string | null;
+  lastName: string;
+  address: string;
+  phone: string | null;
+  email: string;
+  birthday: string;
+  sex: string;
+  username: string;
+  role: string;
+};
+
+export type UserEntry = {
+  source: "user";
+  id: string;
+  firstName: string;
+  middleInit: string | null;
+  lastName: string;
+  address: string;
+  phone: string | null;
+  email: string | null;
+  birthday: null;
+  sex: string;
+  username: string;
+  role: string;
+};
+
+export type AdminListEntry = AdminEntry | UserEntry;

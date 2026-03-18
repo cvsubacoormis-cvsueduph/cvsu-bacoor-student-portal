@@ -9,18 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
-import { updateAdmin } from "@/actions/admin/admin";
-import {
-  createAdminSchema,
-  updateAdminSchema,
-} from "@/lib/formValidationSchemas";
 import { Input } from "@/components/ui/input";
-import { Admin } from "@prisma/client";
-import { z } from "zod";
 import {
   Form,
   FormControl,
@@ -28,8 +17,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "../ui/form";
-
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -37,53 +25,72 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { updateUser } from "@/actions/user/user-action";
+import { UserEntry } from "@/lib/types";
 
-export default function UpdateAdminDialog({ admin }: { admin: Admin }) {
+const updateUserSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  middleInit: z.string().max(10).optional(),
+  lastName: z.string().min(1, "Last name is required"),
+  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phone: z.string().max(11).optional(),
+  address: z.string().min(1, "Address is required"),
+  sex: z.enum(["MALE", "FEMALE"], { message: "Sex is required" }),
+});
+
+type UpdateUserFormValues = z.infer<typeof updateUserSchema>;
+
+export default function UpdateUserDialog({ user }: { user: UserEntry }) {
   const router = useRouter();
-  const form = useForm<z.infer<typeof updateAdminSchema>>({
-    resolver: zodResolver(updateAdminSchema),
+
+  const form = useForm<UpdateUserFormValues>({
+    resolver: zodResolver(updateUserSchema),
     defaultValues: {
-      firstName: admin.firstName,
-      middleInit: admin.middleInit || "",
-      lastName: admin.lastName,
-      username: admin.username,
-      email: admin.email,
-      address: admin.address,
-      phone: admin.phone || "",
-      birthday: admin.birthday,
-      sex: admin.sex,
+      firstName: user.firstName,
+      middleInit: user.middleInit ?? "",
+      lastName: user.lastName,
+      username: user.username,
+      email: user.email ?? "",
+      phone: user.phone ?? "",
+      address: user.address,
+      sex: user.sex as "MALE" | "FEMALE",
     },
   });
 
-  const onSubmit = async (data: z.infer<typeof updateAdminSchema>) => {
-    try {
-      const result = await updateAdmin(admin.id, data);
+  const onSubmit = async (data: UpdateUserFormValues) => {
+    const result = await updateUser(user.id, {
+      ...data,
+      sex: data.sex as "MALE" | "FEMALE",
+      middleInit: data.middleInit || undefined,
+      email: data.email || undefined,
+      phone: data.phone || undefined,
+    });
 
-      if (!result.success) throw new Error(result.error);
-
-      toast.success("Admin updated successfully");
+    if (result.success) {
+      toast.success("User updated successfully");
       router.refresh();
-    } catch (error: any) {
-      console.error("Error updating admin:", error);
-      toast.error(error.message ?? "Failed to update admin");
+    } else {
+      toast.error(result.error ?? "Failed to update user");
     }
   };
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button
-          size="sm"
-          variant="default"
-          className="bg-blue-500 hover:bg-blue-700"
-        >
+        <Button size="sm" variant="default" className="bg-blue-500 hover:bg-blue-700">
           Edit
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Admin</DialogTitle>
-          <DialogDescription>Update admin information</DialogDescription>
+          <DialogTitle>Edit {user.role}</DialogTitle>
+          <DialogDescription>Update {user.firstName}'s information</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -168,27 +175,17 @@ export default function UpdateAdminDialog({ admin }: { admin: Admin }) {
               />
               <FormField
                 control={form.control}
-                name="birthday"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Birthday</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="sex"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Gender</FormLabel>
                     <FormControl>
-                      <Select {...field}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Select a sex" />
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select sex" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="MALE">MALE</SelectItem>
@@ -217,8 +214,9 @@ export default function UpdateAdminDialog({ admin }: { admin: Admin }) {
             <Button
               type="submit"
               className="w-full bg-blue-500 hover:bg-blue-700"
+              disabled={form.formState.isSubmitting}
             >
-              Save Changes
+              {form.formState.isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </form>
         </Form>

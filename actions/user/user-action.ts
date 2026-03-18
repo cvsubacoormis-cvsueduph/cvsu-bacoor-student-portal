@@ -4,8 +4,10 @@ import prisma from "@/lib/prisma";
 import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { UserSex, Role } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { createUserSchema } from "@/schemas/user-schema";
+
+const ALLOWED_ROLES = ["admin", "superuser"] as const;
 
 export async function createUser(formData: {
   username: string;
@@ -95,5 +97,56 @@ export async function createUser(formData: {
     return {
       error: error.message || "Failed to create user. Please try again.",
     };
+  }
+}
+
+export async function updateUser(
+  id: string,
+  data: {
+    firstName: string;
+    middleInit?: string;
+    lastName: string;
+    username: string;
+    email?: string;
+    phone?: string;
+    address: string;
+    sex: UserSex;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Unauthorized" };
+
+  const caller = await currentUser();
+  const callerRole = caller?.publicMetadata?.role as string | undefined;
+  if (!callerRole || !ALLOWED_ROLES.includes(callerRole as (typeof ALLOWED_ROLES)[number])) {
+    return { success: false, error: "Forbidden: insufficient permissions." };
+  }
+
+  try {
+    const clerk = await clerkClient();
+    await clerk.users.updateUser(id, {
+      firstName: data.firstName,
+      lastName: data.lastName,
+    });
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        firstName: data.firstName,
+        middleInit: data.middleInit || null,
+        lastName: data.lastName,
+        username: data.username,
+        email: data.email || null,
+        phone: data.phone || null,
+        address: data.address,
+        sex: data.sex,
+      },
+    });
+
+    revalidatePath("/list/admin-lists");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Failed to update user:", error);
+    return { success: false, error: error.message ?? "Failed to update user." };
   }
 }

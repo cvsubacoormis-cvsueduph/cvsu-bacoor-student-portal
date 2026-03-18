@@ -23,11 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { mutate } from "swr";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { createAdmin } from "@/actions/admin/admin";
 import { createAdminSchema } from "@/lib/formValidationSchemas";
 
 export default function CreateAdminForm() {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [DialogOpen, setDialogOpen] = useState(false);
@@ -51,30 +53,22 @@ export default function CreateAdminForm() {
   async function onSubmit(values: z.infer<typeof createAdminSchema>) {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/admin-lists", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+      const result = await createAdmin(values);
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.message || "Failed to create student");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create administrator");
       }
+
       form.reset();
       setDialogOpen(false);
-      mutate("/api/admin-lists");
+      router.refresh();
       toast.success("Administrator created successfully");
       setErrorMessage("");
-    } catch (error) {
-      console.error("Error creating student:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "An unexpected error occurred";
-      setErrorMessage(errorMessage);
-      toast.error(errorMessage);
+    } catch (error: any) {
+      console.error("Error creating administrator:", error);
+      const message = error.message || "An unexpected error occurred";
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

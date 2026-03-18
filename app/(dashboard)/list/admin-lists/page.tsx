@@ -10,9 +10,9 @@ export default function AdminListsPage() {
           {/* TOP */}
           <div className="flex items-center justify-between">
             <h1 className="hidden md:block text-lg font-semibold">
-              All Administrators
+              All Users
               <span className=" flex text-xs text-gray-500">
-                Lists of Administrators
+                Lists of Users
               </span>
             </h1>
           </div>
