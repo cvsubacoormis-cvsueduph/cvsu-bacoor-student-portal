@@ -91,7 +91,7 @@ export default async function AdminListsTable() {
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-medium ${badgeClass}`}
                 >
-                  {entry.role}
+                  {entry.role.charAt(0).toUpperCase() + entry.role.slice(1)}
                 </span>
               </TableCell>
               <TableCell className="text-center">{entry.address}</TableCell>
