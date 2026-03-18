@@ -102,7 +102,7 @@ export default function StudentsTable({
             {role === "admin" || role === "registrar" && <TableHead className="hidden lg:table-cell text-center">
               Address
             </TableHead>}
-            {role === "admin" || role === "superuser" || role === "registrar" && <TableHead>Actions</TableHead>}
+            {(role === "admin" || role === "superuser") && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>

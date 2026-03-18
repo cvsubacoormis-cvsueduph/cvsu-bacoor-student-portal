@@ -37,7 +37,7 @@ export default async function Menu() {
           icon: "/calendar.png",
           label: "Subject Offerings",
           href: "/list/subject-offering",
-          visible: ["admin", "superuser", "registrar"],
+          visible: ["admin", "superuser"],
         },
         {
           icon: "/student.png",
@@ -130,7 +130,7 @@ export default async function Menu() {
         },
         {
           icon: "/profile.png",
-          label: role === "faculty" ? "Faculty Profile" : "Admin Profile",
+          label: role === "faculty" ? "Faculty Profile" : role === "registrar" ? "Registrar Profile" : "Admin Profile",
           href: "/list/adminprofile",
           visible: ["admin", "superuser", "faculty", "registrar"],
         },
