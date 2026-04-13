@@ -33,7 +33,7 @@ export default function RootLayout({
       <Script
         async
         src="https://analytics.cvsu-bacoor.com/script.js"
-        data-website-id="8316ee4b-feeb-4942-ac08-ebb67c27baea"
+        data-website-id="c7d6fd89-6ffa-48f7-a9aa-6ab5494f690f"
       />
       <html lang="en">
         <body
