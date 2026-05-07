@@ -61,6 +61,7 @@ export function auth() {
     userId: currentAuth.userId,
     sessionClaims: {
       metadata: { role: currentAuth.role },
+      publicMetadata: { role: currentAuth.role },
     },
   };
 }

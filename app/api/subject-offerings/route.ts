@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
+import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,11 @@ const getQuerySchema = z.object({
 
 export async function GET(request: Request) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const academicYear = searchParams.get("academicYear");
         const semester = searchParams.get("semester");

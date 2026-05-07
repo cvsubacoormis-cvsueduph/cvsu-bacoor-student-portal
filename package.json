@@ -46,7 +46,7 @@
     "formidable": "^3.5.4",
     "html2canvas": "^1.4.1",
     "ioredis": "^5.9.0",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.479.0",
     "moment": "^2.30.1",

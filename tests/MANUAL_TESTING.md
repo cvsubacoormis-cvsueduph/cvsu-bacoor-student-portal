@@ -229,10 +229,150 @@ After signing in as admin, verify these pages still work:
 
 ---
 
+## 6. Testing Admin Profile Security (Server Actions)
+
+> **Automated**: See `tests/admin-security.test.ts` (~35 tests)
+
+### 6a. Student tries to create an admin account → Denied
+
+```js
+// In browser console, signed in as STUDENT
+// Manually call the server action (requires dev tools inspection of action payloads)
+// Expected result: "Forbidden: only superusers can create admin accounts"
+```
+
+**Manual verification**: Sign in as Student → Cannot navigate to `/list/create-admin` (redirected to `/student` by middleware).
+
+### 6b. Faculty tries to update admin profile → Denied
+
+```js
+// In browser console, signed in as FACULTY
+// Navigate to /list/admin-lists — should be denied by middleware.
+// Even if server action is called directly, it returns "Forbidden: insufficient permissions."
+```
+
+### 6c. Admin updates another admin profile → Allowed
+
+1. Sign in as **Admin**
+2. Navigate to `/list/admin-lists`
+3. Click **Edit** on any admin user
+4. Modify fields and save
+5. **Expected**: Changes save successfully
+
+### 6d. Superuser creates admin account → Allowed
+
+1. Sign in as **Superuser**
+2. Navigate to `/list/create-admin`
+3. Fill out form and submit
+4. **Expected**: Admin account created successfully
+
+---
+
+## 7. Testing Student Profile Security (Server Actions + API)
+
+> **Automated**: See `tests/student-security.test.ts` (~21 tests)
+
+### 7a. Student tries to dump all student records (`getStudents`) → Denied
+
+```js
+// In browser console, signed in as STUDENT
+// Try calling the getStudents server action
+// Expected: "Forbidden: insufficient permissions" error
+```
+
+### 7b. Student tries to view another student's profile (`getStudentById`) → Denied
+
+```js
+// In browser console, signed in as STUDENT
+// Try calling getStudentById with a different student's ID
+// Expected: "Unauthorized: you can only view your own profile"
+```
+
+**Manual verification**: Student can only view their own profile at `/list/profile`. Attempting to access another student's data via server action is rejected.
+
+### 7c. Student tries to search other students via API → Denied
+
+```js
+// In browser console, signed in as STUDENT
+fetch("/api/students/get-student?query=jane")
+  .then(r => console.log(r.status, r.statusText))
+// Expected: 403 Forbidden
+```
+
+### 7d. Admin searches for students via API → Allowed
+
+```js
+// In browser console, signed in as ADMIN
+fetch("/api/students/get-student?query=jane")
+  .then(r => r.json())
+  .then(data => console.log(data))
+// Expected: Returns matching student records
+```
+
+### 7e. Faculty/Student tries to bulk-upload students via API → Denied
+
+```js
+// In browser console, signed in as FACULTY
+fetch("/api/upload", { method: "POST" })
+  .then(r => console.log(r.status, r.statusText))
+// Expected: 403 Forbidden
+```
+
+### 7f. Unauthenticated access to subject-offerings API → Denied
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/subject-offerings?academicYear=AY_2024_2025&semester=FIRST"
+# Expected: 401
+```
+
+### 7g. Faculty tries to modify grades via preview-grades API → Denied
+
+```js
+// In browser console, signed in as FACULTY
+fetch("/api/preview-grades?id=grade-1", {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ courseCode: "CS101", creditUnit: 3, courseTitle: "IT", grade: "1.00", instructor: "Test" })
+}).then(r => console.log(r.status, r.statusText))
+// Expected: 403 Forbidden
+```
+
+### 7h. Registrar modifies grades via API → Allowed
+
+```js
+// In browser console, signed in as REGISTRAR
+fetch("/api/preview-grades?id=grade-1", {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ courseCode: "CS101", creditUnit: 3, courseTitle: "IT", grade: "1.00", instructor: "Test" })
+}).then(r => console.log(r.status, r.statusText))
+// Expected: 200 OK
+```
+
+---
+
+## 8. Register Student Enumeration Prevention
+
+> **Automated**: Server action unit tests verify role guards; enumeration fix is structural.
+
+The `registerStudent` action now applies rate limiting **before** checking for duplicate student numbers, usernames, or emails. This prevents attackers from probing the database to enumerate registered students.
+
+### 8a. Verify rate limit on registration
+
+```bash
+# Attempt 3+ registrations in 5 minutes from the same IP
+curl -X POST "http://localhost:3000" \
+  -H "Content-Type: application/json" \
+  -d '...' # registration payload
+# After 3 attempts: "Too many registration attempts. Please try again later."
+```
+
+---
+
 ## Notes
 
-- **Password display in UI**: The backend now returns `generatedPassword` but the frontend components (`create-user-form.tsx`, `students/create/page.tsx`, `bulk-upload-users.tsx`) don't yet display it. You'll see the password in Network tab responses but not in a toast. This is a follow-up UI task.
+- **Password display in UI**: The backend returns `generatedPassword` for admin-created accounts. Check Network tab responses.
 
-- **Clerk session required**: For API calls that test role-based access (section 2), you MUST be signed in through the browser. The Clerk session cookie will automatically be included in `fetch()` calls.
+- **Clerk session required**: For API calls that test role-based access (sections 2, 6, 7), you MUST be signed in through the browser. The Clerk session cookie will automatically be included in `fetch()` calls.
 
-- **Automated tests**: Run `npx vitest run` to execute the 43 automated tests that verify all auth/role guards.
+- **Automated tests**: Run `npx vitest run` to execute all 108 automated tests that verify auth/role guards across all endpoints.

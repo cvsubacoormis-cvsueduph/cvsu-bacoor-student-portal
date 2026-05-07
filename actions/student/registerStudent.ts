@@ -35,6 +35,13 @@ export async function registerStudent(formData: CreateStudentSchema) {
 
   const data = parsed.data;
 
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  try {
+    await registerLimiter.consume(ip);
+  } catch {
+    return { success: false, errors: ["Too many registration attempts. Please try again later."] };
+  }
+
   const errors: string[] = [];
 
   const existingStudentNumber = await prisma.student.findUnique({
@@ -66,13 +73,6 @@ export async function registerStudent(formData: CreateStudentSchema) {
       success: false,
       errors,
     };
-  }
-
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  try {
-    await registerLimiter.consume(ip);
-  } catch {
-    return { success: false, errors: ["Too many registration attempts. Please try again later."] };
   }
 
   try {

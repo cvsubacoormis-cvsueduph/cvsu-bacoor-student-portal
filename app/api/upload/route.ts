@@ -22,10 +22,16 @@ const getClientIp = (request: NextRequest) => {
 };
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const ip = getClientIp(request);
   const clerk = await clerkClient();
 

@@ -139,12 +139,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Authorization - Only admin and authorized staff can edit grades
+    // Authorization - Only admin, superuser, and registrar can edit grades
     const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const allowedRoles = ["admin", "superuser", "registrar"];
 
-    if (role === "student") {
+    if (!role || !allowedRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Forbidden: Students cannot edit grades" },
+        { error: "Forbidden: insufficient permissions" },
         { status: 403 }
       );
     }
@@ -246,9 +247,10 @@ export async function POST(request: Request) {
     }
 
     const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
-    if (role === "student") {
+    const allowedRoles = ["admin", "superuser", "registrar"];
+    if (!role || !allowedRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Forbidden: Students cannot add grades" },
+        { error: "Forbidden: insufficient permissions" },
         { status: 403 }
       );
     }
@@ -332,9 +334,10 @@ export async function DELETE(request: Request) {
     }
 
     const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
-    if (role === "student") {
+    const allowedRoles = ["admin", "superuser", "registrar"];
+    if (!role || !allowedRoles.includes(role)) {
       return NextResponse.json(
-        { error: "Forbidden: Students cannot delete grades" },
+        { error: "Forbidden: insufficient permissions" },
         { status: 403 }
       );
     }

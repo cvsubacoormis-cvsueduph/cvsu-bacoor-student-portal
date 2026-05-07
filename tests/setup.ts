@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { afterAll, beforeAll, vi } from "vitest";
 import * as clerkMocks from "./__mocks__/clerk";
 
 const {
@@ -176,6 +176,10 @@ vi.mock("rate-limiter-flexible", () => {
     RateLimiterRedis: MockRateLimiterRedis,
   };
 });
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
 
 vi.mock("ioredis", () => ({
   default: class {

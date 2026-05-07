@@ -5,10 +5,16 @@ export const runtime = "nodejs";
 
 
 export async function GET(request: NextRequest) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role === "student") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get("query") || "";
   const page = Number(searchParams.get("page")) || 1;

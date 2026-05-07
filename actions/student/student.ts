@@ -17,9 +17,14 @@ import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 const clerk = await clerkClient();
 
 export async function getStudents() {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (!role || role === "student") {
+    throw new Error("Forbidden: insufficient permissions");
   }
   try {
     const students = await prisma.student.findMany({
@@ -196,6 +201,10 @@ export async function getStudentById(id: string) {
 
   if (!userId || (role !== "student" && role !== "admin")) {
     return { student: null, error: "Unauthorized" };
+  }
+
+  if (role === "student" && id !== userId) {
+    return { student: null, error: "Unauthorized: you can only view your own profile" };
   }
 
   try {

@@ -184,7 +184,8 @@ export async function updateAdmin(
 
   const caller = await currentUser();
   const callerRole = caller?.publicMetadata?.role as string | undefined;
-  if (!callerRole || !ALLOWED_ROLES.includes(callerRole as (typeof ALLOWED_ROLES)[number])) {
+  const ALLOWED_UPDATE = ["admin", "superuser"] as const;
+  if (!callerRole || !ALLOWED_UPDATE.includes(callerRole as (typeof ALLOWED_UPDATE)[number])) {
     return { success: false, error: "Forbidden: insufficient permissions." };
   }
 
@@ -211,8 +212,13 @@ export async function updateAdmin(
 export async function createAdmin(
   data: z.infer<typeof createAdminSchema>
 ): Promise<{ success: boolean; error?: string }> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) return { success: false, error: "Unauthorized" };
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "superuser") {
+    return { success: false, error: "Forbidden: only superusers can create admin accounts" };
+  }
 
   const result = createAdminSchema.safeParse(data);
   if (!result.success) {
