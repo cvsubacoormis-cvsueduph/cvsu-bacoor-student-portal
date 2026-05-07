@@ -7,6 +7,17 @@ import {
   CreateStudentSchema,
 } from "@/lib/formValidationSchemas";
 import { clerkClient } from "@clerk/nextjs/server";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
+import { headers } from "next/headers";
+import { redis } from "@/lib/redis";
+import { RateLimiterRedis } from "rate-limiter-flexible";
+
+const registerLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl:register_student",
+  points: 3,
+  duration: 300,
+});
 
 const clerk = await clerkClient();
 
@@ -55,6 +66,13 @@ export async function registerStudent(formData: CreateStudentSchema) {
       success: false,
       errors,
     };
+  }
+
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  try {
+    await registerLimiter.consume(ip);
+  } catch {
+    return { success: false, errors: ["Too many registration attempts. Please try again later."] };
   }
 
   try {

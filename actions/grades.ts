@@ -138,6 +138,16 @@ export async function searchStudent(
 export async function getStudentDetails(
   studentNumber: string
 ): Promise<StudentDetails> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const user = await currentUser();
+  const role = (user?.publicMetadata?.role as string) || "";
+  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  if (!allowedRoles.includes(role)) {
+    throw new Error("Forbidden");
+  }
+
   if (!studentNumber.trim()) {
     throw new Error("Student number cannot be empty");
   }
@@ -320,6 +330,9 @@ export async function checkExsistingGrade({
   academicYear,
   semester,
 }: CheckExsistingGradeParams) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
   const existing = await prisma.grade.findFirst({
     where: {
       studentNumber,

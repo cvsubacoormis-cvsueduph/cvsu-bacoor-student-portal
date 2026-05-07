@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 export const runtime = "nodejs";
 
 
@@ -25,11 +26,20 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { title, category, content, important, author } = await request.json();
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("news_write", 15, 60);
+  if (rl.error) return rl.error;
+
+  const { title, category, content, important, author } = await request.json();
   try {
     const news = await prisma.news.create({
       data: {
@@ -50,11 +60,19 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  // Validate request body
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("news_write", 15, 60);
+  if (rl.error) return rl.error;
+
   const { title, category, description, important, author, id } =
     await request.json();
 
@@ -95,10 +113,19 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("news_write", 15, 60);
+  if (rl.error) return rl.error;
+
   const { id } = await request.json();
 
   if (!id) {

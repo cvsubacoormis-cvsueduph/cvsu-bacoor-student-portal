@@ -2,6 +2,7 @@ import { EventSchema, eventSchema } from "@/lib/formValidationSchemas";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
@@ -36,6 +37,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("event_write", 15, 60);
+  if (rl.error) return rl.error;
+
   try {
     const body = await request.json();
     const result = eventSchema.safeParse(body);
@@ -74,6 +88,19 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("event_write", 15, 60);
+  if (rl.error) return rl.error;
+
   try {
     const id = request.nextUrl.searchParams.get("id");
 
@@ -110,6 +137,19 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("event_write", 15, 60);
+  if (rl.error) return rl.error;
+
   try {
     const body = await request.json();
     const { id, ...rest } = body;

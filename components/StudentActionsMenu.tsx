@@ -77,9 +77,17 @@ export function StudentActionsMenu({
               <AlertDialogAction className="bg-blue-700 text-white hover:bg-blue-500"
                 onClick={() =>
                   startTransition(async () => {
-                    await approveStudent(studentId);
-                    router.refresh();
-                    toast.success(`Student ${studentNumber} Approved`);
+                    try {
+                      await approveStudent(studentId);
+                      router.refresh();
+                      toast.success(`Student ${studentNumber} Approved`);
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to approve student"
+                      );
+                    }
                   })
                 }
               >
@@ -110,9 +118,17 @@ export function StudentActionsMenu({
               <AlertDialogAction className="bg-red-700 text-white hover:bg-red-500"
                 onClick={() =>
                   startTransition(async () => {
-                    await rejectStudent(studentId);
-                    router.refresh();
-                    toast.error(`Student ${studentNumber} Rejected`);
+                    try {
+                      await rejectStudent(studentId);
+                      router.refresh();
+                      toast.error(`Student ${studentNumber} Rejected`);
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to reject student"
+                      );
+                    }
                   })
                 }
               >

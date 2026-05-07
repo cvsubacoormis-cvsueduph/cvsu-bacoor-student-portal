@@ -1,8 +1,9 @@
 // import { StudentSchema, studentSchema } from "@/lib/formValidationSchemas";
 import prisma from "@/lib/prisma";
-import { clerkClient } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { Courses, Major, Status, UserSex } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 export const runtime = "nodejs";
 
 
@@ -79,6 +80,19 @@ export const runtime = "nodejs";
 // // }
 
 export async function DELETE(request: NextRequest) {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const rl = await checkApiRateLimit("delete_student", 10, 60);
+  if (rl.error) return rl.error;
+
   try {
     const id = request.nextUrl.searchParams.get("id");
 

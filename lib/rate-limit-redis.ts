@@ -84,7 +84,7 @@ export async function checkRateLimitRedis({
       await redis.zrem(key, `${now}`);
 
       const error: any = new Error(
-        "Too many requests. Please try again in a minute.",
+        `Too many requests. Please try again in ${Math.ceil(windowSeconds / 60) || 1} minute(s).`,
       );
       error.code = "RATE_LIMIT_EXCEEDED";
       error.remaining = 0;

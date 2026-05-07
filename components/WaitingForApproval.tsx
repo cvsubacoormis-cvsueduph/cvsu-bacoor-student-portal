@@ -33,12 +33,14 @@ export function WaitingApproval({ user }: { user: User }) {
     setError("");
     try {
       const res = await fetch("/api/check-approval", {
-        headers: { "x-user-id": user.id },
         cache: "no-store",
       });
       const data = await res.json();
+      if (res.status === 401) {
+        setError("Session expired. Please sign out and sign in again.");
+        return;
+      }
       if (data?.isApproved) {
-        // Navigate to the student area once approved
         router.push("/student");
       } else {
         setError(

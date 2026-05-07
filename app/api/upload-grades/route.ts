@@ -10,11 +10,19 @@ import { RateLimiterRedis } from "rate-limiter-flexible";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-// Rate limiter: 3 uploads per 15 minutes
+// Rate limiter: 3 uploads per 15 minutes for faculty
 const uploadLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: "rl:upload_grades",
   points: 15,
+  duration: 15 * 60,
+});
+
+// Admin/registrar rate limiter: higher limit but still protected
+const adminUploadLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: "rl:upload_grades_admin",
+  points: 60,
   duration: 15 * 60,
 });
 
@@ -144,16 +152,18 @@ export async function POST(req: Request) {
   const userRole = (user.publicMetadata?.role as string) || "";
   const isAdmin = userRole === "admin" || userRole === "superuser" || userRole === "registrar";
 
-  // Rate Limiting check for faculty
-  if (userRole === "faculty") {
-    try {
-      await uploadLimiter.consume(userId);
-    } catch (rateLimiterRes) {
-      return NextResponse.json(
-        { error: "Too many upload attempts. Please try again in 15 minutes." },
-        { status: 429 }
-      );
-    }
+  // Rate Limiting check for all roles
+  const isAdminRole = userRole === "admin" || userRole === "superuser" || userRole === "registrar";
+  const limiter = isAdminRole ? adminUploadLimiter : uploadLimiter;
+
+  try {
+    await limiter.consume(userId);
+  } catch (rateLimiterRes: any) {
+    const retrySec = Math.ceil((rateLimiterRes.msBeforeNext || 900000) / 1000);
+    return NextResponse.json(
+      { error: `Too many upload attempts. Please try again in ${Math.ceil(retrySec / 60)} minute(s).` },
+      { status: 429 }
+    );
   }
 
   // Check if uploads are disabled

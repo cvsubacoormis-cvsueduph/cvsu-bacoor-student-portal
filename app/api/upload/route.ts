@@ -6,6 +6,7 @@ import { CreateStudentSchema } from "@/lib/formValidationSchemas";
 import { clerkClient } from "@clerk/nextjs/server";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import { auth } from "@clerk/nextjs/server";
+import crypto from "node:crypto";
 export const runtime = "nodejs";
 
 const rateLimiter = new RateLimiterMemory({
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
     });
 
     const batchSize = 25;
+    const createdStudents: { studentNumber: string; generatedPassword: string }[] = [];
     for (let i = 0; i < studentsToCreate.length; i += batchSize) {
       if (signal.aborted) throw new Error("Upload cancelled by user");
 
@@ -105,13 +107,13 @@ export async function POST(request: NextRequest) {
               .replaceAll("-", "");
 
             // Create Clerk user
+            const password = crypto.randomBytes(12).toString("hex");
             const user = await clerk.users.createUser({
               username,
               firstName: student.firstName.toUpperCase(),
               lastName: student.lastName.toUpperCase(),
               emailAddress: [student.email ?? ""],
-              password: `cvsubacoor${student.studentNumber}`,
-              skipPasswordChecks: true,
+              password,
               publicMetadata: { role: "student", isApproved: true },
             });
 
@@ -138,6 +140,10 @@ export async function POST(request: NextRequest) {
                 isApproved: true,
                 id: user.id,
               },
+            });
+            createdStudents.push({
+              studentNumber: String(student.studentNumber).replaceAll("-", ""),
+              generatedPassword: password,
             });
           } catch (error) {
             if (
@@ -181,6 +187,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: `Success! Created ${studentsToCreate.length}/${students.length} students.`,
       duplicates,
+      createdStudents,
     });
   } catch (error) {
     if (

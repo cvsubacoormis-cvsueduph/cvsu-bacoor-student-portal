@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { UserSex, Role } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { createUserSchema } from "@/schemas/user-schema";
+import crypto from "node:crypto";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 
 const ALLOWED_ROLES = ["admin", "superuser"] as const;
 
@@ -35,16 +37,11 @@ export async function createUser(formData: {
 
   const validData = parsed.data;
 
+  await checkRateLimitRedis({ action: "create_user", limit: 10, windowSeconds: 60 });
+
   const clerk = await clerkClient();
   try {
-    const cleanedFirstName = validData.firstName
-      .toLowerCase()
-      .replace(/\s+/g, "");
-
-    const password =
-      validData.role === "faculty"
-        ? `cvsubacoorfaculty${cleanedFirstName}`
-        : `cvsubacoorregistrar${cleanedFirstName}`;
+    const password = crypto.randomBytes(12).toString("hex");
 
     const clerkUser = await clerk.users.createUser({
       username: validData.username,

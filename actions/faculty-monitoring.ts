@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
+import { auth } from "@clerk/nextjs/server";
 
 export type FacultyUploadStatus = {
   id: string;
@@ -32,6 +33,9 @@ export async function getFacultyUploadStatus(
   page: number = 1,
   limit: number = 10
 ): Promise<{ data: FacultyUploadStatus[]; total: number }> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
   try {
     const isExport = limit === 0;
 

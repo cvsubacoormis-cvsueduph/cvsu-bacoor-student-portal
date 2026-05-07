@@ -161,6 +161,21 @@ export async function updateCurriculumChecklist(data: {
 }
 
 export async function deleteCurriculumChecklist(id: string) {
+  const { userId, sessionClaims } = await auth();
+  const role = sessionClaims?.metadata as { role?: string };
+
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  if (
+    role?.role !== "admin" &&
+    role?.role !== "faculty" &&
+    role?.role !== "registrar"
+  ) {
+    throw new Error("Unauthorized role");
+  }
+
   await prisma.curriculumChecklist.delete({
     where: {
       id: id,

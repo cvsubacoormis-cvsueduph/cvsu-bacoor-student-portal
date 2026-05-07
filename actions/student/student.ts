@@ -11,6 +11,8 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { Courses, Major, Status, UserSex } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
+import crypto from "node:crypto";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 
 const clerk = await clerkClient();
 
@@ -54,11 +56,11 @@ export async function createStudent(data: CreateStudentSchema) {
     const studentData = result.data;
 
     const clerk = await clerkClient();
+    const password = crypto.randomBytes(12).toString("hex");
     const user = await clerk.users.createUser({
       username: `${studentData.studentNumber
         }${studentData.firstName.toLowerCase()}`,
-      password: `cvsubacoor${studentData.firstName.toLowerCase()}${studentData.studentNumber
-        }`,
+      password,
       emailAddress: studentData.email ? [studentData.email] : undefined,
       firstName: studentData.firstName.toUpperCase(),
       lastName: studentData.lastName.toUpperCase(),
@@ -87,7 +89,7 @@ export async function createStudent(data: CreateStudentSchema) {
     });
 
     revalidatePath("/students");
-    return { student: createdStudent, error: null };
+    return { student: createdStudent, generatedPassword: password, error: null };
   } catch (error) {
     console.error("Error creating student:", error);
     return { student: null, error: "An unexpected error occurred" };
@@ -99,8 +101,10 @@ export async function deleteStudent(id: string) {
   const role = (sessionClaims?.metadata as { role?: string })?.role;
 
   if (!userId || role !== "admin") {
-    return { success: false, error: "Unauthorized" };
+    return { student: null, error: "Unauthorized" };
   }
+
+  await checkRateLimitRedis({ action: "delete_student", limit: 5, windowSeconds: 60 });
 
   try {
     if (!id) {

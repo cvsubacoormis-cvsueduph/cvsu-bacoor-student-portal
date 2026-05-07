@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { UserSex, Role } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { bulkUserSchema } from "@/schemas/user-schema";
+import crypto from "node:crypto";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 
 export interface BulkUserPayload {
   username: string;
@@ -20,9 +22,14 @@ export interface BulkUserPayload {
 }
 
 export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  if (role !== "admin" && role !== "superuser") {
+    throw new Error("Forbidden: insufficient permissions.");
   }
 
   const parsed = bulkUserSchema.safeParse(usersData);
@@ -36,23 +43,19 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
 
   const validUsers = parsed.data;
 
+  await checkRateLimitRedis({ action: "bulk_create_users", limit: 3, windowSeconds: 300 });
+
   const clerk = await clerkClient();
   const results = {
     successful: 0,
     failed: 0,
     errors: [] as string[],
+    createdUsers: [] as { username: string; generatedPassword: string }[],
   };
 
   for (const [index, formData] of validUsers.entries()) {
     try {
-      const cleanedFirstName = formData.firstName
-        .toLowerCase()
-        .replace(/\s+/g, "");
-
-      const password =
-        formData.role === "faculty"
-          ? `cvsubacoorfaculty${cleanedFirstName}`
-          : `cvsubacoorregistrar${cleanedFirstName}`;
+      const password = crypto.randomBytes(12).toString("hex");
 
       // Create user in Clerk
       const clerkUser = await clerk.users.createUser({
@@ -89,6 +92,7 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
       });
 
       results.successful++;
+      results.createdUsers.push({ username: formData.username, generatedPassword: password });
     } catch (error: any) {
       results.failed++;
       console.error(`Failed to create user ${formData.username}:`, error);

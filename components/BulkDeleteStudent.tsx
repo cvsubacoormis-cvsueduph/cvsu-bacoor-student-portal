@@ -30,7 +30,11 @@ export default function BulkDeleteStudent() {
         toast.success("All students deleted successfully");
         mutate("/api/students");
       } else {
-        toast.error("Failed to delete all students");
+        if (response.status === 403) {
+          toast.error("You do not have permission to delete all students.");
+        } else {
+          toast.error("Failed to delete all students");
+        }
       }
     }
     setIsLoading(false);
