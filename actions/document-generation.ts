@@ -55,10 +55,17 @@ export async function generateCOGWithRateLimit(
     };
   } catch (error) {
     console.error("[generateCOGWithRateLimit] Error:", error);
+    
+    // Capture the actual error for debugging
     if (error instanceof Error) {
-      throw new Error(`COG generation failed: ${error.message}`);
+      console.error("[generateCOGWithRateLimit] Error name:", error.name);
+      console.error("[generateCOGWithRateLimit] Error message:", error.message);
+      console.error("[generateCOGWithRateLimit] Stack:", error.stack);
+      
+      // Pass through the original message for better user feedback
+      throw new Error(error.message);
     }
-    throw new Error("COG generation failed: Unknown error");
+    throw new Error("Unable to generate COG. Please try again.");
   }
 }
 

@@ -123,15 +123,27 @@ export default function GenerateCOG() {
   };
 
   const handleGenerate = async () => {
-    if (!academicYear || !semester) return;
+    if (!academicYear || !semester) {
+      toast.error("Please select both academic year and semester.");
+      return;
+    }
 
     setIsLoading(true);
+    setStudentData(null);
+    
     try {
+      console.log("[GenerateCOG] Starting with:", { academicYear, semester });
+      
       // Use the rate-limited action for COG generation
-      const { student } = await generateCOGWithRateLimit(
-        academicYear,
-        semester,
-      );
+      const result = await generateCOGWithRateLimit(academicYear, semester);
+      
+      console.log("[GenerateCOG] Got result:", result);
+      
+      if (!result || !result.student) {
+        throw new Error("No data returned from server");
+      }
+      
+      const { student } = result;
       const data = student as StudentData;
       setStudentData({
         ...data,
@@ -144,79 +156,84 @@ export default function GenerateCOG() {
       });
       generatePDF(data as StudentData, data.grades as Grade[]);
       setIsDialogOpen(false);
-    } catch (error) {
-      console.error("COG Generation Error:", error);
-
-      const err = error as { message: string; code?: string; digest?: string };
-
+} catch (error) {
+      console.error("========== COG Generation Error ==========");
+      console.error("Full error object:", error);
+      console.error("Error type:", typeof error);
+      console.error("Is Error:", error instanceof Error);
+      
+      let errMsg = "Unknown error";
+      let errCode: string | undefined;
+      let errDigest: string | undefined;
+      
+      if (error instanceof Error) {
+        errMsg = error.message;
+        errCode = (error as any).code;
+        errDigest = (error as any).digest;
+        console.error("Error message:", errMsg);
+        console.error("Error code:", errCode);
+        console.error("Error digest:", errDigest);
+        console.error("Error stack:", error.stack);
+      } else if (error && typeof error === "object") {
+        // Handle cases where error might be a plain object
+        errMsg = (error as any).message || JSON.stringify(error);
+        errCode = (error as any).code;
+        errDigest = (error as any).digest;
+        console.error("Error object:", error);
+      }
+      
+      const err = { message: errMsg, code: errCode, digest: errDigest };
+      
       // Map technical errors to user-friendly messages
       const getUserFriendlyMessage = (errorMsg: string): string => {
         const lowerMsg = errorMsg.toLowerCase();
-
+        
+        console.log("Processing error message:", lowerMsg);
+        
         // Rate limit
-        if (
-          lowerMsg.includes("rate limit") ||
-          lowerMsg.includes("too many request")
-        ) {
+        if (lowerMsg.includes("rate limit") || lowerMsg.includes("too many request")) {
           return "You've reached the maximum number of documents you can generate. Please wait a moment and try again.";
         }
-
+        
         // No grades for selected term
-        if (
-          lowerMsg.includes("no grades found") ||
-          lowerMsg.includes("no grades")
-        ) {
+        if (lowerMsg.includes("no grades found") || lowerMsg.includes("no grades") || lowerMsg.includes("no grades found for this academic term")) {
           return "No grades found for the selected academic year and semester. Please select a different term or contact the registrar.";
         }
-
+        
         // Student not found / Unauthorized
-        if (
-          lowerMsg.includes("unauthorized") ||
-          lowerMsg.includes("forbidden") ||
-          lowerMsg.includes("not found")
-        ) {
+        if (lowerMsg.includes("unauthorized") || lowerMsg.includes("forbidden")) {
           return "Unable to access your grades. Please make sure you're logged in correctly and try again.";
         }
-
+        
+        // Student not found
+        if (lowerMsg.includes("student not found")) {
+          return "Your student record was not found. Please contact the registrar to verify your enrollment.";
+        }
+        
         // Database / server errors
-        if (
-          lowerMsg.includes("database") ||
-          lowerMsg.includes("prisma") ||
-          lowerMsg.includes("server error")
-        ) {
+        if (lowerMsg.includes("database") || lowerMsg.includes("prisma") || lowerMsg.includes("server error") || lowerMsg.includes("connection")) {
           return "We're having trouble loading your grades. Please try again in a few minutes.";
         }
-
+        
         // Redis / connection errors
-        if (lowerMsg.includes("redis") || lowerMsg.includes("connection")) {
+        if (lowerMsg.includes("redis")) {
           return "Unable to generate document right now. Please try again.";
         }
-
-        // COG generation failed - catch-all
-        if (lowerMsg.includes("cog generation failed")) {
-          // Extract the underlying error
-          const parts = errorMsg.split(": ");
-          if (parts.length > 1) {
-            return getUserFriendlyMessage(parts.slice(1).join(": "));
-          }
-        }
-
-        // Default - generic but friendly
-        return "Something went wrong while generating your document. Please try again or contact support if the problem persists.";
+        
+        // Default - return original for debugging
+        return errorMsg;
       };
-
-      const friendlyMessage = getUserFriendlyMessage(err.message);
-      toast.error(friendlyMessage);
-
-      // Log detailed error for debugging
-      console.error(
-        "Detailed error:",
-        err.message,
-        "Code:",
-        err.code,
-        "Digest:",
-        err.digest,
-      );
+      
+      // Check if we have a mapped message or return default
+      let displayMessage = getUserFriendlyMessage(err.message);
+      
+      // If the message returned is the same as input (no mapping), use default with hint
+      if (displayMessage === err.message && !err.message.includes("rate limit") && !err.message.includes("no grades")) {
+        console.log("Unmapped error - using default. Original:", err.message);
+        displayMessage = "Unable to generate your document right now. Please try again or select a different academic term.";
+      }
+      
+      toast.error(displayMessage);
     } finally {
       setIsLoading(false);
     }
