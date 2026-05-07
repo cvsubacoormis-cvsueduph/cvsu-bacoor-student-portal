@@ -1,10 +1,15 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export async function getSetting(key: string): Promise<string | null> {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return null;
+        }
+
         const setting = await prisma.systemSettings.findUnique({
             where: { key },
         });

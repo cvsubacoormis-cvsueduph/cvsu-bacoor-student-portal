@@ -7,9 +7,15 @@ export const getStudents = async (
   page: number = 1,
   limit: number = 10
 ) => {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  if (!role || !allowedRoles.includes(role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {
     const students = await prisma.student.findMany({

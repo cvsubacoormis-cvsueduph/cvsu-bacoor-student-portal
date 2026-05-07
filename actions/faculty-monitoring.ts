@@ -33,8 +33,14 @@ export async function getFacultyUploadStatus(
   page: number = 1,
   limit: number = 10
 ): Promise<{ data: FacultyUploadStatus[]; total: number }> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  if (!role || !allowedRoles.includes(role)) {
+    throw new Error("Forbidden: insufficient permissions.");
+  }
 
   try {
     const isExport = limit === 0;

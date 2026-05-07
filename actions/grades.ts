@@ -64,9 +64,15 @@ export async function searchStudent(
   page: number = 1,
   limit: number = 10
 ): Promise<SearchResponse> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  if (!role || !allowedRoles.includes(role)) {
+    throw new Error("Forbidden: insufficient permissions.");
   }
   if (!query.trim()) {
     throw new Error("Search query cannot be empty");
@@ -190,7 +196,16 @@ export async function getStudentDetails(
 
 export async function addManualGrade(gradeData: GradeData): Promise<void> {
   const user = await currentUser();
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
   const userRole = (user?.publicMetadata?.role as string) || "";
+  const allowedRoles = ["admin", "superuser", "registrar"];
+  if (!allowedRoles.includes(userRole)) {
+    throw new Error("Forbidden: insufficient permissions.");
+  }
+
   const isAdmin = userRole === "admin" || userRole === "superuser";
 
   const settingValue = await prisma.systemSettings.findUnique({
@@ -330,8 +345,14 @@ export async function checkExsistingGrade({
   academicYear,
   semester,
 }: CheckExsistingGradeParams) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
+
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  if (!role || !allowedRoles.includes(role)) {
+    throw new Error("Forbidden: insufficient permissions.");
+  }
 
   const existing = await prisma.grade.findFirst({
     where: {

@@ -11,6 +11,11 @@ const getCacheKey = (course: string, date: Date) =>
 
 export async function GET(req: Request) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const url = new URL(req.url);
 
         // Pagination Params

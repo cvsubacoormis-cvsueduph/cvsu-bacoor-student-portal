@@ -2,17 +2,23 @@
 
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 export async function createAcademicTerm(data: {
     academicYear: AcademicYear;
     semester: Semester;
 }) {
-    const { userId } = await auth();
+    const { userId, sessionClaims } = await auth();
 
     if (!userId) {
         return { success: false, message: "Unauthorized" };
+    }
+
+    const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
+    const ALLOWED = ["admin", "superuser", "registrar"] as const;
+    if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
+        return { success: false, message: "Forbidden: insufficient permissions." };
     }
 
     try {
@@ -45,6 +51,11 @@ export async function createAcademicTerm(data: {
 }
 
 export async function getAllAcademicTerms() {
+    const { userId } = await auth();
+    if (!userId) {
+        throw new Error("Unauthorized");
+    }
+
     try {
         const terms = await prisma.academicTerm.findMany({
             orderBy: [

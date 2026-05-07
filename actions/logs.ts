@@ -112,6 +112,11 @@ export async function resolveGradeLog(
         throw new Error("Permission Denied: You must be logged in to perform this action.");
     }
 
+    const role = user.publicMetadata.role as string;
+    if (role !== "admin" && role !== "registrar") {
+        throw new Error("Permission Denied: You do not have the required permissions (Admin or Registrar) to resolve logs.");
+    }
+
     // Validate required fields
     if (
         !gradeData.studentNumber ||

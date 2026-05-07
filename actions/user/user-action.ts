@@ -22,9 +22,14 @@ export async function createUser(formData: {
   sex: UserSex;
   role: Role;
 }) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
+  if (!callerRole || !ALLOWED_ROLES.includes(callerRole as (typeof ALLOWED_ROLES)[number])) {
+    throw new Error("Forbidden: insufficient permissions.");
   }
 
   const parsed = createUserSchema.safeParse(formData);

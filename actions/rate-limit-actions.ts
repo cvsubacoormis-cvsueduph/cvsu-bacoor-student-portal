@@ -1,6 +1,7 @@
 "use server";
 
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
+import { auth } from "@clerk/nextjs/server";
 
 /**
  * Server action to check rate limit for generate_checklist from client components
@@ -8,6 +9,11 @@ import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
  */
 export async function checkChecklistRateLimit() {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
     await checkRateLimitRedis({
       action: "generate_checklist",
       limit: 5,
@@ -32,6 +38,11 @@ export async function checkChecklistRateLimit() {
  */
 export async function checkCOGRateLimit() {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
     await checkRateLimitRedis({
       action: "generate_cog",
       limit: 5,
@@ -55,6 +66,11 @@ export async function checkCOGRateLimit() {
  */
 export async function checkCOGAdminRateLimit() {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
     await checkRateLimitRedis({
       action: "generate_cog_admin",
       limit: 10,

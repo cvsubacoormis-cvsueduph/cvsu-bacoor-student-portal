@@ -17,9 +17,15 @@ export async function getSubjectOfferings({
     academicYear?: string;
     semester?: string;
 }) {
-    const { userId } = await auth();
+    const { userId, sessionClaims } = await auth();
     if (!userId) {
         throw new Error("Unauthorized");
+    }
+
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
+    const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+    if (!role || !allowedRoles.includes(role)) {
+        throw new Error("Forbidden: insufficient permissions.");
     }
 
     const skip = (page - 1) * limit;
