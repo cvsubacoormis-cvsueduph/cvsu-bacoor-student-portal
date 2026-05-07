@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { CurriculumItem, GradeAttempt } from "@/lib/types";
 import { DownloadIcon } from "lucide-react";
 import { CurriculumData } from "@/hooks/use-curriculum-data";
+import { checkChecklistRateLimit } from "@/actions/rate-limit-actions";
 
 type CourseRowProps = {
   code: string;
@@ -96,6 +97,17 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
 
   const generateChecklistPDF = async () => {
     if (!buttonRef.current || !studentData || !checklistData.length) return;
+
+    // Check rate limit before generating
+    try {
+      await checkChecklistRateLimit();
+    } catch (error: any) {
+      if (error.code === "RATE_LIMIT_EXCEEDED" || error.message === "Too many requests. Please try again in a minute.") {
+        alert("You have reached the limit for generating this document. Please wait a minute and try again.");
+        return;
+      }
+      throw error; // Re-throw other errors
+    }
 
     setGenerating(true);
 

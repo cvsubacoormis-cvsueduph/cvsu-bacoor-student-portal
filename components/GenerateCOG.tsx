@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/select";
 import {
   getAvailableAcademicOptions,
-  getStudentGradesWithReExam,
 } from "@/actions/student-grades/student-grades";
+import { generateCOGWithRateLimit } from "@/actions/document-generation";
 import {
   courseClerkshipMap,
   courseMap,
@@ -124,7 +124,8 @@ export default function GenerateCOG() {
 
     setIsLoading(true);
     try {
-      const { student } = await getStudentGradesWithReExam();
+      // Use the rate-limited action for COG generation
+      const { student } = await generateCOGWithRateLimit(academicYear, semester);
       const data = student as StudentData;
       setStudentData({
         ...data,
@@ -135,22 +136,18 @@ export default function GenerateCOG() {
         major: data.major || "",
         middleInit: data.middleInit || "",
       });
-      const filteredGrades = data.grades.filter(
-        (g: { academicYear: string; semester: string }) =>
-          g.academicYear === academicYear && g.semester === semester
-      );
-      generatePDF(data as StudentData, filteredGrades as Grade[]);
+      generatePDF(data as StudentData, data.grades as Grade[]);
       setIsDialogOpen(false);
     } catch (error) {
       // Log the full error for debugging
       console.error("COG Generation Error:", error);
 
-      const err = error as { message: string };
+      const err = error as { message: string; code?: string };
 
-      // Check for rate limit error (corrected message)
+      // Check for rate limit error
       if (
-        err.message ===
-        "Too many requests. Please try again in a minute."
+        err.message === "Too many requests. Please try again in a minute." ||
+        err.code === "RATE_LIMIT_EXCEEDED"
       ) {
         toast.error(
           "You have reached the limit for generating this document. Please wait a minute and try again."

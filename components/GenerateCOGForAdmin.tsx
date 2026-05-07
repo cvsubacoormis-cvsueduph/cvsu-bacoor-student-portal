@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import {
   getStudentGradesWithReExam,
 } from "@/actions/student-grades/student-grades";
+import { generateCOGAdminWithRateLimit } from "@/actions/document-generation";
 import {
   courseClerkshipMap,
   courseMap,
@@ -145,29 +146,34 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       toast.error("Please fill in all fields before generating.");
       return;
     }
-    if (!studentData) return;
 
     setIsLoading(true);
     try {
-      const filteredGrades = studentData.grades.filter(
-        (g: { academicYear: string; semester: string }) =>
-          g.academicYear === academicYear && g.semester === semester
+      // Use the rate-limited action for admin COG generation
+      const { student } = await generateCOGAdminWithRateLimit(
+        studentId,
+        academicYear,
+        semester
       );
 
-      if (filteredGrades.length === 0) {
-        toast.error("No grades found for this term.");
-        setIsLoading(false);
-        return;
-      }
+      const data = {
+        studentNumber: student.studentNumber,
+        firstName: student.firstName,
+        middleInit: student.middleInit,
+        lastName: student.lastName,
+        course: student.course,
+        major: student.major,
+        grades: student.grades,
+      };
 
-      generatePDF(studentData, filteredGrades as Grade[]);
+      generatePDF(data as StudentData, student.grades as Grade[]);
       setIsDialogOpen(false);
     } catch (error) {
       console.error("PDF Generate Error:", error);
-      const err = error as { message: string };
+      const err = error as { message: string; code?: string };
       if (
-        err?.message ===
-        "Too many requests. Please wait a minute before trying again."
+        err?.message === "Too many requests. Please try again in a minute." ||
+        err?.code === "RATE_LIMIT_EXCEEDED"
       ) {
         toast.error(
           "You have reached the limit for generating this document. Please wait a minute and try again."
