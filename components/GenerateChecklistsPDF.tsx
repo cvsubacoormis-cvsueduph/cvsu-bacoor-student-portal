@@ -101,18 +101,31 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
 
     // Check rate limit before generating
     try {
-      await checkChecklistRateLimit();
-    } catch (error: any) {
-      if (
-        error.code === "RATE_LIMIT_EXCEEDED" ||
-        error.message === "Too many requests. Please try again in a minute."
-      ) {
+      const result = await checkChecklistRateLimit();
+      // If result indicates failure, treat as rate limit exceeded
+      if (!result?.success) {
         toast.error(
           "You have reached the limit for generating this document. Please wait a minute and try again.",
         );
         return;
       }
-      throw error; // Re-throw other errors
+    } catch (error: any) {
+      console.error("Rate limit check error:", error);
+      // Check for rate limit errors - handle various error formats
+      const isRateLimitError =
+        error?.code === "RATE_LIMIT_EXCEEDED" ||
+        error?.message?.includes("Too many requests") ||
+        error?.message?.includes("rate limit") ||
+        error?.message === "Too many requests. Please try again in a minute.";
+
+      if (isRateLimitError) {
+        toast.error(
+          "You have reached the limit for generating this document. Please wait a minute and try again.",
+        );
+        return;
+      }
+      // Re-throw other errors
+      throw error;
     }
 
     setGenerating(true);
