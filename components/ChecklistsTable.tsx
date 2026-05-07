@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -42,7 +41,7 @@ export function CurriculumChecklist() {
         acc[yearKey][semesterKey].push(subject);
         return acc;
       },
-      {}
+      {},
     );
   }, [data]);
 
@@ -51,8 +50,8 @@ export function CurriculumChecklist() {
     return selectedYear === "all"
       ? Object.entries(groupedCurriculum)
       : Object.entries(groupedCurriculum).filter(
-        ([year]) => yearLevelMap(year) === selectedYear
-      );
+          ([year]) => yearLevelMap(year) === selectedYear,
+        );
   }, [groupedCurriculum, selectedYear]);
 
   if (loading) return <CurriculumChecklistSkeleton />;
@@ -143,9 +142,10 @@ function ProgressSummary({ data }: { data: CurriculumData }) {
           <span className="leading-tight">
             Academic Progress - {courseMap(data.studentInfo.course)}
             {data.studentInfo.major !== "NONE" &&
-              ` ${data.studentInfo.major
-                ? formatMajor(data.studentInfo.major)
-                : ""
+              ` ${
+                data.studentInfo.major
+                  ? formatMajor(data.studentInfo.major)
+                  : ""
               }`}
           </span>
         </CardTitle>
@@ -301,7 +301,7 @@ function SubjectRow({ subject }: { subject: Subject }) {
           <Badge
             variant="outline"
             className={`text-xs px-2 py-1 print:px-1 print:py-0 print:text-xs ${getStatusColor(
-              subject.completion
+              subject.completion,
             )}`}
           >
             {subject.completion}
@@ -323,7 +323,7 @@ function SubjectRow({ subject }: { subject: Subject }) {
       </td>
       <td
         className={`py-2 px-2 text-center font-semibold print:py-1 ${getGradeColor(
-          latestReExam
+          latestReExam,
         )}`}
       >
         {latestReExam || "-"}
@@ -349,21 +349,21 @@ function SubjectRow({ subject }: { subject: Subject }) {
 function AttemptRow({ attempt }: { attempt: any }) {
   const betterGrade = getBetterGrade(attempt.grade, attempt.reExam);
 
-  const aySem = attempt.retakenAYSem ||
-    `AY ${attempt.academicYear.split("_").slice(1).join("-")} / ${attempt.semester === "FIRST"
-      ? "1st"
-      : attempt.semester === "SECOND"
-        ? "2nd"
-        : "Midyear"
+  const aySem =
+    attempt.retakenAYSem ||
+    `AY ${attempt.academicYear.split("_").slice(1).join("-")} / ${
+      attempt.semester === "FIRST"
+        ? "1st"
+        : attempt.semester === "SECOND"
+          ? "2nd"
+          : "Midyear"
     } Sem (Attempt ${attempt.attemptNumber})`;
 
   return (
     <div className="text-xs">
       {aySem} -
       {(attempt.grade || attempt.reExam) && (
-        <span
-          className={`ml-2 font-medium ${getGradeColor(betterGrade)}`}
-        >
+        <span className={`ml-2 font-medium ${getGradeColor(betterGrade)}`}>
           {betterGrade}
         </span>
       )}
@@ -388,9 +388,7 @@ function StatusIcon({ status }: { status: string }) {
     case "Incomplete":
       return <XCircle className="h-4 w-4 text-orange-600" />;
     default:
-      return (
-        <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-      );
+      return <div className="h-4 w-4 rounded-full border-2 border-gray-300" />;
   }
 }
 
@@ -399,7 +397,6 @@ function Legend() {
     <Card className="w-full border-gray-200 print:border print:border-gray-300 print:shadow-none">
       {/* Reduced padding on mobile (p-4) to maximize space */}
       <CardContent className="p-4 sm:p-6 print:pt-2">
-
         {/* Adjusted header size and margin for mobile */}
         <h4 className="mb-3 text-base font-medium text-gray-900 sm:text-lg print:mb-2 print:text-sm">
           Legend
@@ -411,24 +408,31 @@ function Legend() {
            - Desktop (md): 4 columns
         */}
         <div className="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-2 md:grid-cols-4 print:grid-cols-4 print:gap-2 print:text-xs">
-
           <LegendItem
-            icon={<CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 print:mt-0 print:h-3 print:w-3" />}
+            icon={
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 print:mt-0 print:h-3 print:w-3" />
+            }
             label="Completed/Passed/S"
           />
 
           <LegendItem
-            icon={<XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 print:mt-0 print:h-3 print:w-3" />}
+            icon={
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 print:mt-0 print:h-3 print:w-3" />
+            }
             label="Failed/Unsatisfactory"
           />
 
           <LegendItem
-            icon={<XCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600 print:mt-0 print:h-3 print:w-3" />}
+            icon={
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600 print:mt-0 print:h-3 print:w-3" />
+            }
             label="Conditional Failure/Dropped/Lack of Requirements"
           />
 
           <LegendItem
-            icon={<div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-gray-300 print:mt-0 print:h-3 print:w-3" />}
+            icon={
+              <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-gray-300 print:mt-0 print:h-3 print:w-3" />
+            }
             label="Not Taken"
           />
         </div>

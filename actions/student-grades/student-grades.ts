@@ -66,6 +66,8 @@ export async function getStudentGradesWithReExam(studentId?: string) {
     throw new Error("Forbidden");
   }
 
+  console.log("[getStudentGradesWithReExam] Fetching grades for:", studentId || userId);
+
   const student = await prisma.student.findUnique({
     where: { id: studentId || userId },
     select: {

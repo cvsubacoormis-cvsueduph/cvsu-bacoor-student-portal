@@ -1,4 +1,4 @@
-import { redis } from "@/lib/redis";
+import { redis, isRedisConnected } from "@/lib/redis";
 import { auth } from "@clerk/nextjs/server";
 
 type RateLimitOptions = {
@@ -25,6 +25,8 @@ export async function checkRateLimitRedis({
   limit,
   windowSeconds,
 }: RateLimitOptions): Promise<RateLimitResult> {
+  console.log(`[checkRateLimitRedis] Checking rate limit for action: ${action}`);
+  
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
@@ -35,6 +37,17 @@ export async function checkRateLimitRedis({
   const windowStart = now - windowSeconds * 1000;
 
   try {
+    // Check if Redis is connected first
+    if (!isRedisConnected()) {
+      console.log("[checkRateLimitRedis] Redis not connected, using fallback");
+      // Allow the request with fallback
+      return {
+        success: true,
+        remaining: limit,
+        resetTime: now + windowSeconds * 1000,
+      };
+    }
+    
     // Use Redis transaction for atomic operations
     const pipeline = redis.pipeline();
 

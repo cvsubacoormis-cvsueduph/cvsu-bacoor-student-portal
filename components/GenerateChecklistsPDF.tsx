@@ -7,6 +7,7 @@ import { CurriculumItem, GradeAttempt } from "@/lib/types";
 import { DownloadIcon } from "lucide-react";
 import { CurriculumData } from "@/hooks/use-curriculum-data";
 import { checkChecklistRateLimit } from "@/actions/rate-limit-actions";
+import { toast } from "sonner";
 
 type CourseRowProps = {
   code: string;
@@ -102,8 +103,13 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
     try {
       await checkChecklistRateLimit();
     } catch (error: any) {
-      if (error.code === "RATE_LIMIT_EXCEEDED" || error.message === "Too many requests. Please try again in a minute.") {
-        alert("You have reached the limit for generating this document. Please wait a minute and try again.");
+      if (
+        error.code === "RATE_LIMIT_EXCEEDED" ||
+        error.message === "Too many requests. Please try again in a minute."
+      ) {
+        toast.error(
+          "You have reached the limit for generating this document. Please wait a minute and try again.",
+        );
         return;
       }
       throw error; // Re-throw other errors
@@ -133,7 +139,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           logoX,
           logoY,
           logoWidth,
-          logoHeight
+          logoHeight,
         );
       } catch (e) {
         console.warn("Logo not found or invalid");
@@ -243,10 +249,11 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           attemptsText = allAttempts
             .map(
               (attempt) =>
-                `${formatAySem(attempt.academicYear, attempt.semester)} (${attempt.grade || "-"}) ${attempt.attemptNumber > 1
-                  ? `(Attempt ${attempt.attemptNumber})`
-                  : ""
-                }`
+                `${formatAySem(attempt.academicYear, attempt.semester)} (${attempt.grade || "-"}) ${
+                  attempt.attemptNumber > 1
+                    ? `(Attempt ${attempt.attemptNumber})`
+                    : ""
+                }`,
             )
             .join("\n");
         } else {
@@ -256,7 +263,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         const maxLines = Math.max(
           titleLines.length,
           prereqLines.length,
-          allAttempts?.length || 1
+          allAttempts?.length || 1,
         );
         const rowHeight = maxLines * 4;
 
@@ -309,7 +316,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         const columnWidths = [30, 10, 10, 10, 10, 15, 15, 15];
         const totalTableWidth = columnWidths.reduce(
           (sum, width) => sum + width,
-          0
+          0,
         );
 
         doc.setFontSize(8);
@@ -321,33 +328,33 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         doc.text(
           "2nd Sem",
           tableStartX + columnWidths[0] + columnWidths[1] + columnWidths[2],
-          yPos - 3
+          yPos - 3,
         );
         doc.text(
           "Summer",
           tableStartX +
-          columnWidths[0] +
-          columnWidths[1] +
-          columnWidths[2] +
-          columnWidths[3] +
-          columnWidths[4],
-          yPos - 3
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3] +
+            columnWidths[4],
+          yPos - 3,
         );
         doc.text(
           "TOTAL (Lec)",
           tableStartX +
-          columnWidths[0] +
-          columnWidths[1] +
-          columnWidths[2] +
-          columnWidths[3] +
-          columnWidths[4] +
-          columnWidths[5],
-          yPos - 3
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3] +
+            columnWidths[4] +
+            columnWidths[5],
+          yPos - 3,
         );
         doc.text(
           "TOTAL (Lab)",
           tableStartX + totalTableWidth - columnWidths[7],
-          yPos - 3
+          yPos - 3,
         );
 
         doc.text("Year Level", tableStartX, yPos + 4);
@@ -355,21 +362,21 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         doc.text(
           "Lab",
           tableStartX + columnWidths[0] + columnWidths[1],
-          yPos + 4
+          yPos + 4,
         );
         doc.text(
           "Lec",
           tableStartX + columnWidths[0] + columnWidths[1] + columnWidths[2],
-          yPos + 4
+          yPos + 4,
         );
         doc.text(
           "Lab",
           tableStartX +
-          columnWidths[0] +
-          columnWidths[1] +
-          columnWidths[2] +
-          columnWidths[3],
-          yPos + 4
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3],
+          yPos + 4,
         );
 
         yPos += 8;
@@ -383,50 +390,51 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           (yearLevel) => {
             const firstSem = checklistData.filter(
               (item) =>
-                item.yearLevel === yearLevel && item.semester === "FIRST"
+                item.yearLevel === yearLevel && item.semester === "FIRST",
             );
             const secondSem = checklistData.filter(
               (item) =>
-                item.yearLevel === yearLevel && item.semester === "SECOND"
+                item.yearLevel === yearLevel && item.semester === "SECOND",
             );
             const midYear = checklistData.filter(
               (item) =>
-                item.yearLevel === yearLevel && item.semester === "MIDYEAR"
+                item.yearLevel === yearLevel && item.semester === "MIDYEAR",
             );
 
             const sem1Lec = firstSem.reduce(
               (sum, item) => sum + (item.creditUnit.lec || 0),
-              0
+              0,
             );
             const sem1Lab = firstSem.reduce(
               (sum, item) => sum + (item.creditUnit.lab || 0),
-              0
+              0,
             );
             const sem2Lec = secondSem.reduce(
               (sum, item) => sum + (item.creditUnit.lec || 0),
-              0
+              0,
             );
             const sem2Lab = secondSem.reduce(
               (sum, item) => sum + (item.creditUnit.lab || 0),
-              0
+              0,
             );
             const summer = midYear.reduce(
               (sum, item) =>
                 sum + (item.creditUnit.lec || 0) + (item.creditUnit.lab || 0),
-              0
+              0,
             );
             const totalLec = sem1Lec + sem2Lec;
             const totalLab = sem1Lab + sem2Lab;
 
             return {
-              year: `${yearLevel === "FIRST"
-                ? "First"
-                : yearLevel === "SECOND"
-                  ? "Second"
-                  : yearLevel === "THIRD"
-                    ? "Third"
-                    : "Fourth"
-                } Year`,
+              year: `${
+                yearLevel === "FIRST"
+                  ? "First"
+                  : yearLevel === "SECOND"
+                    ? "Second"
+                    : yearLevel === "THIRD"
+                      ? "Third"
+                      : "Fourth"
+              } Year`,
               sem1Lec,
               sem1Lab,
               sem2Lec,
@@ -435,16 +443,16 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
               totalLec,
               totalLab,
             };
-          }
+          },
         );
 
         const grandTotalLec = summaryData.reduce(
           (sum, row) => sum + row.totalLec,
-          0
+          0,
         );
         const grandTotalLab = summaryData.reduce(
           (sum, row) => sum + row.totalLab,
-          0
+          0,
         );
 
         doc.setFontSize(6);
@@ -456,47 +464,47 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           doc.text(
             row.sem1Lab.toString(),
             tableStartX + columnWidths[0] + columnWidths[1],
-            yPos
+            yPos,
           );
           doc.text(
             row.sem2Lec.toString(),
             tableStartX + columnWidths[0] + columnWidths[1] + columnWidths[2],
-            yPos
+            yPos,
           );
           doc.text(
             row.sem2Lab.toString(),
             tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3],
-            yPos
+              columnWidths[0] +
+              columnWidths[1] +
+              columnWidths[2] +
+              columnWidths[3],
+            yPos,
           );
           doc.text(
             row.summer.toString(),
             tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3] +
-            columnWidths[4],
-            yPos
+              columnWidths[0] +
+              columnWidths[1] +
+              columnWidths[2] +
+              columnWidths[3] +
+              columnWidths[4],
+            yPos,
           );
           doc.text(
             row.totalLec.toString(),
             tableStartX +
-            columnWidths[0] +
-            columnWidths[1] +
-            columnWidths[2] +
-            columnWidths[3] +
-            columnWidths[4] +
-            columnWidths[5],
-            yPos
+              columnWidths[0] +
+              columnWidths[1] +
+              columnWidths[2] +
+              columnWidths[3] +
+              columnWidths[4] +
+              columnWidths[5],
+            yPos,
           );
           doc.text(
             row.totalLab.toString(),
             tableStartX + totalTableWidth - columnWidths[7],
-            yPos
+            yPos,
           );
           yPos += 5;
         });
@@ -506,18 +514,18 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         doc.text(
           grandTotalLec.toString(),
           tableStartX +
-          columnWidths[0] +
-          columnWidths[1] +
-          columnWidths[2] +
-          columnWidths[3] +
-          columnWidths[4] +
-          columnWidths[5],
-          yPos
+            columnWidths[0] +
+            columnWidths[1] +
+            columnWidths[2] +
+            columnWidths[3] +
+            columnWidths[4] +
+            columnWidths[5],
+          yPos,
         );
         doc.text(
           grandTotalLab.toString(),
           tableStartX + totalTableWidth - columnWidths[7],
-          yPos
+          yPos,
         );
         yPos += 10;
       };
@@ -537,7 +545,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         addSemesterHeader("First Semester");
         checklistData
           .filter(
-            (item) => item.yearLevel === yearLevel && item.semester === "FIRST"
+            (item) => item.yearLevel === yearLevel && item.semester === "FIRST",
           )
           .forEach((item) => {
             addCourseRow({
@@ -558,7 +566,8 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
         addSemesterHeader("Second Semester");
         checklistData
           .filter(
-            (item) => item.yearLevel === yearLevel && item.semester === "SECOND"
+            (item) =>
+              item.yearLevel === yearLevel && item.semester === "SECOND",
           )
           .forEach((item) => {
             addCourseRow({
@@ -577,14 +586,14 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
           });
 
         const hasMidYear = checklistData.some(
-          (item) => item.yearLevel === yearLevel && item.semester === "MIDYEAR"
+          (item) => item.yearLevel === yearLevel && item.semester === "MIDYEAR",
         );
         if (hasMidYear) {
           addSemesterHeader("Mid-year");
           checklistData
             .filter(
               (item) =>
-                item.yearLevel === yearLevel && item.semester === "MIDYEAR"
+                item.yearLevel === yearLevel && item.semester === "MIDYEAR",
             )
             .forEach((item) => {
               addCourseRow({
@@ -621,7 +630,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
 
       // Get all retaken courses
       const retakenCourses = checklistData.filter(
-        (item) => item.allAttempts && item.allAttempts.length > 1
+        (item) => item.allAttempts && item.allAttempts.length > 1,
       );
 
       if (retakenCourses.length > 0) {
@@ -657,7 +666,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
             ?.map((attempt: any) =>
               attempt.attemptNumber === 1
                 ? "First Take"
-                : `Retake ${attempt.attemptNumber - 1}`
+                : `Retake ${attempt.attemptNumber - 1}`,
             )
             .join("\n");
           const gradesText = course.allAttempts
@@ -671,7 +680,7 @@ const GenerateChecklistPDF = ({ data }: { data: CurriculumData }) => {
 
           const maxLines = Math.max(
             titleLines.length,
-            course.allAttempts?.length || 1
+            course.allAttempts?.length || 1,
           );
           yPos += maxLines * 4;
         });

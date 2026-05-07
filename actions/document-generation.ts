@@ -5,8 +5,6 @@ import { getStudentGradesWithReExam } from "@/actions/student-grades/student-gra
 import { getStudentCurriculum } from "@/actions/getStudentCurriculum";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
-const clerk = await clerkClient();
-
 // Rate limit configuration for document generation
 const RATE_LIMITS = {
   generate_cog: { limit: 5, windowSeconds: 60 }, // 5 requests per minute for COG
@@ -24,36 +22,44 @@ export async function generateCOGWithRateLimit(
   academicYear: string,
   semester: string,
 ) {
-  // Check rate limit using Redis
-  await checkRateLimitRedis({
-    action: "generate_cog",
-    limit: RATE_LIMITS.generate_cog.limit,
-    windowSeconds: RATE_LIMITS.generate_cog.windowSeconds,
-  });
+  try {
+    // Check rate limit using Redis
+    await checkRateLimitRedis({
+      action: "generate_cog",
+      limit: RATE_LIMITS.generate_cog.limit,
+      windowSeconds: RATE_LIMITS.generate_cog.windowSeconds,
+    });
 
-  // Fetch student grades (this also has its own rate limiting)
-  const { student } = await getStudentGradesWithReExam();
+    // Fetch student grades (this also has its own rate limiting)
+    const { student } = await getStudentGradesWithReExam();
 
-  // Filter grades by academic year and semester
-  const filteredGrades = student.grades.filter(
-    (g) => g.academicYear === academicYear && g.semester === semester,
-  );
+    // Filter grades by academic year and semester
+    const filteredGrades = student.grades.filter(
+      (g) => g.academicYear === academicYear && g.semester === semester,
+    );
 
-  if (filteredGrades.length === 0) {
-    throw new Error("No grades found for this academic term");
+    if (filteredGrades.length === 0) {
+      throw new Error("No grades found for this academic term");
+    }
+
+    return {
+      student: {
+        studentNumber: student.studentNumber,
+        firstName: student.firstName,
+        middleInit: student.middleInit,
+        lastName: student.lastName,
+        course: student.course,
+        major: student.major,
+        grades: filteredGrades,
+      },
+    };
+  } catch (error) {
+    console.error("[generateCOGWithRateLimit] Error:", error);
+    if (error instanceof Error) {
+      throw new Error(`COG generation failed: ${error.message}`);
+    }
+    throw new Error("COG generation failed: Unknown error");
   }
-
-  return {
-    student: {
-      studentNumber: student.studentNumber,
-      firstName: student.firstName,
-      middleInit: student.middleInit,
-      lastName: student.lastName,
-      course: student.course,
-      major: student.major,
-      grades: filteredGrades,
-    },
-  };
 }
 
 /**
@@ -74,6 +80,7 @@ export async function generateCOGAdminWithRateLimit(
   }
 
   // Check user role
+  const clerk = await clerkClient();
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
 

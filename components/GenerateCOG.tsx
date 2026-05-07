@@ -26,7 +26,6 @@ import {
   coursePositionMap,
   formatMajor,
 } from "@/lib/courses";
-import toast from "react-hot-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import {
   AlertCircleIcon,
@@ -35,6 +34,7 @@ import {
   PopcornIcon,
 } from "lucide-react";
 import { semesterMap } from "@/lib/utils";
+import { toast } from "sonner";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
@@ -145,27 +145,78 @@ export default function GenerateCOG() {
       generatePDF(data as StudentData, data.grades as Grade[]);
       setIsDialogOpen(false);
     } catch (error) {
-      // Log the full error for debugging
       console.error("COG Generation Error:", error);
 
-      const err = error as { message: string; code?: string };
+      const err = error as { message: string; code?: string; digest?: string };
 
-      // Check for rate limit error
-      if (
-        err.message === "Too many requests. Please try again in a minute." ||
-        err.code === "RATE_LIMIT_EXCEEDED"
-      ) {
-        toast.error(
-          "You have reached the limit for generating this document. Please wait a minute and try again.",
-        );
-      } else {
-        // Show more detailed error message
-        const errorMessage = err.message || "Unknown error occurred";
-        toast.error(
-          `Something went wrong while generating your COG: ${errorMessage}`,
-        );
-        console.error("Detailed error:", errorMessage);
-      }
+      // Map technical errors to user-friendly messages
+      const getUserFriendlyMessage = (errorMsg: string): string => {
+        const lowerMsg = errorMsg.toLowerCase();
+
+        // Rate limit
+        if (
+          lowerMsg.includes("rate limit") ||
+          lowerMsg.includes("too many request")
+        ) {
+          return "You've reached the maximum number of documents you can generate. Please wait a moment and try again.";
+        }
+
+        // No grades for selected term
+        if (
+          lowerMsg.includes("no grades found") ||
+          lowerMsg.includes("no grades")
+        ) {
+          return "No grades found for the selected academic year and semester. Please select a different term or contact the registrar.";
+        }
+
+        // Student not found / Unauthorized
+        if (
+          lowerMsg.includes("unauthorized") ||
+          lowerMsg.includes("forbidden") ||
+          lowerMsg.includes("not found")
+        ) {
+          return "Unable to access your grades. Please make sure you're logged in correctly and try again.";
+        }
+
+        // Database / server errors
+        if (
+          lowerMsg.includes("database") ||
+          lowerMsg.includes("prisma") ||
+          lowerMsg.includes("server error")
+        ) {
+          return "We're having trouble loading your grades. Please try again in a few minutes.";
+        }
+
+        // Redis / connection errors
+        if (lowerMsg.includes("redis") || lowerMsg.includes("connection")) {
+          return "Unable to generate document right now. Please try again.";
+        }
+
+        // COG generation failed - catch-all
+        if (lowerMsg.includes("cog generation failed")) {
+          // Extract the underlying error
+          const parts = errorMsg.split(": ");
+          if (parts.length > 1) {
+            return getUserFriendlyMessage(parts.slice(1).join(": "));
+          }
+        }
+
+        // Default - generic but friendly
+        return "Something went wrong while generating your document. Please try again or contact support if the problem persists.";
+      };
+
+      const friendlyMessage = getUserFriendlyMessage(err.message);
+      toast.error(friendlyMessage);
+
+      // Log detailed error for debugging
+      console.error(
+        "Detailed error:",
+        err.message,
+        "Code:",
+        err.code,
+        "Digest:",
+        err.digest,
+      );
     } finally {
       setIsLoading(false);
     }
