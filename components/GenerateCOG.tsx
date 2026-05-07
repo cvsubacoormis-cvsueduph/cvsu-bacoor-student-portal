@@ -18,9 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  getAvailableAcademicOptions,
-} from "@/actions/student-grades/student-grades";
+import { getAvailableAcademicOptions } from "@/actions/student-grades/student-grades";
 import { generateCOGWithRateLimit } from "@/actions/document-generation";
 import {
   courseClerkshipMap,
@@ -30,7 +28,12 @@ import {
 } from "@/lib/courses";
 import toast from "react-hot-toast";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { AlertCircleIcon, Bold, CheckCircle2Icon, PopcornIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  Bold,
+  CheckCircle2Icon,
+  PopcornIcon,
+} from "lucide-react";
 import { semesterMap } from "@/lib/utils";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
@@ -82,7 +85,7 @@ export default function GenerateCOG() {
     const fetchOptions = async () => {
       const options = await getAvailableAcademicOptions();
       setAcademicOptions(
-        options as { academicYear: string; semester: string }[]
+        options as { academicYear: string; semester: string }[],
       );
     };
     fetchOptions();
@@ -125,7 +128,10 @@ export default function GenerateCOG() {
     setIsLoading(true);
     try {
       // Use the rate-limited action for COG generation
-      const { student } = await generateCOGWithRateLimit(academicYear, semester);
+      const { student } = await generateCOGWithRateLimit(
+        academicYear,
+        semester,
+      );
       const data = student as StudentData;
       setStudentData({
         ...data,
@@ -150,13 +156,13 @@ export default function GenerateCOG() {
         err.code === "RATE_LIMIT_EXCEEDED"
       ) {
         toast.error(
-          "You have reached the limit for generating this document. Please wait a minute and try again."
+          "You have reached the limit for generating this document. Please wait a minute and try again.",
         );
       } else {
         // Show more detailed error message
         const errorMessage = err.message || "Unknown error occurred";
         toast.error(
-          `Something went wrong while generating your COG: ${errorMessage}`
+          `Something went wrong while generating your COG: ${errorMessage}`,
         );
         console.error("Detailed error:", errorMessage);
       }
@@ -195,11 +201,13 @@ export default function GenerateCOG() {
     doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
-    const fullName = `${student.firstName}, ${student.middleInit || ""} ${student.lastName
-      }`;
+    const fullName = `${student.firstName}, ${student.middleInit || ""} ${
+      student.lastName
+    }`;
     const studentNo = student.studentNumber;
     const course = student.course;
-    const major = student.major !== "NONE" && student.major ? student.major : "NONE";
+    const major =
+      student.major !== "NONE" && student.major ? student.major : "NONE";
 
     doc.setFontSize(7);
     doc.setTextColor(139, 0, 0);
@@ -229,7 +237,11 @@ export default function GenerateCOG() {
     doc.text("Academic Year:", 120, 65);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");
-    doc.text(`${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`, 140, 65);
+    doc.text(
+      `${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`,
+      140,
+      65,
+    );
 
     doc.setTextColor(139, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -256,7 +268,7 @@ export default function GenerateCOG() {
         year: "numeric",
       }),
       130,
-      70
+      70,
     );
 
     autoTable(doc, {
@@ -297,7 +309,9 @@ export default function GenerateCOG() {
       ],
       body: grades.map((g) => [
         g.courseCode,
-        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade) ? "0" : g.creditUnit.toString(),
+        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
+          ? "0"
+          : g.creditUnit.toString(),
         g.courseTitle,
         ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
           ? { content: g.grade || "-", styles: { textColor: [255, 0, 0] } }
@@ -316,14 +330,16 @@ export default function GenerateCOG() {
     // BUT treats DRP, INC, 4.00, 5.00, US as 0 units
     const totalUnitsEnrolled = grades.reduce((acc, g) => {
       const gradeStr = String(g.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
       return acc + g.creditUnit;
     }, 0);
 
     // Separate calculation for GPA Denominator (only items that contribute to GPA)
     const totalGPAUnits = grades.reduce((acc, cur) => {
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
 
       // Include CVSU 101 "S" in the GPA denominator
       if (cur.courseCode === "CVSU 101" && cur.grade === "S") {
@@ -339,7 +355,8 @@ export default function GenerateCOG() {
     const totalCreditsEarned = grades.reduce((acc, cur) => {
       // Earned points for GPA Numerator
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
       if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
 
       const finalGrade = getFinalGradeToUse(cur);
@@ -358,47 +375,47 @@ export default function GenerateCOG() {
     doc.text(
       `Total Subjects Enrolled: ${totalSubjectsEnrolled}`,
       20,
-      (doc as any).lastAutoTable.finalY + 10
+      (doc as any).lastAutoTable.finalY + 10,
     );
     doc.text(
       `Total Credits Enrolled: ${totalUnitsEnrolled}`,
       150,
-      (doc as any).lastAutoTable.finalY + 10
+      (doc as any).lastAutoTable.finalY + 10,
     );
     doc.text(
       `Total Credits Earned: ${totalCreditsEarned.toFixed(2)}`,
       20,
-      (doc as any).lastAutoTable.finalY + 16
+      (doc as any).lastAutoTable.finalY + 16,
     );
     doc.text(
       `Grade Point Average: ${gpa}`,
       150,
-      (doc as any).lastAutoTable.finalY + 16
+      (doc as any).lastAutoTable.finalY + 16,
     );
 
     doc.setFont("helvetica", "bold");
     doc.text(
       `PURPOSE: ${purpose.toUpperCase()}`,
       20,
-      (doc as any).lastAutoTable.finalY + 38
+      (doc as any).lastAutoTable.finalY + 38,
     );
 
     doc.text(
       courseClerkshipMap(course),
       153,
-      (doc as any).lastAutoTable.finalY + 38
+      (doc as any).lastAutoTable.finalY + 38,
     );
     const registrarWidth = doc.getTextWidth(courseClerkshipMap(course));
     doc.line(
       153,
       (doc as any).lastAutoTable.finalY + 39,
       153 + registrarWidth,
-      (doc as any).lastAutoTable.finalY + 39
+      (doc as any).lastAutoTable.finalY + 39,
     );
     doc.text(
       coursePositionMap(course),
       158,
-      (doc as any).lastAutoTable.finalY + 42
+      (doc as any).lastAutoTable.finalY + 42,
     );
 
     autoTable(doc, {
@@ -454,7 +471,7 @@ export default function GenerateCOG() {
     doc.text(
       "Note: Not Valid without school dry seal.",
       20,
-      (doc as any).lastAutoTable.finalY + 8
+      (doc as any).lastAutoTable.finalY + 8,
     );
 
     // === FOOTER ===
@@ -481,7 +498,7 @@ export default function GenerateCOG() {
       imageWidth?: number;
       imageHeight?: number;
       centered?: boolean;
-    }
+    },
   ) => {
     const totalPages = (doc as any).internal.getNumberOfPages();
     const pageWidth = (doc as any).internal.pageSize.width;
@@ -509,7 +526,7 @@ export default function GenerateCOG() {
             xPos,
             yPos,
             imgWidth,
-            imgHeight
+            imgHeight,
           );
         } else {
           // Tiled background (optional - can be removed if not needed)
@@ -521,7 +538,7 @@ export default function GenerateCOG() {
             xPos,
             yPos,
             imgWidth,
-            imgHeight
+            imgHeight,
           );
         }
 
@@ -557,7 +574,7 @@ export default function GenerateCOG() {
                     <SelectItem key={year} value={year}>
                       {year.replace("_", "-")}
                     </SelectItem>
-                  )
+                  ),
                 )}
               </SelectContent>
             </Select>
@@ -580,7 +597,7 @@ export default function GenerateCOG() {
                             ? "Midyear"
                             : sem}
                     </SelectItem>
-                  )
+                  ),
                 )}
               </SelectContent>
             </Select>
@@ -605,7 +622,9 @@ export default function GenerateCOG() {
                 <AlertTitle>Note on Year Level</AlertTitle>
                 <AlertDescription>
                   <p>
-                    Year level is for year standing only. Your grades and academic progress are based on the academic year and semester.
+                    Year level is for year standing only. Your grades and
+                    academic progress are based on the academic year and
+                    semester.
                   </p>
                 </AlertDescription>
               </Alert>
