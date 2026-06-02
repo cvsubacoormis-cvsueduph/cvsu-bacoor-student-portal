@@ -194,6 +194,11 @@ export default function GenerateCOG() {
         if (lowerMsg.includes("rate limit") || lowerMsg.includes("too many request")) {
           return "You've reached the maximum number of documents you can generate. Please wait a moment and try again.";
         }
+
+        // Grades hidden by faculty (upload in progress)
+        if (lowerMsg.includes("grades_hidden")) {
+          return "Your grades are currently being processed by the faculty. Please check back shortly.";
+        }
         
         // No grades for selected term
         if (lowerMsg.includes("no grades found") || lowerMsg.includes("no grades") || lowerMsg.includes("no grades found for this academic term")) {

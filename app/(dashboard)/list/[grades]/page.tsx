@@ -6,6 +6,7 @@ import { getGrades } from "@/actions/student-grades/student-grades";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { GradesPageSkeleton } from "@/components/skeleton/GradesPageSkeleton";
 import Grades from "@/components/GradesTable";
+import { GradesHiddenMessage } from "@/components/GradesHiddenMessage";
 
 export default function GradesPage() {
   const searchParams = useSearchParams();
@@ -16,6 +17,7 @@ export default function GradesPage() {
   const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [gradesHidden, setGradesHidden] = useState(false);
 
   const year = searchParams.get("year") || "";
   const semester = searchParams.get("semester") || "";
@@ -44,12 +46,19 @@ export default function GradesPage() {
             )
           );
           setError(null);
+          setGradesHidden(false);
         }
       } catch (err) {
         if (isMounted) {
-          setError(
-            "Failed to fetch grades data. Please try again in a moment."
-          );
+          if (err instanceof Error && err.message === "GRADES_HIDDEN") {
+            setGradesHidden(true);
+            setError(null);
+          } else {
+            setError(
+              "Failed to fetch grades data. Please try again in a moment."
+            );
+            setGradesHidden(false);
+          }
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -73,6 +82,19 @@ export default function GradesPage() {
   };
 
   if (loading) return <GradesPageSkeleton />;
+
+  if (gradesHidden) {
+    return (
+      <>
+        <SignedIn>
+          <GradesHiddenMessage />
+        </SignedIn>
+        <SignedOut>
+          <RedirectToSignIn />
+        </SignedOut>
+      </>
+    );
+  }
 
   if (error) {
     return (

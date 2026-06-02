@@ -4,8 +4,26 @@ import prisma from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { AcademicYear, Semester } from "@prisma/client";
+import { getSetting } from "@/actions/settings";
 
 const clerk = await clerkClient();
+
+/**
+ * Guard: if user is a student and grades are hidden by faculty/admin, throw GRADES_HIDDEN.
+ * Non-student roles (admin, superuser, faculty, registrar) always bypass this check.
+ */
+async function enforceGradeVisibility(userId: string): Promise<void> {
+  const user = await clerk.users.getUser(userId);
+  const role = user.publicMetadata?.role;
+
+  // Only block students — faculty/admins/registrars always see grades
+  if (role !== "student") return;
+
+  const isVisible = await getSetting("GRADES_VISIBLE_TO_STUDENTS");
+  if (isVisible === "false") {
+    throw new Error("GRADES_HIDDEN");
+  }
+}
 
 export async function getGrades(year?: AcademicYear, semester?: Semester) {
   const { userId } = await auth();
@@ -24,6 +42,9 @@ export async function getGrades(year?: AcademicYear, semester?: Semester) {
   ) {
     throw new Error("Forbidden: Only students and admins can access this page");
   }
+
+  // Block students from viewing grades if faculty has hidden them
+  await enforceGradeVisibility(userId);
 
   await checkRateLimit({
     action: "getGrades",
@@ -64,6 +85,12 @@ export async function getStudentGradesWithReExam(studentId?: string) {
     role !== "registrar"
   ) {
     throw new Error("Forbidden");
+  }
+
+  // Block students from viewing grades if faculty has hidden them
+  // Admin/faculty/registrar always bypass this check
+  if (role === "student") {
+    await enforceGradeVisibility(userId);
   }
 
   const student = await prisma.student.findUnique({

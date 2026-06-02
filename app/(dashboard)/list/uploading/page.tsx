@@ -6,17 +6,22 @@ import { Suspense } from "react";
 import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
 import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
 import { UploadGrades } from "@/components/UploadGrades";
-import { getSetting } from "@/actions/settings";
+import { getSetting, getGradeVisibility } from "@/actions/settings";
 import { currentUser } from "@clerk/nextjs/server";
 import AdminUploadToggle from "@/components/AdminUploadToggle";
+import GradeVisibilityToggle from "@/components/GradeVisibilityToggle";
 import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 
 export default async function GradeUploader() {
   const user = await currentUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const isAdmin = role === "admin" || role === "superuser";
+  const canToggleGradeVisibility = isAdmin || role === "faculty";
+
   const settingValue = await getSetting("UPLOAD_GRADES_ENABLED");
   const isUploadEnabled = settingValue !== "false";
+
+  const isGradesVisible = await getGradeVisibility();
 
   return (
     <div className="">
@@ -31,9 +36,14 @@ export default async function GradeUploader() {
                 Uploading of Student Grades
               </span>
             </div>
-            {isAdmin && (
-              <AdminUploadToggle initialEnabled={isUploadEnabled} />
-            )}
+            <div className="flex items-center gap-3">
+              {canToggleGradeVisibility && (
+                <GradeVisibilityToggle initialVisible={isGradesVisible} />
+              )}
+              {isAdmin && (
+                <AdminUploadToggle initialEnabled={isUploadEnabled} />
+              )}
+            </div>
           </div>
 
           {!isUploadEnabled && !isAdmin ? (
