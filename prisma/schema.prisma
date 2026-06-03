@@ -215,6 +215,30 @@ enum Major {
   NONE
 }
 
+model CogVerification {
+  id             String   @id @default(cuid())
+  hash           String   @unique // SHA-256 hash used as verification token
+  studentNumber  String
+  studentName    String   // "LastName, FirstName MiddleInit"
+  course         String
+  major          String
+  academicYear   String   // e.g. "2024_2025"
+  semester       String   // e.g. "FIRST"
+  yearLevel      String   // e.g. "FIRST YEAR"
+  gpa            String   // e.g. "1.45"
+  totalSubjects  Int
+  totalCredits   Int
+  totalCreditsEarned Float?
+  grades         String   // JSON string of grade array
+  purpose        String
+  generatedBy    String?  // Clerk userId
+  generatedAt    DateTime @default(now())
+  expiresAt      DateTime? // Nullable for backward compat — code treats null as "check generatedAt + 1yr"
+  isRevoked      Boolean  @default(false)
+
+  @@map("cog_verifications")
+}
+
 model Event {
   id          Int       @id @default(autoincrement())
   title       String

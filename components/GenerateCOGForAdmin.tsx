@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import QRCode from "qrcode";
+import { storeCogVerification } from "@/actions/cog-verification";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -534,6 +536,56 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       20,
       (doc as any).lastAutoTable.finalY + 8
     );
+
+    // === QR CODE VERIFICATION ===
+    try {
+      const { hash } = await storeCogVerification({
+        studentNumber: student.studentNumber,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        middleInit: student.middleInit,
+        course: student.course,
+        major: student.major,
+        grades: grades.map((g) => ({
+          courseCode: g.courseCode,
+          courseTitle: g.courseTitle,
+          creditUnit: g.creditUnit,
+          grade: g.grade,
+          reExam: g.reExam,
+          remarks: g.remarks,
+          instructor: g.instructor,
+        })),
+        academicYear: academicYear || "",
+        semester: semester || "",
+        yearLevel,
+        gpa,
+        totalSubjects: totalSubjectsEnrolled,
+        totalCredits: totalUnitsEnrolled,
+        totalCreditsEarned: parseFloat(totalCreditsEarned.toFixed(2)),
+        purpose,
+      });
+
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (typeof window !== "undefined" ? window.location.origin : "");
+      const verifyUrl = `${baseUrl}/verify/${hash}`;
+      const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+        width: 200,
+        margin: 2,
+        color: { dark: "#000000", light: "#FFFFFF" },
+      });
+
+      const qrY = (doc as any).lastAutoTable.finalY + 8;
+      doc.addImage(qrDataUrl, "PNG", 165, qrY, 22, 22);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Scan to verify", 165, qrY + 24, { align: "left" });
+      doc.setTextColor(0, 0, 0);
+    } catch (err) {
+      console.warn("Failed to generate verification QR code:", err);
+    }
 
     // === FOOTER ===
     doc.setFont("helvetica", "bold");
