@@ -16,7 +16,7 @@ export default async function GradeUploader() {
   const user = await currentUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const isAdmin = role === "admin" || role === "superuser";
-  const canToggleGradeVisibility = isAdmin || role === "faculty";
+  const canToggleGradeVisibility = isAdmin || role === "registrar";
 
   const settingValue = await getSetting("UPLOAD_GRADES_ENABLED");
   const isUploadEnabled = settingValue !== "false";
