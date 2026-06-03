@@ -1,7 +1,6 @@
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
-import { revokeCogVerification } from "@/actions/cog-verification";
 import {
   CheckCircle2Icon,
   XCircleIcon,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { courseMap, formatMajor } from "@/lib/courses";
 import Link from "next/link";
+import { RevokeForm } from "./revoke-form";
 
 type GradeRow = {
   courseCode: string;
@@ -155,7 +155,7 @@ function AccessDenied({
             )}
             <a
               href={dashboardUrl}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
             >
               {isLoggedIn ? (
                 <><LayoutDashboardIcon className="w-4 h-4" /> Go to Dashboard</>
@@ -316,30 +316,6 @@ function isExpired(record: any): boolean {
   const defaultExpiry = new Date(record.generatedAt);
   defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
   return new Date() > defaultExpiry;
-}
-
-// Revoke button is a form that calls the server action
-function RevokeForm({ hash }: { hash: string }) {
-  return (
-    <form
-      action={async () => {
-        "use server";
-        await revokeCogVerification(hash);
-      }}
-    >
-      <button
-        type="submit"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-        onClick={(e) => {
-          if (!confirm("Are you sure you want to revoke this verification? This cannot be undone.")) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <BanIcon className="w-3.5 h-3.5" /> Revoke Verification
-      </button>
-    </form>
-  );
 }
 
 export default async function VerifyPage({
