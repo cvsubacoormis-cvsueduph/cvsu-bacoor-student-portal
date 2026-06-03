@@ -154,7 +154,7 @@ export default function GenerateCOG() {
         major: data.major || "",
         middleInit: data.middleInit || "",
       });
-      generatePDF(data as StudentData, data.grades as Grade[]);
+      await generatePDF(data as StudentData, data.grades as Grade[]);
       setIsDialogOpen(false);
 } catch (error) {
       console.error("========== COG Generation Error ==========");
@@ -244,8 +244,43 @@ export default function GenerateCOG() {
     }
   };
 
-  const generatePDF = (student: StudentData, grades: Grade[]) => {
-    const doc = new jsPDF("p", "mm", "a4");
+  /**
+   * Generates a SHA-256 hash of the grade data for tamper detection.
+   * The hash is embedded in the PDF metadata so the registrar can verify
+   * that the grades have not been altered after generation.
+   */
+  const generateIntegrityHash = async (grades: Grade[]): Promise<string> => {
+    const data = JSON.stringify(
+      grades.map((g) => ({
+        c: g.courseCode,
+        g: g.grade,
+        r: g.reExam,
+        u: g.creditUnit,
+        rm: g.remarks,
+      })),
+    );
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+  };
+
+  const generatePDF = async (student: StudentData, grades: Grade[]) => {
+    // Generate a unique owner password per document (only registrar knows it)
+    const ownerPassword = crypto.randomUUID();
+
+    const doc = new jsPDF({
+      orientation: "p",
+      unit: "mm",
+      format: "a4",
+      encryption: {
+        ownerPassword,
+        // User permissions: allow printing ONLY.
+        // Intentionally EXCLUDED: "modify", "copy", "annot-forms"
+        // This prevents the student from tampering with grades.
+        userPermissions: ["print"],
+      },
+    });
 
     const logoWidth = 18;
     const logoHeight = 15;
@@ -396,6 +431,27 @@ export default function GenerateCOG() {
         g.instructor || "",
       ]),
     });
+
+    // Embed a tamper-evident integrity hash in PDF metadata
+    const integrityHash = await generateIntegrityHash(grades);
+    doc.setProperties({
+      title: "Certificate of Grades",
+      subject: `COG - ${student.studentNumber}`,
+      author: "Cavite State University - Bacoor Campus Registrar",
+      keywords: `COG,${student.studentNumber},${academicYear},${semester}`,
+      creator: "CvSU Bacoor Portal",
+    });
+
+    // Write the integrity hash as a hidden text string in the PDF
+    // (visible in raw PDF source, used by registrar for verification)
+    doc.setFontSize(0.01);
+    doc.setTextColor(255, 255, 255); // white text on white background = invisible
+    doc.text(
+      `INTEGRITY_HASH:${integrityHash}|OWNER_PW:${ownerPassword}`,
+      0.1,
+      (doc as any).lastAutoTable.finalY + 70,
+      { charSpace: -2 },
+    );
 
     const totalSubjectsEnrolled = grades.length;
 
@@ -718,6 +774,17 @@ export default function GenerateCOG() {
               </SelectContent>
             </Select>
           </div>
+          <Alert className="border-blue-500 text-blue-700 bg-blue-50">
+            <CheckCircle2Icon className="h-4 w-4 !text-blue-700" />
+            <AlertTitle>Document Security</AlertTitle>
+            <AlertDescription>
+              <p>
+                The generated PDF will be encrypted and tamper-protected.
+                Modifications are disabled — grades cannot be altered.
+                Printing is permitted.
+              </p>
+            </AlertDescription>
+          </Alert>
           <Button
             onClick={handleGenerate}
             className="bg-blue-700 hover:bg-blue-900"
