@@ -61,7 +61,31 @@ interface UploadResult {
   status: string;
   studentName?: string;
   identifier?: string;
+  matchQuality?: string; // "exact" | "fuzzy" | "warning" | "updated" | "error" | "unchanged"
 }
+
+type MatchQuality = "exact" | "fuzzy" | "warning" | "updated" | "error" | "unchanged";
+
+function getMatchQuality(result: UploadResult): MatchQuality {
+  // Use explicit server-provided quality if available
+  if (result.matchQuality && ["exact", "fuzzy", "warning", "updated", "error", "unchanged"].includes(result.matchQuality)) {
+    return result.matchQuality as MatchQuality;
+  }
+  // Fallback: derive from status string
+  if (result.status.startsWith("❌")) return "error";
+  if (result.status.includes("already exists") || result.status.includes("no changes")) return "unchanged";
+  if (result.status.startsWith("⚠️")) return "fuzzy";
+  return "exact";
+}
+
+const QUALITY_CONFIG: Record<MatchQuality, { label: string; badgeClass: string; icon: typeof CheckCircle }> = {
+  exact:     { label: "Exact Match", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100", icon: CheckCircle },
+  fuzzy:     { label: "Partial Match", badgeClass: "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100", icon: AlertCircle },
+  warning:   { label: "Warning",    badgeClass: "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100", icon: AlertCircle },
+  updated:   { label: "Updated",    badgeClass: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100", icon: RefreshCcw },
+  error:     { label: "Failed",     badgeClass: "bg-red-100 text-red-800 border-red-200 hover:bg-red-100", icon: XCircle },
+  unchanged: { label: "No Change",  badgeClass: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100", icon: CheckCircle },
+};
 
 interface LogEntry {
   type: 'success' | 'error' | 'warning';
@@ -598,7 +622,7 @@ export function UploadGrades() {
 
                       <span className="font-medium text-green-600">{progress}%</span>
                     </div>
-                    <Progress value={progress} className="h-2 bg-green-600" />
+                    <Progress value={progress} className="h-2 [&>span]:bg-green-600" />
                     <p className="text-xs text-center text-gray-500">
                       Processed {processedCount} of {totalRecords} rows
                     </p>
@@ -677,20 +701,39 @@ export function UploadGrades() {
                     <div className="bg-blue-50/50 p-2 mb-2 rounded text-xs text-center border border-blue-100 text-blue-800">
                       {hasValidated && !isUploading ? "Validation Mode: No changes were made to the database." : "Displaying latest results."}
                     </div>
+
+                    {/* Summary Bar */}
+                    <div className="flex flex-wrap gap-2 mb-3 p-2 bg-gray-50 rounded border">
+                      {(["exact", "fuzzy", "warning", "updated", "error", "unchanged"] as MatchQuality[]).map(q => {
+                        const count = uploadResults.filter(r => getMatchQuality(r) === q).length;
+                        if (count === 0) return null;
+                        const config = QUALITY_CONFIG[q];
+                        const Icon = config.icon;
+                        return (
+                          <Badge key={q} variant="outline" className={`text-xs gap-1 ${config.badgeClass}`}>
+                            <Icon className="w-3 h-3" />
+                            {config.label}: {count}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+
                     <Tabs defaultValue="all" className="flex flex-col">
-                      <div className="flex items-center justify-between mb-4">
-                        <TabsList>
-                          <TabsTrigger value="all">All ({uploadResults.length})</TabsTrigger>
-                          <TabsTrigger value="success">Success ({uploadResults.filter(r => !r.status.includes("❌")).length})</TabsTrigger>
-                          <TabsTrigger value="failed" className="text-red-600 data-[state=active]:text-red-700">Failed ({uploadResults.filter(r => r.status.includes("❌")).length})</TabsTrigger>
+                      <div className="flex items-center justify-between mb-4 overflow-x-auto">
+                        <TabsList className="flex-wrap h-auto gap-0.5 p-0.5">
+                          <TabsTrigger value="all" className="text-xs px-2 py-1">All ({uploadResults.length})</TabsTrigger>
+                          <TabsTrigger value="exact" className="text-xs px-2 py-1">Exact ({uploadResults.filter(r => getMatchQuality(r) === "exact").length})</TabsTrigger>
+                          <TabsTrigger value="fuzzy" className="text-xs px-2 py-1">Partial ({uploadResults.filter(r => getMatchQuality(r) === "fuzzy").length})</TabsTrigger>
+                          <TabsTrigger value="warning" className="text-xs px-2 py-1">Warning ({uploadResults.filter(r => getMatchQuality(r) === "warning").length})</TabsTrigger>
+                          <TabsTrigger value="updated" className="text-xs px-2 py-1">Updated ({uploadResults.filter(r => getMatchQuality(r) === "updated").length})</TabsTrigger>
+                          <TabsTrigger value="error" className="text-xs px-2 py-1 text-red-600 data-[state=active]:text-red-700">Failed ({uploadResults.filter(r => getMatchQuality(r) === "error").length})</TabsTrigger>
                         </TabsList>
                       </div>
 
-                      {["all", "success", "failed"].map((tabInfo) => {
+                      {(["all", "exact", "fuzzy", "warning", "updated", "error"] as const).map((tabInfo) => {
                         const filtered = uploadResults.filter(r => {
-                          if (tabInfo === "success") return !r.status.includes("❌");
-                          if (tabInfo === "failed") return r.status.includes("❌");
-                          return true;
+                          if (tabInfo === "all") return true;
+                          return getMatchQuality(r) === tabInfo;
                         });
 
                         // Calculate pagination for this specific tab
@@ -706,39 +749,39 @@ export function UploadGrades() {
                               <Table>
                                 <TableHeader className="bg-gray-50 sticky top-0">
                                   <TableRow>
-                                    <TableHead>Student</TableHead>
-                                    <TableHead>Course</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-xs">Quality</TableHead>
+                                    <TableHead className="text-xs">Student</TableHead>
+                                    <TableHead className="text-xs">Course</TableHead>
+                                    <TableHead className="text-xs">Status</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {currentTabRes.map((res, i) => (
-                                    <TableRow key={i}>
-                                      <TableCell className="text-xs font-semibold">
-                                        {res.studentName || res.identifier || res.studentNumber || "Unknown"}
-                                        <div className="text-xs text-gray-500">{res.studentNumber || "No Student #"}</div>
-                                      </TableCell>
-                                      <TableCell className="text-xs font-semibold">{res.courseCode}</TableCell>
-                                      <TableCell className="text-xs font-semibold">
-                                        {res.status.includes("✅") ? (
-                                          <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">Success</Badge>
-                                        ) : res.status.includes("⚠️") ? (
-                                          <div className="flex items-center text-yellow-700 gap-1 text-xs font-medium">
-                                            <AlertCircle className="w-4 h-4" />
-                                            {res.status.replace("⚠️", "").trim()}
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center text-red-600 gap-1 text-xs font-medium">
-                                            <AlertCircle className="w-4 h-4" />
-                                            {res.status.replace("❌", "").trim()}
-                                          </div>
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
+                                  {currentTabRes.map((res, i) => {
+                                    const quality = getMatchQuality(res);
+                                    const config = QUALITY_CONFIG[quality];
+                                    const Icon = config.icon;
+                                    return (
+                                      <TableRow key={i}>
+                                        <TableCell>
+                                          <Badge variant="outline" className={`text-[10px] gap-0.5 px-1.5 py-0 ${config.badgeClass}`}>
+                                            <Icon className="w-2.5 h-2.5" />
+                                            {config.label}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs font-semibold">
+                                          {res.studentName || res.identifier || res.studentNumber || "Unknown"}
+                                          <div className="text-[10px] text-gray-500">{res.studentNumber || "No Student #"}</div>
+                                        </TableCell>
+                                        <TableCell className="text-xs font-semibold">{res.courseCode}</TableCell>
+                                        <TableCell className="text-[11px] leading-tight max-w-[220px]">
+                                          {res.status.replace(/^[✅⚠️❌]\s*/, "").trim()}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                                   {filtered.length === 0 && (
                                     <TableRow>
-                                      <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                                      <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                                         No results in this category.
                                       </TableCell>
                                     </TableRow>
@@ -775,8 +818,8 @@ export function UploadGrades() {
                                     <span className="sr-only">Previous</span>
                                   </Button>
 
-                                  {/* Numbered Pages */
-                                    (() => {
+                                  {/* Numbered Pages */}
+                                    {(() => {
                                       let start = Math.max(1, effectivePage - 2);
                                       let end = Math.min(totalPages, start + 4);
 

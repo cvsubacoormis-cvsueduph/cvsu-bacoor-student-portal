@@ -392,6 +392,7 @@ export async function POST(req: Request) {
   const gradesToUpsert = [];
   const logsToCreate = [];
   const failedLogsToCreate = []; // Separate array for failed logs
+  const processedKeys = new Set<string>(); // Track student+course pairs within this batch
 
   // Process each entry in the batch
   for (const entry of grades) {
@@ -564,6 +565,15 @@ export async function POST(req: Request) {
         continue;
       }
 
+      // Duplicate row detection within this batch
+      const batchKey = `${targetStudent.studentNumber}-${sanitizedCourseCode}`;
+      let isDuplicated = false;
+      if (processedKeys.has(batchKey)) {
+        isDuplicated = true;
+      } else {
+        processedKeys.add(batchKey);
+      }
+
       let standardizedGrade = normalizeGrade(grade);
       let standardizedReExam = normalizeGrade(reExam);
       if (!standardizedGrade) {
@@ -606,11 +616,50 @@ export async function POST(req: Request) {
         );
       }
 
-
+      // Priority 3: Match Course Code across all curricula (shared/GE subjects)
+      // Only allowed when the subject is offered in multiple programs —
+      // but requires at least the student's course to be represented in curricula
+      let isCrossProgramMatch = false;
       if (!checklistSubject) {
-        checklistSubject = curriculumSubjects.find(
+        const globalMatch = curriculumSubjects.find(
           (cs) => cs.courseCode === sanitizedCourseCode
         );
+        if (globalMatch) {
+          // Verify the student's course exists in curricula (student is not from an unmapped program)
+          const studentHasCurriculum = curriculumSubjects.some(
+            cs => cs.course === targetStudent.course
+          );
+          if (studentHasCurriculum) {
+            // Cross-program mismatch: subject exists but in a different program
+            const studentName = `${targetStudent.firstName} ${targetStudent.lastName}`;
+            const studentProgram = targetStudent.course;
+            const subjectProgram = globalMatch.course;
+
+            results.push({
+              studentNumber: targetStudent.studentNumber,
+              courseCode: sanitizedCourseCode,
+              status: `❌ Wrong program: ${studentName} is ${studentProgram} but ${sanitizedCourseCode} belongs to ${subjectProgram} curriculum`,
+              studentName,
+            });
+            failedLogsToCreate.push({
+              studentNumber: targetStudent.studentNumber,
+              courseCode: sanitizedCourseCode,
+              courseTitle: sanitizedCourseTitle || "",
+              creditUnit: Number(creditUnit) || 0,
+              grade: String(grade) || "",
+              remarks: `Cross-program mismatch: student ${studentProgram}, subject ${sanitizedCourseCode} in ${subjectProgram} curriculum`,
+              instructor: sanitizedInstructor,
+              academicYear,
+              semester,
+              action: "FAILED",
+              importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+            });
+            continue;
+          }
+          // Student's course has no curriculum at all — allow global match
+          checklistSubject = globalMatch;
+          isCrossProgramMatch = true;
+        }
       }
 
 
@@ -692,14 +741,22 @@ export async function POST(req: Request) {
       let isLegacyUpload = false;
       let resolvedCreditUnit = Number(creditUnit);
       let resolvedCourseTitle = sanitizedCourseTitle?.toUpperCase() ?? "";
+      let creditUnitCorrected = false;
 
       if (checklistSubject) {
         const offering = offeringMap.get(checklistSubject.id);
         if (offering) {
           subjectOfferingId = offering.id;
         }
-        // Use checklist data if available
-        resolvedCreditUnit = (checklistSubject.creditLec || 0) + (checklistSubject.creditLab || 0);
+        // Use curriculum data as authoritative source
+        const curriculumCredits = (checklistSubject.creditLec || 0) + (checklistSubject.creditLab || 0);
+        const excelCredits = Number(creditUnit);
+
+        if (excelCredits && excelCredits !== curriculumCredits && curriculumCredits > 0) {
+          creditUnitCorrected = true;
+        }
+
+        resolvedCreditUnit = curriculumCredits || excelCredits;
         resolvedCourseTitle = checklistSubject.courseTitle || resolvedCourseTitle;
       }
 
@@ -755,6 +812,23 @@ export async function POST(req: Request) {
       } else if (isTitleFallback && checklistSubject) {
         statusMsg = `Grade uploaded (Corrected Code by Title: ${entry.courseCode || "MISSING"} -> ${checklistSubject.courseCode})`;
         statusPrefix = "⚠️";
+      } else if (isCrossProgramMatch && checklistSubject) {
+        statusMsg = `Grade uploaded (Cross-program: ${checklistSubject.courseCode} from ${checklistSubject.course})`;
+        statusPrefix = "⚠️";
+      }
+
+      // Credit unit correction warning
+      if (creditUnitCorrected && checklistSubject) {
+        const curriculumCredits = (checklistSubject.creditLec || 0) + (checklistSubject.creditLab || 0);
+        const suffix = `[Credits corrected: ${Number(creditUnit) || 0} → ${curriculumCredits}]`;
+        statusMsg = `${statusMsg} ${suffix}`;
+        statusPrefix = "⚠️";
+      }
+
+      // Duplicate row in this batch warning
+      if (isDuplicated) {
+        statusMsg = `${statusMsg} [Duplicate row — using last entry]`;
+        statusPrefix = "⚠️";
       }
 
       if (existingGrade) {
@@ -762,7 +836,6 @@ export async function POST(req: Request) {
         if (isFaculty) {
           const currentUserFullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
           // Strict check: Can only overwrite if uploaded by SELF.
-          // Note: This relies on the uploadedBy string matching.
           if (existingGrade.uploadedBy && existingGrade.uploadedBy !== currentUserFullName) {
             results.push({
               studentNumber: targetStudent.studentNumber,
@@ -774,19 +847,15 @@ export async function POST(req: Request) {
           }
         }
 
+        // Preserve instructor name if new upload doesn't provide one
         if (!finalInstructorName && existingGrade.instructor) {
           finalInstructorName = existingGrade.instructor;
         }
 
-        // Force Keep Existing Grade (User Request)
-        standardizedGrade = existingGrade.grade;
-        // Keep existing reExam if present, otherwise allow new one (though usually we shouldn't change it either if we are strictly preserving)
-        // Let's assume strict preservation for integrity
-        if (existingGrade.reExam) {
-          standardizedReExam = existingGrade.reExam;
-        }
-
+        // True upsert: last write wins — check if anything actually changed
         if (
+          existingGrade.grade === standardizedGrade &&
+          existingGrade.reExam === standardizedReExam &&
           existingGrade.remarks === sanitizedRemarks &&
           existingGrade.instructor === finalInstructorName
         ) {
@@ -800,7 +869,17 @@ export async function POST(req: Request) {
         }
 
         action = "UPDATED";
-        statusMsg = "Instructor/Metadata updated (Grade preserved)";
+
+        // Build a descriptive status showing what changed
+        const changes: string[] = [];
+        if (existingGrade.grade !== standardizedGrade) changes.push("grade");
+        if (existingGrade.reExam !== standardizedReExam) changes.push("reExam");
+        if (existingGrade.remarks !== sanitizedRemarks) changes.push("remarks");
+        if (existingGrade.instructor !== finalInstructorName) changes.push("instructor");
+
+        statusMsg = changes.length > 0
+          ? `Grade updated (${changes.join(", ")})`
+          : "Grade updated";
       } else if (isLegacyMode && !subjectOfferingId) {
         action = "LEGACY_ENTRY";
         statusMsg = "Legacy Grade uploaded";
@@ -836,11 +915,27 @@ export async function POST(req: Request) {
         importedName: `${firstName || ""} ${lastName || ""}`.trim(),
       });
 
+      // Determine match quality for preview color-coding
+      let matchQuality = "exact";
+      if (isLegacyUpload || isTitleFallback || isCrossProgramMatch || creditUnitCorrected || isDuplicated) {
+        matchQuality = "warning";
+      } else if (
+        identificationMethod === "NAME_RECOVERY" ||
+        identificationMethod === "NAME_CORRECTION" ||
+        identificationMethod === "ID_MATCH_FUZZY" ||
+        isFuzzyCode
+      ) {
+        matchQuality = "fuzzy";
+      } else if (existingGrade) {
+        matchQuality = "updated";
+      }
+
       results.push({
         studentNumber: targetStudent.studentNumber,
         courseCode: sanitizedCourseCode,
         status: `${statusPrefix} ${statusMsg}`,
         studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
+        matchQuality,
       });
 
     } catch (error) {
