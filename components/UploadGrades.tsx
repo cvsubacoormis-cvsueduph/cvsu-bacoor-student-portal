@@ -46,7 +46,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useUploadStatePersistence,
   type PersistedUploadState,
-  UPLOAD_STATE_KEY,
 } from "@/hooks/use-upload-state-persistence";
 
 // --- Validation Schema ---
@@ -239,6 +238,7 @@ export function UploadGrades() {
         text: "Failed to parse Excel file. Please check the format.",
       });
       setFile(null);
+      setFileMeta(null);
     } finally {
       setIsParsing(false);
     }

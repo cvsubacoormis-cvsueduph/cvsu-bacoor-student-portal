@@ -43,7 +43,11 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
 
   const validUsers = parsed.data;
 
-  await checkRateLimitRedis({ action: "bulk_create_users", limit: 3, windowSeconds: 300 });
+  await checkRateLimitRedis({
+    action: "bulk_create_users",
+    limit: 3,
+    windowSeconds: 300,
+  });
 
   const clerk = await clerkClient();
   const results = {
@@ -55,18 +59,23 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
 
   for (const [index, formData] of validUsers.entries()) {
     try {
-      const password = crypto.randomBytes(4).toString("hex");
+      const password = crypto.randomBytes(8).toString("hex").slice(0, 8);
+
+      // Clerk requires an email identifier. When the user hasn't provided one,
+      // use a placeholder so they can fill in their real email later.
+      const clerkEmail = formData.email || `sample${index + 1}@gmail.com`;
 
       // Create user in Clerk
       const clerkUser = await clerk.users.createUser({
         username: formData.username,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        emailAddress: formData.email ? [formData.email] : undefined,
-        password: password,
+        emailAddress: [clerkEmail],
+        password,
       });
 
-      // Create user in DB
+      // Create user in DB — store real email (null when not provided) so users
+      // see an empty field and can fill it in themselves later
       await prisma.user.create({
         data: {
           id: clerkUser.id,
@@ -74,8 +83,8 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
           firstName: formData.firstName,
           lastName: formData.lastName,
           middleInit: formData.middleInit,
-          email: formData.email,
-          phone: formData.phone,
+          email: formData.email || null,
+          phone: formData.phone || null,
           address: formData.address,
           sex: formData.sex,
           role: formData.role,
@@ -92,17 +101,22 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
       });
 
       results.successful++;
-      results.createdUsers.push({ username: formData.username, generatedPassword: password });
+      results.createdUsers.push({
+        username: formData.username,
+        generatedPassword: password,
+      });
     } catch (error: any) {
       results.failed++;
       console.error(`Failed to create user ${formData.username}:`, error);
-      
+
       let errorMessage = error.message || "Failed to create user";
       if (error.errors && error.errors.length > 0) {
         errorMessage = error.errors[0].message;
       }
-      
-      results.errors.push(`Row ${index + 1} (${formData.username}): ${errorMessage}`);
+
+      results.errors.push(
+        `Row ${index + 1} (${formData.username}): ${errorMessage}`,
+      );
     }
   }
 

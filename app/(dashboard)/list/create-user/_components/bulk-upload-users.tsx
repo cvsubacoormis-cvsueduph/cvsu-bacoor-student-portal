@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, FileText, X, AlertCircle, Loader2, Download } from "lucide-react";
+import { Upload, FileText, X, AlertCircle, Loader2, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { bulkCreateUsers, type BulkUserPayload } from "@/actions/user/bulk-user-action";
@@ -32,6 +32,15 @@ export function BulkUploadUsers() {
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pagination
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.ceil(parsedData.length / PAGE_SIZE);
+  const paginatedData = parsedData.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -71,7 +80,11 @@ export function BulkUploadUsers() {
           username: row.username?.toString().trim() || "",
           firstName: row.firstName?.toString().trim() || "",
           lastName: row.lastName?.toString().trim() || "",
-          middleInit: row.middleInit?.toString().trim() || "",
+          middleInit: (() => {
+            const raw = row.middleInit?.toString().trim() || "";
+            // Auto-extract first character — users often put full middle names
+            return raw.charAt(0).toUpperCase() || "";
+          })(),
           email: row.email?.toString().trim() || undefined,
           phone: row.phone?.toString().trim() || undefined,
           address: row.address?.toString().trim() || "",
@@ -92,7 +105,10 @@ export function BulkUploadUsers() {
                 .toLowerCase()
                 .replace(/[^a-z0-9]/g, "");
             }
-            // Resolve duplicates within the batch
+            // Append random 1-2 digit number to reduce collisions
+            const randomDigits = Math.floor(Math.random() * 90) + 10; // 10-99
+            candidate = candidate + randomDigits;
+            // Resolve duplicates within the batch (unlikely with random digits)
             let uniqueName = candidate;
             let suffix = 1;
             while (usedUsernames.has(uniqueName)) {
@@ -125,6 +141,7 @@ export function BulkUploadUsers() {
         });
 
         setParsedData(validRows);
+        setCurrentPage(1);
 
         if (validRows.length === 0) {
           toast.error("No valid data found. Ensure required columns are present and valid.");
@@ -153,6 +170,7 @@ export function BulkUploadUsers() {
   const handleClear = () => {
     setFile(null);
     setParsedData([]);
+    setCurrentPage(1);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -362,7 +380,9 @@ export function BulkUploadUsers() {
             <h3 className="text-lg font-semibold flex items-center">
               Data Preview
               <span className="ml-2 text-sm font-normal text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">
-                Showing top 5 rows
+                {parsedData.length} total &middot; showing{" "}
+                {(currentPage - 1) * PAGE_SIZE + 1}&ndash;
+                {Math.min(currentPage * PAGE_SIZE, parsedData.length)}
               </span>
             </h3>
             <div className="border rounded-md overflow-hidden">
@@ -377,7 +397,7 @@ export function BulkUploadUsers() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {parsedData.slice(0, 5).map((row, idx) => (
+                  {paginatedData.map((row, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">{row.username}</TableCell>
                       <TableCell>{`${row.firstName} ${row.lastName}`}</TableCell>
@@ -389,6 +409,56 @@ export function BulkUploadUsers() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span className="sr-only">Previous</span>
+                  </Button>
+
+                  {(() => {
+                    const start = Math.max(1, currentPage - 2);
+                    const end = Math.min(totalPages, start + 4);
+                    const pages: number[] = [];
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    return pages.map((p) => (
+                      <Button
+                        key={p}
+                        variant={currentPage === p ? "default" : "outline"}
+                        size="sm"
+                        className="h-7 w-7 p-0 text-xs"
+                        onClick={() => setCurrentPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    ));
+                  })()}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                    <span className="sr-only">Next</span>
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {parsedData.find(row => !row.address) && (
               <div className="flex items-start flex-row space-x-2 text-amber-600 bg-amber-50 p-3 rounded-md text-sm border border-amber-200">
