@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, FileText, X, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, FileText, X, AlertCircle, Loader2, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
 import { bulkCreateUsers, type BulkUserPayload } from "@/actions/user/bulk-user-action";
@@ -68,16 +68,43 @@ export function BulkUploadUsers() {
 
         // Validate and map rows
         const mappedData: BulkUserPayload[] = jsonData.map((row: any) => ({
-          username: row.username?.toString() || "",
-          firstName: row.firstName?.toString() || "",
-          lastName: row.lastName?.toString() || "",
-          middleInit: row.middleInit?.toString() || "",
-          email: row.email?.toString() || undefined,
-          phone: row.phone?.toString() || undefined,
-          address: row.address?.toString() || "",
+          username: row.username?.toString().trim() || "",
+          firstName: row.firstName?.toString().trim() || "",
+          lastName: row.lastName?.toString().trim() || "",
+          middleInit: row.middleInit?.toString().trim() || "",
+          email: row.email?.toString().trim() || undefined,
+          phone: row.phone?.toString().trim() || undefined,
+          address: row.address?.toString().trim() || "",
           sex: (row.sex?.toString().toUpperCase() === "FEMALE" ? "FEMALE" : "MALE") as "MALE" | "FEMALE",
           role: (row.role?.toString().toLowerCase() === "registrar" ? "registrar" : "faculty") as "faculty" | "registrar",
         }));
+
+        // Auto-generate usernames from firstName + lastName when username is empty
+        const usedUsernames = new Set<string>();
+        mappedData.forEach((row) => {
+          if (row.firstName && row.lastName && !row.username) {
+            const base =
+              row.firstName.charAt(0) + row.lastName;
+            let candidate = base.toLowerCase().replace(/[^a-z0-9]/g, "");
+            // Ensure minimum 3 chars
+            if (candidate.length < 3) {
+              candidate = (row.firstName + row.lastName.charAt(0))
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, "");
+            }
+            // Resolve duplicates within the batch
+            let uniqueName = candidate;
+            let suffix = 1;
+            while (usedUsernames.has(uniqueName)) {
+              uniqueName = candidate + suffix;
+              suffix++;
+            }
+            usedUsernames.add(uniqueName);
+            row.username = uniqueName;
+          } else if (row.username) {
+            usedUsernames.add(row.username);
+          }
+        });
 
         // Validate row by row to filter out invalid items early
         const validRows: BulkUserPayload[] = [];
@@ -131,6 +158,49 @@ export function BulkUploadUsers() {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const headers = [
+      "username",
+      "firstName",
+      "lastName",
+      "middleInit",
+      "email",
+      "phone",
+      "address",
+      "sex",
+      "role",
+    ];
+    const exampleRows = [
+      [
+        "jsmith",
+        "John",
+        "Smith",
+        "J",
+        "jsmith@school.edu",
+        "09171234567",
+        "123 Main St, Manila",
+        "MALE",
+        "faculty",
+      ],
+      [
+        "mrodriguez",
+        "Maria",
+        "Rodriguez",
+        "",
+        "mrodriguez@school.edu",
+        "09189876543",
+        "456 Oak Ave, QC",
+        "FEMALE",
+        "registrar",
+      ],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...exampleRows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+    XLSX.writeFile(workbook, "bulk-upload-template.xlsx");
+  };
+
   const handleUpload = async () => {
     if (parsedData.length === 0) {
       toast.error("No valid data to upload.");
@@ -148,6 +218,36 @@ export function BulkUploadUsers() {
           toast.error(`${result.data.failed} users failed to create. Check console for details.`);
           console.error("Upload errors:", result.data.errors);
         }
+
+        // Generate and download xlsx with user data + generated passwords
+        if (result.data?.createdUsers && result.data.createdUsers.length > 0) {
+          const passwordMap = new Map(
+            result.data.createdUsers.map((u) => [u.username, u.generatedPassword])
+          );
+
+          const mergedData = parsedData
+            .filter((user) => passwordMap.has(user.username))
+            .map((user) => ({
+              username: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              middleInit: user.middleInit || "",
+              email: user.email || "",
+              phone: user.phone || "",
+              address: user.address,
+              sex: user.sex,
+              role: user.role,
+              generatedPassword: passwordMap.get(user.username) ?? "N/A",
+            }));
+
+          if (mergedData.length > 0) {
+            const worksheet = XLSX.utils.json_to_sheet(mergedData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+            XLSX.writeFile(workbook, "bulk-users-passwords.xlsx");
+          }
+        }
+
         handleClear();
       } else {
         toast.error("An error occurred during bulk upload.");
@@ -170,6 +270,20 @@ export function BulkUploadUsers() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Template Download */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            type="button"
+            size="sm"
+            onClick={handleDownloadTemplate}
+            className="text-xs"
+          >
+            <Download className="mr-2 h-3.5 w-3.5" />
+            Download Template
+          </Button>
+        </div>
+
         {/* Upload Area */}
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-10 flex flex-col items-center justify-center bg-gray-50 transition-colors hover:bg-gray-100 relative">
           <Input

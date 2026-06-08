@@ -55,7 +55,7 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
 
   for (const [index, formData] of validUsers.entries()) {
     try {
-      const password = crypto.randomBytes(12).toString("hex");
+      const password = crypto.randomBytes(4).toString("hex");
 
       // Create user in Clerk
       const clerkUser = await clerk.users.createUser({
