@@ -6,7 +6,7 @@ import { RedirectToSignIn, SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 import StudentsTable from "@/components/StudentsTable";
 import UploadStudents from "@/components/students/upload-students";
 import SearchStudent from "@/components/students/search-students";
-import BulkDeleteStudent from "@/components/BulkDeleteStudent";
+import ExportStudents from "@/components/students/export-students";
 import { Button } from "@/components/ui/button";
 import { PlusCircleIcon } from "lucide-react";
 import Link from "next/link";
@@ -55,7 +55,9 @@ export default function StudentLists() {
                   <SelectContent>
                     <SelectItem value="ALL">All Courses</SelectItem>
                     {allCourses.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -76,6 +78,11 @@ export default function StudentLists() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 md:gap-4 self-end">
+                <ExportStudents
+                  query={searchQuery}
+                  course={courseFilter}
+                  status={statusFilter}
+                />
                 {(role === "admin" || role === "superuser") && (
                   <>
                     <Link href="/list/students/create">
