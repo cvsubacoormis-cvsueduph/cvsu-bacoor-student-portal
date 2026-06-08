@@ -15,3 +15,12 @@ export const createUserSchema = z.object({
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 export const bulkUserSchema = z.array(createUserSchema);
+
+export const updateOwnProfileSchema = z.object({
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  phone: z.string().min(7, "Phone number is too short").max(20).optional().or(z.literal("")),
+  address: z.string().min(5, "Address must be at least 5 characters"),
+  middleInit: z.string().max(1, "Middle initial can only be 1 character").optional(),
+});
+
+export type UpdateOwnProfileFormValues = z.infer<typeof updateOwnProfileSchema>;

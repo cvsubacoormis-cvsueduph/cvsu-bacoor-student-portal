@@ -136,6 +136,12 @@ export default async function Menu() {
         },
         {
           icon: "/profile.png",
+          label: "Edit Profile",
+          href: "/list/adminprofile/edit",
+          visible: ["faculty", "registrar"],
+        },
+        {
+          icon: "/profile.png",
           label: "Create Admin",
           href: "/list/create-admin",
           visible: ["superuser"],
