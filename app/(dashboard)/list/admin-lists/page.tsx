@@ -1,3 +1,5 @@
+"use client";
+
 import AdminListsTable from "@/components/AdminListsTable";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import React from "react";

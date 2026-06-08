@@ -11,7 +11,30 @@ import { z } from "zod";
 
 const ALLOWED_ROLES = ["admin", "superuser", "faculty", "registrar"] as const;
 
-export async function getAdminsAndUsers(): Promise<AdminListEntry[]> {
+const BULK_DELETE_ALLOWED_ROLES = [
+  "admin",
+  "superuser",
+  "faculty",
+  "registrar",
+  "csg",
+] as const;
+
+type BulkDeleteRole = (typeof BULK_DELETE_ALLOWED_ROLES)[number];
+
+export interface PaginatedAdminListResult {
+  entries: AdminListEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function getAdminsAndUsers(params?: {
+  search?: string;
+  role?: string;
+  page?: number;
+  limit?: number;
+}): Promise<PaginatedAdminListResult> {
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized: must be signed in.");
@@ -23,20 +46,85 @@ export async function getAdminsAndUsers(): Promise<AdminListEntry[]> {
     throw new Error("Forbidden: insufficient permissions.");
   }
 
-  const [admins, users] = await Promise.all([
+  // ── Sanitize and default pagination params ──
+  const page = Math.max(1, Math.floor(params?.page ?? 1));
+  const limit = Math.min(50, Math.max(1, Math.floor(params?.limit ?? 10)));
+  const skip = (page - 1) * limit;
+  const roleFilter = params?.role?.trim().toLowerCase();
+  const searchTerm = params?.search?.trim();
+
+  // ── Build where clauses ──
+  const adminWhere: Record<string, unknown> = {};
+  const userWhere: Record<string, unknown> = {
+    role: { notIn: [Role.student] },
+  };
+
+  if (roleFilter) {
+    adminWhere.role = roleFilter;
+    userWhere.role = roleFilter;
+  }
+
+  if (searchTerm) {
+    // Search across firstName, lastName, and email
+    const searchFilter = {
+      OR: [
+        { firstName: { contains: searchTerm, mode: "insensitive" } },
+        { lastName: { contains: searchTerm, mode: "insensitive" } },
+        { email: { contains: searchTerm, mode: "insensitive" } },
+      ],
+    };
+    Object.assign(adminWhere, searchFilter);
+    // For User, merge with existing where
+    const userSearch = { AND: [userWhere, searchFilter] };
+    // We'll handle users differently below
+  }
+
+  // ── Execute queries ──
+  const [admins, adminsTotal] = await Promise.all([
     prisma.admin.findMany({
+      where: adminWhere as any,
       orderBy: { lastName: "asc" },
+      skip,
+      take: limit,
     }),
-    prisma.user.findMany({
-      where: {
-        role: {
-          notIn: [Role.student],
-        },
-      },
-      orderBy: { lastName: "asc" },
-    }),
+    prisma.admin.count({ where: adminWhere as any }),
   ]);
 
+  // For users, build the where carefully
+  let finalUserWhere: Record<string, unknown>;
+  if (searchTerm) {
+    finalUserWhere = {
+      AND: [
+        { role: { notIn: [Role.student] } },
+        ...(roleFilter ? [{ role: roleFilter }] : []),
+        {
+          OR: [
+            { firstName: { contains: searchTerm, mode: "insensitive" } },
+            { lastName: { contains: searchTerm, mode: "insensitive" } },
+            { email: { contains: searchTerm, mode: "insensitive" } },
+          ],
+        },
+      ],
+    };
+  } else if (roleFilter) {
+    finalUserWhere = { role: roleFilter };
+  } else {
+    finalUserWhere = { role: { notIn: [Role.student] } };
+  }
+
+  const [users, usersTotal] = await Promise.all([
+    prisma.user.findMany({
+      where: finalUserWhere as any,
+      orderBy: { lastName: "asc" },
+      skip: Math.max(0, skip - adminsTotal),
+      take: Math.max(0, limit - admins.length),
+    }),
+    prisma.user.count({ where: finalUserWhere as any }),
+  ]);
+
+  const total = adminsTotal + usersTotal;
+
+  // ── Map entries ──
   const adminEntries: AdminEntry[] = admins.map((a) => ({
     source: "admin",
     id: a.id,
@@ -67,12 +155,112 @@ export async function getAdminsAndUsers(): Promise<AdminListEntry[]> {
     role: u.role,
   }));
 
-  return [...adminEntries, ...userEntries];
+  const combined = [...adminEntries, ...userEntries]
+    .sort((a, b) => a.lastName.localeCompare(b.lastName))
+    .slice(0, limit);
+
+  return {
+    entries: combined,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 }
 
 // ─── Unified Delete ───────────────────────────────────────────────────────────
 
 type DeleteResult = { success: boolean; error?: string };
+
+// ─── Bulk Delete by Role ───────────────────────────────────────────────────────
+
+type BulkDeleteResult = {
+  success: boolean;
+  error?: string;
+  deleted?: number;
+  skippedCurrentUser?: boolean;
+};
+
+/**
+ * Deletes ALL Admin and User entries matching a given role from Clerk + DB.
+ * - Caller must be authenticated and have role admin or superuser.
+ * - Caller's own account is always preserved.
+ * - Only non-student roles can be targeted (admin, superuser, faculty, registrar, csg).
+ * - Role input is validated against the allowed set.
+ */
+export async function deleteByRole(
+  role: string
+): Promise<BulkDeleteResult> {
+  // 1. Auth
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Unauthorized" };
+
+  // 2. Role check
+  const caller = await currentUser();
+  const callerRole = caller?.publicMetadata?.role as string | undefined;
+  const ALLOWED = ["admin", "superuser"] as const;
+  if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
+    return { success: false, error: "Forbidden: insufficient permissions." };
+  }
+
+  // 3. Validate target role — only non-student roles allowed
+  const normalizedRole = role.trim().toLowerCase();
+  if (!BULK_DELETE_ALLOWED_ROLES.includes(normalizedRole as BulkDeleteRole)) {
+    return { success: false, error: `Invalid role: "${role}". Allowed roles: ${BULK_DELETE_ALLOWED_ROLES.join(", ")}` };
+  }
+
+  try {
+    // 4. Find all matching entries from both tables
+    const roleEnum = normalizedRole as Role;
+    const [admins, users] = await Promise.all([
+      prisma.admin.findMany({ where: { role: roleEnum } }),
+      prisma.user.findMany({ where: { role: roleEnum } }),
+    ]);
+
+    const allIds = [
+      ...admins.map((a) => ({ id: a.id, source: "admin" as const })),
+      ...users.map((u) => ({ id: u.id, source: "user" as const })),
+    ];
+
+    if (allIds.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    const clerk = await clerkClient();
+    let deleted = 0;
+    let skippedCurrentUser = false;
+
+    // 5. Delete from Clerk first, then Prisma (use transaction for Prisma)
+    for (const entry of allIds) {
+      // Never delete the caller
+      if (entry.id === userId) {
+        skippedCurrentUser = true;
+        continue;
+      }
+
+      try {
+        await clerk.users.deleteUser(entry.id);
+
+        if (entry.source === "admin") {
+          await prisma.admin.delete({ where: { id: entry.id } });
+        } else {
+          await prisma.user.delete({ where: { id: entry.id } });
+        }
+
+        deleted++;
+      } catch (err) {
+        console.error(`[deleteByRole] Failed to delete ${entry.id}:`, err);
+        // Continue with remaining entries — best-effort deletion
+      }
+    }
+
+    revalidatePath("/list/admin-lists");
+    return { success: true, deleted, skippedCurrentUser };
+  } catch (error: any) {
+    console.error("[deleteByRole] error:", error);
+    return { success: false, error: error.message ?? "Bulk deletion failed. Please try again." };
+  }
+}
 
 /**
  * Deletes either an Admin or a User (faculty/registrar/etc.) from Clerk + DB.
