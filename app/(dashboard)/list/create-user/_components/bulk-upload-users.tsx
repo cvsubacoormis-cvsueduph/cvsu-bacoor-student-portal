@@ -20,10 +20,22 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, FileText, X, AlertCircle, Loader2, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  X,
+  AlertCircle,
+  Loader2,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
-import { bulkCreateUsers, type BulkUserPayload } from "@/actions/user/bulk-user-action";
+import {
+  bulkCreateUsers,
+  type BulkUserPayload,
+} from "@/actions/user/bulk-user-action";
 import { bulkUserSchema } from "@/schemas/user-schema";
 
 export function BulkUploadUsers() {
@@ -39,7 +51,7 @@ export function BulkUploadUsers() {
   const totalPages = Math.ceil(parsedData.length / PAGE_SIZE);
   const paginatedData = parsedData.slice(
     (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
+    currentPage * PAGE_SIZE,
   );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +64,10 @@ export function BulkUploadUsers() {
       "application/vnd.ms-excel",
       "text/csv",
     ];
-    if (!validTypes.includes(selectedFile.type) && !selectedFile.name.match(/\.(xlsx|xls|csv)$/i)) {
+    if (
+      !validTypes.includes(selectedFile.type) &&
+      !selectedFile.name.match(/\.(xlsx|xls|csv)$/i)
+    ) {
       toast.error("Please upload a valid Excel (.xlsx/.xls) or CSV file.");
       return;
     }
@@ -88,16 +103,19 @@ export function BulkUploadUsers() {
           email: row.email?.toString().trim() || undefined,
           phone: row.phone?.toString().trim() || undefined,
           address: row.address?.toString().trim() || "",
-          sex: (row.sex?.toString().toUpperCase() === "FEMALE" ? "FEMALE" : "MALE") as "MALE" | "FEMALE",
-          role: (row.role?.toString().toLowerCase() === "registrar" ? "registrar" : "faculty") as "faculty" | "registrar",
+          sex: (row.sex?.toString().toUpperCase() === "FEMALE"
+            ? "FEMALE"
+            : "MALE") as "MALE" | "FEMALE",
+          role: (row.role?.toString().toLowerCase() === "registrar"
+            ? "registrar"
+            : "faculty") as "faculty" | "registrar",
         }));
 
         // Auto-generate usernames from firstName + lastName when username is empty
         const usedUsernames = new Set<string>();
         mappedData.forEach((row) => {
           if (row.firstName && row.lastName && !row.username) {
-            const base =
-              row.firstName.charAt(0) + row.lastName;
+            const base = row.firstName.charAt(0) + row.lastName;
             let candidate = base.toLowerCase().replace(/[^a-z0-9]/g, "");
             // Ensure minimum 3 chars
             if (candidate.length < 3) {
@@ -136,7 +154,9 @@ export function BulkUploadUsers() {
           if (parsed.success) {
             validRows.push(parsed.data as BulkUserPayload);
           } else {
-            validationErrors.push(`Row ${i + 1} (${row.username || "Unknown"}): ${parsed.error.errors[0]?.message}`);
+            validationErrors.push(
+              `Row ${i + 1} (${row.username || "Unknown"}): ${parsed.error.errors[0]?.message}`,
+            );
           }
         });
 
@@ -144,9 +164,14 @@ export function BulkUploadUsers() {
         setCurrentPage(1);
 
         if (validRows.length === 0) {
-          toast.error("No valid data found. Ensure required columns are present and valid.");
+          toast.error(
+            "No valid data found. Ensure required columns are present and valid.",
+          );
         } else if (validationErrors.length > 0) {
-          toast.error(`Parsed ${validRows.length} rows. Encountered ${validationErrors.length} validation issues. See console.`, { duration: 5000 });
+          toast.error(
+            `Parsed ${validRows.length} rows. Encountered ${validationErrors.length} validation issues. See console.`,
+            { duration: 5000 },
+          );
           console.warn("Validation parsing issues:", validationErrors);
         } else {
           toast.success(`Successfully parsed ${validRows.length} rows.`);
@@ -233,14 +258,19 @@ export function BulkUploadUsers() {
       if (result.success) {
         toast.success(`Successfully created ${result.data?.successful} users!`);
         if (result.data?.failed && result.data.failed > 0) {
-          toast.error(`${result.data.failed} users failed to create. Check console for details.`);
+          toast.error(
+            `${result.data.failed} users failed to create. Check console for details.`,
+          );
           console.error("Upload errors:", result.data.errors);
         }
 
         // Generate and download xlsx with user data + generated passwords
         if (result.data?.createdUsers && result.data.createdUsers.length > 0) {
           const passwordMap = new Map(
-            result.data.createdUsers.map((u) => [u.username, u.generatedPassword])
+            result.data.createdUsers.map((u) => [
+              u.username,
+              u.generatedPassword,
+            ]),
           );
 
           const mergedData = parsedData
@@ -284,7 +314,8 @@ export function BulkUploadUsers() {
         <CardTitle className="text-lg font-bold">Bulk Upload Users</CardTitle>
         <CardDescription className="text-sm">
           Upload an Excel (.xlsx) or CSV file containing user details. columns:
-          username, firstName, lastName, middleInit, email, phone, address, sex, role.
+          username, firstName, lastName, middleInit, email, phone, address, sex,
+          role.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -359,7 +390,9 @@ export function BulkUploadUsers() {
             <Button
               type="button"
               onClick={handleUpload}
-              disabled={isLoading || parsedData.length === 0 || isProcessingFile}
+              disabled={
+                isLoading || parsedData.length === 0 || isProcessingFile
+              }
               className="min-w-[140px] bg-blue-700 hover:bg-blue-900 text-white"
             >
               {isLoading ? (
@@ -399,7 +432,9 @@ export function BulkUploadUsers() {
                 <TableBody>
                   {paginatedData.map((row, idx) => (
                     <TableRow key={idx}>
-                      <TableCell className="font-medium">{row.username}</TableCell>
+                      <TableCell className="font-medium">
+                        {row.username}
+                      </TableCell>
                       <TableCell>{`${row.firstName} ${row.lastName}`}</TableCell>
                       <TableCell className="capitalize">{row.role}</TableCell>
                       <TableCell>{row.email || "-"}</TableCell>
@@ -450,7 +485,9 @@ export function BulkUploadUsers() {
                     variant="outline"
                     size="sm"
                     className="h-7 w-7 p-0"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage === totalPages}
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
@@ -460,10 +497,15 @@ export function BulkUploadUsers() {
               </div>
             )}
 
-            {parsedData.find(row => !row.address) && (
+            {parsedData.find((row) => !row.address) && (
               <div className="flex items-start flex-row space-x-2 text-amber-600 bg-amber-50 p-3 rounded-md text-sm border border-amber-200">
                 <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                <p>Some records have missing fields (like address or email). Only required fields (Username, First Name, Last Name) are strictly enforced by the backend validation. Make sure your file is formatted correctly to avoid DB constraints errors.</p>
+                <p>
+                  Some records have missing fields (like address or email). Only
+                  required fields (Username, First Name, Last Name) are strictly
+                  enforced by the backend validation. Make sure your file is
+                  formatted correctly to avoid DB constraints errors.
+                </p>
               </div>
             )}
           </div>

@@ -57,13 +57,17 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
     createdUsers: [] as { username: string; generatedPassword: string }[],
   };
 
+  // Unique batch prefix so placeholder emails never collide across uploads
+  const batchId = Date.now().toString(36);
+
   for (const [index, formData] of validUsers.entries()) {
     try {
       const password = crypto.randomBytes(8).toString("hex").slice(0, 8);
 
       // Clerk requires an email identifier. When the user hasn't provided one,
       // use a placeholder so they can fill in their real email later.
-      const clerkEmail = formData.email || `sample${index + 1}@gmail.com`;
+      const clerkEmail =
+        formData.email || `placeholder_${batchId}_${index + 1}@gmail.com`;
 
       // Create user in Clerk
       const clerkUser = await clerk.users.createUser({
