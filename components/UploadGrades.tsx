@@ -43,6 +43,11 @@ import { Badge } from "@/components/ui/badge";
 import { useUser } from "@clerk/nextjs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useUploadStatePersistence,
+  type PersistedUploadState,
+  UPLOAD_STATE_KEY,
+} from "@/hooks/use-upload-state-persistence";
 
 // --- Validation Schema ---
 const gradeRowSchema = z.object({
@@ -124,6 +129,22 @@ export function UploadGrades() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Persisted file metadata (file object can't be serialized)
+  const [fileMeta, setFileMeta] = useState<{
+    name: string;
+    size: number;
+  } | null>(null);
+
+  // ── Upload State Persistence ────────────────────────────────────────────
+  const {
+    recoveredState,
+    showRecoveryBanner,
+    persistState,
+    clearPersistedState,
+    dismissRecovery,
+    confirmRecovery,
+  } = useUploadStatePersistence();
+
   // Computed
   const totalPages = previewData ? Math.ceil(previewData.length / recordsPerPage) : 0;
   const paginatedData = previewData?.slice(
@@ -135,6 +156,7 @@ export function UploadGrades() {
 
   const resetState = () => {
     setFile(null);
+    setFileMeta(null);
     setPreviewData(null);
     setUploadResults([]);
     setLogs([]);
@@ -145,6 +167,7 @@ export function UploadGrades() {
     setIsValidating(false);
     setHasValidated(false);
     setAllowLegacy(false);
+    clearPersistedState();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,6 +212,7 @@ export function UploadGrades() {
     }
 
     setFile(selectedFile);
+    setFileMeta({ name: selectedFile.name, size: selectedFile.size });
     setIsParsing(true);
     setUploadResults([]);
     setLogs([]);
@@ -255,7 +279,7 @@ export function UploadGrades() {
   };
 
   const handleUpload = async (isDryRun = false) => {
-    if (!file || !academicYear || !semester || !previewData) return;
+    if (!academicYear || !semester || !previewData || previewData.length === 0) return;
 
     if (isDryRun) {
       setIsValidating(true);
@@ -391,12 +415,14 @@ export function UploadGrades() {
       if (!controller.signal.aborted && !rateLimitExceeded) {
         if (isDryRun) {
           setHasValidated(true);
+          clearPersistedState(); // validation complete — clean up
           await Swal.fire({
             icon: "info",
             title: "Validation Complete",
             text: `checked ${totalRecords} records. Check the results tab for errors/warnings. No changes were made.`,
           });
         } else {
+          clearPersistedState(); // upload complete — clean up
           await Swal.fire({
             icon: "success",
             title: "Processing Complete",
@@ -465,6 +491,86 @@ export function UploadGrades() {
       setAcademicYear("");
     }
   }, [allowLegacy, academicYears, academicYear]);
+
+  // ── Restore persisted state on mount ───────────────────────────────────
+  useEffect(() => {
+    if (!recoveredState) return;
+    // Restore all serializable state
+    setFileMeta({
+      name: recoveredState.fileName,
+      size: recoveredState.fileSize,
+    });
+    setPreviewData(recoveredState.previewData);
+    setAcademicYear(recoveredState.academicYear);
+    setSemester(recoveredState.semester);
+    setAllowLegacy(recoveredState.allowLegacy);
+    setUploadResults(recoveredState.uploadResults);
+    setLogs(
+      recoveredState.logs.map((l) => ({
+        ...l,
+        timestamp: new Date(l.timestamp),
+      }))
+    );
+    setHasValidated(recoveredState.hasValidated);
+    setProgress(recoveredState.progress);
+    setProcessedCount(recoveredState.processedCount);
+    setTotalRecords(recoveredState.totalRecords);
+  }, [recoveredState]);
+
+  // ── Persist state on meaningful changes ───────────────────────────────
+  useEffect(() => {
+    if (!previewData || previewData.length === 0) return;
+
+    const snapshot: Partial<PersistedUploadState> = {
+      previewData,
+      academicYear,
+      semester,
+      allowLegacy,
+      uploadResults,
+      logs: logs.map((l) => ({
+        type: l.type,
+        message: l.message,
+        timestamp: l.timestamp.toISOString(),
+      })),
+      hasValidated,
+      progress,
+      processedCount,
+      totalRecords,
+    };
+
+    if (fileMeta) {
+      snapshot.fileName = fileMeta.name;
+      snapshot.fileSize = fileMeta.size;
+    }
+
+    persistState(snapshot);
+  }, [
+    previewData,
+    academicYear,
+    semester,
+    allowLegacy,
+    uploadResults,
+    logs,
+    hasValidated,
+    progress,
+    processedCount,
+    totalRecords,
+    fileMeta,
+    persistState,
+  ]);
+
+  // ── Warn before leaving during active upload ───────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isUploading || isValidating) {
+        e.preventDefault();
+        // Modern browsers show a generic message regardless
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isUploading, isValidating]);
 
   return (
     <div className="space-y-6 mx-auto">
@@ -536,8 +642,53 @@ export function UploadGrades() {
 
       <UploadGradeNotice />
 
+      {/* Recovery Banner — shown when previous upload state is detected */}
+      {showRecoveryBanner && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-900">Previous session recovered</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            <p className="mb-2">
+              We found an unsaved upload session from{" "}
+              {recoveredState?.timestamp
+                ? new Date(recoveredState.timestamp).toLocaleString()
+                : "earlier"}
+              . Your file, settings, and results have been restored.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-900 hover:bg-amber-100"
+                onClick={confirmRecovery}
+              >
+                <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                Keep Session
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-900 hover:bg-amber-100"
+                onClick={dismissRecovery}
+              >
+                Dismiss
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-50"
+                onClick={resetState}
+              >
+                <XCircle className="w-3.5 h-3.5 mr-1" />
+                Start Fresh
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Upload Area */}
-      {(!file || isParsing) && (
+      {((!file && !fileMeta) || isParsing) && (
         <div
           className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${!academicYear || !semester
             ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
@@ -598,7 +749,7 @@ export function UploadGrades() {
       )}
 
       {/* File Preview & Action Area */}
-      {file && previewData && (
+      {(file || fileMeta) && previewData && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* File Info & Actions */}
           <div className="lg:col-span-1 space-y-6">
@@ -610,8 +761,12 @@ export function UploadGrades() {
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
                   <FileSpreadsheet className="h-8 w-8 text-green-600" />
                   <div className="overflow-hidden">
-                    <p className="font-medium truncate" title={file.name}>{file.name}</p>
-                    <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB • {totalRecords} Records</p>
+                    <p className="font-medium truncate" title={file?.name ?? fileMeta?.name}>
+                      {file?.name ?? fileMeta?.name ?? "Unknown"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {((file?.size ?? fileMeta?.size ?? 0) / 1024).toFixed(1)} KB • {totalRecords} Records
+                    </p>
                   </div>
                 </div>
 

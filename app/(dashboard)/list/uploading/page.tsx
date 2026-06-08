@@ -1,4 +1,3 @@
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ManualGradeEntry from "@/components/ManualGradeEntry";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
