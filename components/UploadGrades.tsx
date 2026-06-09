@@ -17,7 +17,13 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -49,13 +55,15 @@ import {
 } from "@/hooks/use-upload-state-persistence";
 
 // --- Validation Schema ---
-const gradeRowSchema = z.object({
-  studentNumber: z.union([z.string(), z.number()]).transform(String),
-  courseCode: z.string().min(1),
-  grade: z.union([z.string(), z.number()]),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-}).passthrough(); // Allow other fields
+const gradeRowSchema = z
+  .object({
+    studentNumber: z.union([z.string(), z.number()]).transform(String),
+    courseCode: z.string().min(1),
+    grade: z.union([z.string(), z.number()]),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+  })
+  .passthrough(); // Allow other fields
 
 const BATCH_SIZE = 50;
 
@@ -68,31 +76,76 @@ interface UploadResult {
   matchQuality?: string; // "exact" | "fuzzy" | "warning" | "updated" | "error" | "unchanged"
 }
 
-type MatchQuality = "exact" | "fuzzy" | "warning" | "updated" | "error" | "unchanged";
+type MatchQuality =
+  | "exact"
+  | "fuzzy"
+  | "warning"
+  | "updated"
+  | "error"
+  | "unchanged";
 
 function getMatchQuality(result: UploadResult): MatchQuality {
   // Use explicit server-provided quality if available
-  if (result.matchQuality && ["exact", "fuzzy", "warning", "updated", "error", "unchanged"].includes(result.matchQuality)) {
+  if (
+    result.matchQuality &&
+    ["exact", "fuzzy", "warning", "updated", "error", "unchanged"].includes(
+      result.matchQuality,
+    )
+  ) {
     return result.matchQuality as MatchQuality;
   }
   // Fallback: derive from status string
   if (result.status.startsWith("❌")) return "error";
-  if (result.status.includes("already exists") || result.status.includes("no changes")) return "unchanged";
+  if (
+    result.status.includes("already exists") ||
+    result.status.includes("no changes")
+  )
+    return "unchanged";
   if (result.status.startsWith("⚠️")) return "fuzzy";
   return "exact";
 }
 
-const QUALITY_CONFIG: Record<MatchQuality, { label: string; badgeClass: string; icon: typeof CheckCircle }> = {
-  exact:     { label: "Exact Match", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100", icon: CheckCircle },
-  fuzzy:     { label: "Partial Match", badgeClass: "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100", icon: AlertCircle },
-  warning:   { label: "Warning",    badgeClass: "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100", icon: AlertCircle },
-  updated:   { label: "Updated",    badgeClass: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100", icon: RefreshCcw },
-  error:     { label: "Failed",     badgeClass: "bg-red-100 text-red-800 border-red-200 hover:bg-red-100", icon: XCircle },
-  unchanged: { label: "No Change",  badgeClass: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100", icon: CheckCircle },
+const QUALITY_CONFIG: Record<
+  MatchQuality,
+  { label: string; badgeClass: string; icon: typeof CheckCircle }
+> = {
+  exact: {
+    label: "Exact Match",
+    badgeClass:
+      "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100",
+    icon: CheckCircle,
+  },
+  fuzzy: {
+    label: "Partial Match",
+    badgeClass:
+      "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100",
+    icon: AlertCircle,
+  },
+  warning: {
+    label: "Warning",
+    badgeClass:
+      "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100",
+    icon: AlertCircle,
+  },
+  updated: {
+    label: "Updated",
+    badgeClass: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100",
+    icon: RefreshCcw,
+  },
+  error: {
+    label: "Failed",
+    badgeClass: "bg-red-100 text-red-800 border-red-200 hover:bg-red-100",
+    icon: XCircle,
+  },
+  unchanged: {
+    label: "No Change",
+    badgeClass: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100",
+    icon: CheckCircle,
+  },
 };
 
 interface LogEntry {
-  type: 'success' | 'error' | 'warning';
+  type: "success" | "error" | "warning";
   message: string;
   timestamp: Date;
 }
@@ -100,7 +153,9 @@ interface LogEntry {
 export function UploadGrades() {
   const { user } = useUser();
   const role = user?.publicMetadata?.role as string | undefined;
-  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(role || "");
+  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(
+    role || "",
+  );
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -123,6 +178,9 @@ export function UploadGrades() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 10;
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1024,
+  );
 
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -145,10 +203,12 @@ export function UploadGrades() {
   } = useUploadStatePersistence();
 
   // Computed
-  const totalPages = previewData ? Math.ceil(previewData.length / recordsPerPage) : 0;
+  const totalPages = previewData
+    ? Math.ceil(previewData.length / recordsPerPage)
+    : 0;
   const paginatedData = previewData?.slice(
     (currentPage - 1) * recordsPerPage,
-    currentPage * recordsPerPage
+    currentPage * recordsPerPage,
   );
 
   const totalResultPages = Math.ceil(uploadResults.length / recordsPerPage);
@@ -248,24 +308,27 @@ export function UploadGrades() {
     e.preventDefault();
   };
 
-  const addLog = (type: 'success' | 'error' | 'warning', message: string) => {
-    setLogs(prev => [{ type, message, timestamp: new Date() }, ...prev]);
+  const addLog = (type: "success" | "error" | "warning", message: string) => {
+    setLogs((prev) => [{ type, message, timestamp: new Date() }, ...prev]);
   };
 
   const handleDownloadLogs = () => {
     if (uploadResults.length === 0) return;
 
-    const dataToExport = uploadResults.map(r => ({
+    const dataToExport = uploadResults.map((r) => ({
       "Student Number": r.studentNumber || "",
       "Student Name": r.studentName || r.identifier || "",
       "Course Code": r.courseCode,
-      "Status": r.status
+      Status: r.status,
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Upload Logs");
-    XLSX.writeFile(wb, `Upload_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `Upload_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
   };
 
   const cancelUpload = () => {
@@ -279,7 +342,8 @@ export function UploadGrades() {
   };
 
   const handleUpload = async (isDryRun = false) => {
-    if (!academicYear || !semester || !previewData || previewData.length === 0) return;
+    if (!academicYear || !semester || !previewData || previewData.length === 0)
+      return;
 
     if (isDryRun) {
       setIsValidating(true);
@@ -318,12 +382,12 @@ export function UploadGrades() {
 
     if (validationErrors > 0) {
       const proceed = await Swal.fire({
-        title: 'Validation Issues',
+        title: "Validation Issues",
         text: `Found ${validationErrors} records with missing required fields (Student Number, Course Code, or Grade). These will likely fail. Continue?`,
-        icon: 'warning',
+        icon: "warning",
         showCancelButton: true,
-        confirmButtonText: 'Yes, proceed',
-        cancelButtonText: 'No, cancel'
+        confirmButtonText: "Yes, proceed",
+        cancelButtonText: "No, cancel",
       });
 
       if (!proceed.isConfirmed) {
@@ -351,7 +415,7 @@ export function UploadGrades() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               grades: payload,
-              validateOnly: isDryRun
+              validateOnly: isDryRun,
             }),
             signal: controller.signal,
           });
@@ -362,36 +426,49 @@ export function UploadGrades() {
               Swal.fire({
                 icon: "warning",
                 title: "Rate Limit Exceeded",
-                text: errorData.error || "Too many upload attempts. Please try again in 15 minutes.",
+                text:
+                  errorData.error ||
+                  "Too many upload attempts. Please try again in 15 minutes.",
               });
-              addLog("error", "Upload aborted: Rate Limit Exceeded Please wait 15 minutes");
+              addLog(
+                "error",
+                "Upload aborted: Rate Limit Exceeded Please wait 15 minutes",
+              );
               rateLimitExceeded = true;
               break; // Abort remaining chunks
             }
             const errorText = await res.text();
             addLog("error", `Batch ${i + 1} Failed: ${res.statusText}`);
             // Push placeholder errors for this chunk
-            setUploadResults(prev => [
+            setUploadResults((prev) => [
               ...prev,
               ...chunk.map((item: any) => ({
                 studentNumber: item.studentNumber,
                 courseCode: item.courseCode,
                 status: "❌ Batch Upload Failed",
-                studentName: "Unknown"
-              }))
+                studentName: "Unknown",
+              })),
             ]);
           } else {
             const result = await res.json();
             if (result.results) {
               setUploadResults((prev) => [...prev, ...result.results]);
               // Check for warnings/errors in the success response
-              const failures = result.results.filter((r: any) => r.status.includes("❌"));
-              const warnings = result.results.filter((r: any) => r.status.includes("⚠️"));
-              const successes = result.results.filter((r: any) => r.status.includes("✅"));
+              const failures = result.results.filter((r: any) =>
+                r.status.includes("❌"),
+              );
+              const warnings = result.results.filter((r: any) =>
+                r.status.includes("⚠️"),
+              );
+              const successes = result.results.filter((r: any) =>
+                r.status.includes("✅"),
+              );
 
               const parts = [];
-              if (successes.length > 0) parts.push(`${successes.length} success`);
-              if (warnings.length > 0) parts.push(`${warnings.length} warnings`);
+              if (successes.length > 0)
+                parts.push(`${successes.length} success`);
+              if (warnings.length > 0)
+                parts.push(`${warnings.length} warnings`);
               if (failures.length > 0) parts.push(`${failures.length} errors`);
 
               const message = `Batch ${i + 1}: ${parts.join(", ")}`;
@@ -402,7 +479,7 @@ export function UploadGrades() {
             }
           }
         } catch (err: any) {
-          if (err.name === 'AbortError') throw err;
+          if (err.name === "AbortError") throw err;
           console.error(err);
           addLog("error", `Batch ${i + 1} Network Error`);
         }
@@ -477,7 +554,7 @@ export function UploadGrades() {
     }
 
     // Faculty Restriction: Only Current Academic Year
-    if (role === 'faculty') {
+    if (role === "faculty") {
       const currentAyString = `AY_${currentAyStartYear}_${currentAyStartYear + 1}`;
       return [currentAyString];
     }
@@ -509,7 +586,7 @@ export function UploadGrades() {
       recoveredState.logs.map((l) => ({
         ...l,
         timestamp: new Date(l.timestamp),
-      }))
+      })),
     );
     setHasValidated(recoveredState.hasValidated);
     setProgress(recoveredState.progress);
@@ -559,6 +636,13 @@ export function UploadGrades() {
     persistState,
   ]);
 
+  // ── Track window width reactively for responsive pagination ─────────
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // ── Warn before leaving during active upload ───────────────────────────
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -581,13 +665,21 @@ export function UploadGrades() {
             <FileSpreadsheet className="w-5 h-5 text-blue-600" />
             Upload Configuration
           </CardTitle>
-          <CardDescription>Select the academic term for these grades before uploading.</CardDescription>
+          <CardDescription>
+            Select the academic term for these grades before uploading.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
-              <Select value={academicYear} onValueChange={setAcademicYear} disabled={isUploading}>
+              <Label htmlFor="academic-year">
+                Academic Year <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={academicYear}
+                onValueChange={setAcademicYear}
+                disabled={isUploading}
+              >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select Academic Year" />
                 </SelectTrigger>
@@ -601,15 +693,23 @@ export function UploadGrades() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="semester">Semester <span className="text-red-500">*</span></Label>
-              <Select value={semester} onValueChange={setSemester} disabled={isUploading}>
+              <Label htmlFor="semester">
+                Semester <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={semester}
+                onValueChange={setSemester}
+                disabled={isUploading}
+              >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="FIRST">First Semester</SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR" disabled>Midyear</SelectItem>
+                  <SelectItem value="MIDYEAR" disabled>
+                    Midyear
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -621,7 +721,9 @@ export function UploadGrades() {
               <Checkbox
                 id="legacy-mode"
                 checked={allowLegacy}
-                onCheckedChange={(checked) => setAllowLegacy(checked as boolean)}
+                onCheckedChange={(checked) =>
+                  setAllowLegacy(checked as boolean)
+                }
                 disabled={isUploading}
               />
               <div className="grid gap-1.5 leading-none">
@@ -632,7 +734,9 @@ export function UploadGrades() {
                   Allow Legacy / Unmatched Subjects
                 </label>
                 <p className="text-xs text-amber-700">
-                  If checked, grades for subjects NOT in the current curriculum will be accepted (without curriculum linking). Use with caution.
+                  If checked, grades for subjects NOT in the current curriculum
+                  will be accepted (without curriculum linking). Use with
+                  caution.
                 </p>
               </div>
             </div>
@@ -646,7 +750,9 @@ export function UploadGrades() {
       {showRecoveryBanner && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
           <AlertCircle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">Previous session recovered</AlertTitle>
+          <AlertTitle className="text-amber-900">
+            Previous session recovered
+          </AlertTitle>
           <AlertDescription className="text-amber-700">
             <p className="mb-2">
               We found an unsaved upload session from{" "}
@@ -690,10 +796,11 @@ export function UploadGrades() {
       {/* Upload Area */}
       {((!file && !fileMeta) || isParsing) && (
         <div
-          className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${!academicYear || !semester
-            ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
-            : "border-blue-200 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-50 cursor-pointer"
-            }`}
+          className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${
+            !academicYear || !semester
+              ? "border-gray-200 bg-gray-50 cursor-not-allowed opacity-60"
+              : "border-blue-200 bg-blue-50/50 hover:border-blue-400 hover:bg-blue-50 cursor-pointer"
+          }`}
           onDrop={!academicYear || !semester ? undefined : handleDrop}
           onDragOver={!academicYear || !semester ? undefined : handleDragOver}
           onClick={
@@ -721,7 +828,8 @@ export function UploadGrades() {
                   Configuration Required
                 </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Please select an Academic Year and Semester above to proceed with upload.
+                  Please select an Academic Year and Semester above to proceed
+                  with upload.
                 </p>
               </div>
             </div>
@@ -761,11 +869,15 @@ export function UploadGrades() {
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
                   <FileSpreadsheet className="h-8 w-8 text-green-600" />
                   <div className="overflow-hidden">
-                    <p className="font-medium truncate" title={file?.name ?? fileMeta?.name}>
+                    <p
+                      className="font-medium truncate"
+                      title={file?.name ?? fileMeta?.name}
+                    >
                       {file?.name ?? fileMeta?.name ?? "Unknown"}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {((file?.size ?? fileMeta?.size ?? 0) / 1024).toFixed(1)} KB • {totalRecords} Records
+                      {((file?.size ?? fileMeta?.size ?? 0) / 1024).toFixed(1)}{" "}
+                      KB • {totalRecords} Records
                     </p>
                   </div>
                 </div>
@@ -773,15 +885,26 @@ export function UploadGrades() {
                 {isUploading || isValidating ? (
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span>{isValidating ? "Validating..." : "Uploading..."}</span>
+                      <span>
+                        {isValidating ? "Validating..." : "Uploading..."}
+                      </span>
 
-                      <span className="font-medium text-green-600">{progress}%</span>
+                      <span className="font-medium text-green-600">
+                        {progress}%
+                      </span>
                     </div>
-                    <Progress value={progress} className="h-2 [&>span]:bg-green-600" />
+                    <Progress
+                      value={progress}
+                      className="h-2 [&>span]:bg-green-600"
+                    />
                     <p className="text-xs text-center text-gray-500">
                       Processed {processedCount} of {totalRecords} rows
                     </p>
-                    <Button variant="destructive" className="w-full" onClick={cancelUpload}>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={cancelUpload}
+                    >
                       <XCircle className="w-4 h-4 mr-2" /> Cancel
                     </Button>
                   </div>
@@ -804,13 +927,22 @@ export function UploadGrades() {
                       </Button>
                     </div>
 
-                    <Button variant="outline" className="w-full" onClick={resetState}>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={resetState}
+                    >
                       <RefreshCcw className="w-4 h-4 mr-2" /> Reset / New File
                     </Button>
 
                     {uploadResults.length > 0 && (
-                      <Button variant="secondary" className="w-full" onClick={handleDownloadLogs}>
-                        <FileSpreadsheet className="w-4 h-4 mr-2" /> Download Logs
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={handleDownloadLogs}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" /> Download
+                        Logs
                       </Button>
                     )}
                   </div>
@@ -822,9 +954,16 @@ export function UploadGrades() {
                     <h4 className="text-sm font-medium mb-2">Activity Log</h4>
                     <div className="max-h-[200px] overflow-y-auto text-xs space-y-1 bg-gray-50 p-2 rounded border">
                       {logs.map((log, i) => (
-                        <div key={i} className={`flex gap-2 ${log.type === 'error' ? 'text-red-600' :
-                          log.type === 'warning' ? 'text-amber-600' : 'text-green-600'
-                          }`}>
+                        <div
+                          key={i}
+                          className={`flex gap-2 ${
+                            log.type === "error"
+                              ? "text-red-600"
+                              : log.type === "warning"
+                                ? "text-amber-600"
+                                : "text-green-600"
+                          }`}
+                        >
                           <span>•</span>
                           <span>{log.message}</span>
                         </div>
@@ -841,7 +980,9 @@ export function UploadGrades() {
             <Card className="flex flex-col">
               <CardHeader>
                 <CardTitle>
-                  {isUploading || uploadResults.length > 0 ? "Upload Results" : "Data Preview"}
+                  {isUploading || uploadResults.length > 0
+                    ? "Upload Results"
+                    : "Data Preview"}
                 </CardTitle>
                 <CardDescription>
                   {isUploading || uploadResults.length > 0
@@ -854,18 +995,35 @@ export function UploadGrades() {
                   // Results Tabs
                   <div className="flex flex-col">
                     <div className="bg-blue-50/50 p-2 mb-2 rounded text-xs text-center border border-blue-100 text-blue-800">
-                      {hasValidated && !isUploading ? "Validation Mode: No changes were made to the database." : "Displaying latest results."}
+                      {hasValidated && !isUploading
+                        ? "Validation Mode: No changes were made to the database."
+                        : "Displaying latest results."}
                     </div>
 
                     {/* Summary Bar */}
                     <div className="flex flex-wrap gap-2 mb-3 p-2 bg-gray-50 rounded border">
-                      {(["exact", "fuzzy", "warning", "updated", "error", "unchanged"] as MatchQuality[]).map(q => {
-                        const count = uploadResults.filter(r => getMatchQuality(r) === q).length;
+                      {(
+                        [
+                          "exact",
+                          "fuzzy",
+                          "warning",
+                          "updated",
+                          "error",
+                          "unchanged",
+                        ] as MatchQuality[]
+                      ).map((q) => {
+                        const count = uploadResults.filter(
+                          (r) => getMatchQuality(r) === q,
+                        ).length;
                         if (count === 0) return null;
                         const config = QUALITY_CONFIG[q];
                         const Icon = config.icon;
                         return (
-                          <Badge key={q} variant="outline" className={`text-xs gap-1 ${config.badgeClass}`}>
+                          <Badge
+                            key={q}
+                            variant="outline"
+                            className={`text-xs gap-1 ${config.badgeClass}`}
+                          >
                             <Icon className="w-3 h-3" />
                             {config.label}: {count}
                           </Badge>
@@ -876,38 +1034,127 @@ export function UploadGrades() {
                     <Tabs defaultValue="all" className="flex flex-col">
                       <div className="flex items-center justify-between mb-4 overflow-x-auto">
                         <TabsList className="flex-wrap h-auto gap-0.5 p-0.5">
-                          <TabsTrigger value="all" className="text-xs px-2 py-1">All ({uploadResults.length})</TabsTrigger>
-                          <TabsTrigger value="exact" className="text-xs px-2 py-1">Exact ({uploadResults.filter(r => getMatchQuality(r) === "exact").length})</TabsTrigger>
-                          <TabsTrigger value="fuzzy" className="text-xs px-2 py-1">Partial ({uploadResults.filter(r => getMatchQuality(r) === "fuzzy").length})</TabsTrigger>
-                          <TabsTrigger value="warning" className="text-xs px-2 py-1">Warning ({uploadResults.filter(r => getMatchQuality(r) === "warning").length})</TabsTrigger>
-                          <TabsTrigger value="updated" className="text-xs px-2 py-1">Updated ({uploadResults.filter(r => getMatchQuality(r) === "updated").length})</TabsTrigger>
-                          <TabsTrigger value="error" className="text-xs px-2 py-1 text-red-600 data-[state=active]:text-red-700">Failed ({uploadResults.filter(r => getMatchQuality(r) === "error").length})</TabsTrigger>
+                          <TabsTrigger
+                            value="all"
+                            className="text-xs px-2 py-1"
+                          >
+                            All ({uploadResults.length})
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="exact"
+                            className="text-xs px-2 py-1"
+                          >
+                            Exact (
+                            {
+                              uploadResults.filter(
+                                (r) => getMatchQuality(r) === "exact",
+                              ).length
+                            }
+                            )
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="fuzzy"
+                            className="text-xs px-2 py-1"
+                          >
+                            Partial (
+                            {
+                              uploadResults.filter(
+                                (r) => getMatchQuality(r) === "fuzzy",
+                              ).length
+                            }
+                            )
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="warning"
+                            className="text-xs px-2 py-1"
+                          >
+                            Warning (
+                            {
+                              uploadResults.filter(
+                                (r) => getMatchQuality(r) === "warning",
+                              ).length
+                            }
+                            )
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="updated"
+                            className="text-xs px-2 py-1"
+                          >
+                            Updated (
+                            {
+                              uploadResults.filter(
+                                (r) => getMatchQuality(r) === "updated",
+                              ).length
+                            }
+                            )
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="error"
+                            className="text-xs px-2 py-1 text-red-600 data-[state=active]:text-red-700"
+                          >
+                            Failed (
+                            {
+                              uploadResults.filter(
+                                (r) => getMatchQuality(r) === "error",
+                              ).length
+                            }
+                            )
+                          </TabsTrigger>
                         </TabsList>
                       </div>
 
-                      {(["all", "exact", "fuzzy", "warning", "updated", "error"] as const).map((tabInfo) => {
-                        const filtered = uploadResults.filter(r => {
+                      {(
+                        [
+                          "all",
+                          "exact",
+                          "fuzzy",
+                          "warning",
+                          "updated",
+                          "error",
+                        ] as const
+                      ).map((tabInfo) => {
+                        const filtered = uploadResults.filter((r) => {
                           if (tabInfo === "all") return true;
                           return getMatchQuality(r) === tabInfo;
                         });
 
                         // Calculate pagination for this specific tab
-                        const totalPages = Math.ceil(filtered.length / recordsPerPage);
+                        const totalPages = Math.ceil(
+                          filtered.length / recordsPerPage,
+                        );
                         // Ensure current page is valid for this tab
-                        const effectivePage = Math.min(Math.max(1, currentPage), totalPages || 1);
+                        const effectivePage = Math.min(
+                          Math.max(1, currentPage),
+                          totalPages || 1,
+                        );
 
-                        const currentTabRes = filtered.slice((effectivePage - 1) * recordsPerPage, effectivePage * recordsPerPage);
+                        const currentTabRes = filtered.slice(
+                          (effectivePage - 1) * recordsPerPage,
+                          effectivePage * recordsPerPage,
+                        );
 
                         return (
-                          <TabsContent key={tabInfo} value={tabInfo} className="flex flex-col mt-0">
+                          <TabsContent
+                            key={tabInfo}
+                            value={tabInfo}
+                            className="flex flex-col mt-0"
+                          >
                             <div className="border rounded-md flex-1 relative">
                               <Table>
                                 <TableHeader className="bg-gray-50 sticky top-0">
                                   <TableRow>
-                                    <TableHead className="text-xs">Quality</TableHead>
-                                    <TableHead className="text-xs">Student</TableHead>
-                                    <TableHead className="text-xs">Course</TableHead>
-                                    <TableHead className="text-xs">Status</TableHead>
+                                    <TableHead className="text-xs">
+                                      Quality
+                                    </TableHead>
+                                    <TableHead className="text-xs">
+                                      Student
+                                    </TableHead>
+                                    <TableHead className="text-xs">
+                                      Course
+                                    </TableHead>
+                                    <TableHead className="text-xs">
+                                      Status
+                                    </TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -918,25 +1165,41 @@ export function UploadGrades() {
                                     return (
                                       <TableRow key={i}>
                                         <TableCell>
-                                          <Badge variant="outline" className={`text-[10px] gap-0.5 px-1.5 py-0 ${config.badgeClass}`}>
+                                          <Badge
+                                            variant="outline"
+                                            className={`text-[10px] gap-0.5 px-1.5 py-0 ${config.badgeClass}`}
+                                          >
                                             <Icon className="w-2.5 h-2.5" />
                                             {config.label}
                                           </Badge>
                                         </TableCell>
                                         <TableCell className="text-xs font-semibold">
-                                          {res.studentName || res.identifier || res.studentNumber || "Unknown"}
-                                          <div className="text-[10px] text-gray-500">{res.studentNumber || "No Student #"}</div>
+                                          {res.studentName ||
+                                            res.identifier ||
+                                            res.studentNumber ||
+                                            "Unknown"}
+                                          <div className="text-[10px] text-gray-500">
+                                            {res.studentNumber ||
+                                              "No Student #"}
+                                          </div>
                                         </TableCell>
-                                        <TableCell className="text-xs font-semibold">{res.courseCode}</TableCell>
+                                        <TableCell className="text-xs font-semibold">
+                                          {res.courseCode}
+                                        </TableCell>
                                         <TableCell className="text-[11px] leading-tight max-w-[220px]">
-                                          {res.status.replace(/^[✅⚠️❌]\s*/, "").trim()}
+                                          {res.status
+                                            .replace(/^[✅⚠️❌]\s*/, "")
+                                            .trim()}
                                         </TableCell>
                                       </TableRow>
                                     );
                                   })}
                                   {filtered.length === 0 && (
                                     <TableRow>
-                                      <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                                      <TableCell
+                                        colSpan={4}
+                                        className="text-center py-8 text-gray-500"
+                                      >
                                         No results in this category.
                                       </TableCell>
                                     </TableRow>
@@ -966,7 +1229,9 @@ export function UploadGrades() {
                                     variant="outline"
                                     size="sm"
                                     className="h-7 w-7 p-0"
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    onClick={() =>
+                                      setCurrentPage((p) => Math.max(1, p - 1))
+                                    }
                                     disabled={effectivePage === 1}
                                   >
                                     <ChevronLeft className="w-3 h-3" />
@@ -974,37 +1239,45 @@ export function UploadGrades() {
                                   </Button>
 
                                   {/* Numbered Pages */}
-                                    {(() => {
-                                      let start = Math.max(1, effectivePage - 2);
-                                      let end = Math.min(totalPages, start + 4);
+                                  {(() => {
+                                    let start = Math.max(1, effectivePage - 2);
+                                    const end = Math.min(totalPages, start + 4);
 
-                                      if (end - start < 4) {
-                                        start = Math.max(1, end - 4);
-                                      }
+                                    if (end - start < 4) {
+                                      start = Math.max(1, end - 4);
+                                    }
 
-                                      const pages = [];
-                                      for (let i = start; i <= end; i++) {
-                                        pages.push(i);
-                                      }
+                                    const pages = [];
+                                    for (let i = start; i <= end; i++) {
+                                      pages.push(i);
+                                    }
 
-                                      return pages.map((p) => (
-                                        <Button
-                                          key={p}
-                                          variant={effectivePage === p ? "default" : "outline"}
-                                          size="sm"
-                                          className="h-7 w-7 p-0 text-xs"
-                                          onClick={() => setCurrentPage(p)}
-                                        >
-                                          {p}
-                                        </Button>
-                                      ));
-                                    })()}
+                                    return pages.map((p) => (
+                                      <Button
+                                        key={p}
+                                        variant={
+                                          effectivePage === p
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-xs"
+                                        onClick={() => setCurrentPage(p)}
+                                      >
+                                        {p}
+                                      </Button>
+                                    ));
+                                  })()}
 
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-7 w-7 p-0"
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    onClick={() =>
+                                      setCurrentPage((p) =>
+                                        Math.min(totalPages, p + 1),
+                                      )
+                                    }
                                     disabled={effectivePage === totalPages}
                                   >
                                     <ChevronRight className="w-3 h-3" />
@@ -1023,7 +1296,6 @@ export function UploadGrades() {
                                 </div>
                               </div>
                             )}
-
                           </TabsContent>
                         );
                       })}
@@ -1036,16 +1308,27 @@ export function UploadGrades() {
                       <Table>
                         <TableHeader className="bg-gray-50">
                           <TableRow>
-                            {previewData.length > 0 && Object.keys(previewData[0]).map(header => (
-                              <TableHead key={header} className="text-xs px-2 py-1 h-8 whitespace-nowrap font-semibold">{header}</TableHead>
-                            ))}
+                            {previewData.length > 0 &&
+                              Object.keys(previewData[0]).map((header) => (
+                                <TableHead
+                                  key={header}
+                                  className="text-xs px-2 py-1 h-8 whitespace-nowrap font-semibold"
+                                >
+                                  {header}
+                                </TableHead>
+                              ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {paginatedData?.map((row, i) => (
                             <TableRow key={i} className="hover:bg-gray-50">
                               {Object.values(row).map((val: any, j) => (
-                                <TableCell key={j} className="text-xs px-2 py-1 whitespace-nowrap">{val}</TableCell>
+                                <TableCell
+                                  key={j}
+                                  className="text-xs px-2 py-1 whitespace-nowrap"
+                                >
+                                  {val}
+                                </TableCell>
                               ))}
                             </TableRow>
                           ))}
@@ -1055,7 +1338,6 @@ export function UploadGrades() {
 
                     {/* Pagination Controls */}
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-gray-50 px-2 py-2 border-b">
-
                       {/* Total Rows */}
                       <span className="text-xs text-gray-500 text-center sm:text-left">
                         Total Rows: {previewData.length}
@@ -1063,7 +1345,6 @@ export function UploadGrades() {
 
                       {/* Pagination Controls */}
                       <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-
                         {/* Nav Buttons */}
                         <div className="flex items-center gap-1">
                           <Button
@@ -1080,7 +1361,9 @@ export function UploadGrades() {
                             variant="outline"
                             size="sm"
                             className="h-8 w-8 sm:h-7 sm:w-7 p-0"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            onClick={() =>
+                              setCurrentPage((p) => Math.max(1, p - 1))
+                            }
                             disabled={currentPage === 1}
                           >
                             <ChevronLeft className="w-4 h-4 sm:w-3 sm:h-3" />
@@ -1091,10 +1374,14 @@ export function UploadGrades() {
                         <div className="flex flex-wrap justify-center gap-1 max-w-full">
                           {(() => {
                             let start = Math.max(1, currentPage - 1);
-                            let end = Math.min(totalPages, start + (window.innerWidth < 640 ? 2 : 4));
+                            const maxVisible = windowWidth < 640 ? 2 : 4;
+                            const end = Math.min(
+                              totalPages,
+                              start + maxVisible,
+                            );
 
-                            if (end - start < (window.innerWidth < 640 ? 2 : 4)) {
-                              start = Math.max(1, end - (window.innerWidth < 640 ? 2 : 4));
+                            if (end - start < maxVisible) {
+                              start = Math.max(1, end - maxVisible);
                             }
 
                             const pages = [];
@@ -1105,7 +1392,9 @@ export function UploadGrades() {
                             return pages.map((p) => (
                               <Button
                                 key={p}
-                                variant={currentPage === p ? "default" : "outline"}
+                                variant={
+                                  currentPage === p ? "default" : "outline"
+                                }
                                 size="sm"
                                 className="h-8 min-w-[32px] sm:h-7 sm:min-w-[28px] px-1 text-xs"
                                 onClick={() => setCurrentPage(p)}
@@ -1122,7 +1411,9 @@ export function UploadGrades() {
                             variant="outline"
                             size="sm"
                             className="h-8 w-8 sm:h-7 sm:w-7 p-0"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            onClick={() =>
+                              setCurrentPage((p) => Math.min(totalPages, p + 1))
+                            }
                             disabled={currentPage === totalPages}
                           >
                             <ChevronRight className="w-4 h-4 sm:w-3 sm:h-3" />
@@ -1138,7 +1429,6 @@ export function UploadGrades() {
                             <ChevronsRight className="w-4 h-4 sm:w-3 sm:h-3" />
                           </Button>
                         </div>
-
                       </div>
                     </div>
                   </div>

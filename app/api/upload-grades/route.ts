@@ -89,6 +89,32 @@ function normalizeCourseCode(code: string | null) {
   return noPunctuation.replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+/**
+ * Validates a course code format.
+ * Returns the normalized code if valid, or an error message.
+ */
+function validateCourseCode(rawCode: any): { valid: true; normalized: string } | { valid: false; error: string } {
+  if (rawCode == null || String(rawCode).trim() === "") {
+    return { valid: false, error: "Missing course code" };
+  }
+
+  const cleanStr = String(rawCode).replace(/['"]+,/g, "").trim();
+  const collapsed = cleanStr.replace(/[-_.\s]/g, "");
+
+  // Must match: (Letters)(Numbers)(OptionalLetters) — e.g., CS101, MATH204A
+  const match = collapsed.match(/^([A-Za-z]+)(\d+)([A-Za-z]*)$/);
+
+  if (!match) {
+    return {
+      valid: false,
+      error: `Invalid course code format: "${cleanStr}". Expected format like CS101 or MATH204A.`,
+    };
+  }
+
+  const normalized = normalizeCourseCode(rawCode);
+  return { valid: true, normalized };
+}
+
 // Removed manual token matching and levenshtein helpers as we now use fast-fuzzy
 // normalizeName kept for basic cleanup
 
@@ -413,11 +439,36 @@ export async function POST(req: Request) {
       const normalizedStudentNumber = studentNumber
         ? String(studentNumber).replace(/-/g, "")
         : null;
-      let sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
-      const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
+
+      // ── Validate course code format ──────────────────────────────────
+      const courseCodeValidation = validateCourseCode(courseCode);
+      if (!courseCodeValidation.valid) {
+        results.push({
+          identifier: `${firstName || ""} ${lastName || ""}`.trim() || normalizedStudentNumber || "Unknown",
+          courseCode: String(courseCode || ""),
+          status: `❌ ${courseCodeValidation.error}`,
+        });
+        failedLogsToCreate.push({
+          studentNumber: normalizedStudentNumber || "UNKNOWN",
+          courseCode: "",
+          courseTitle: sanitizedCourseTitle || "",
+          creditUnit: Number(creditUnit) || 0,
+          grade: String(grade) || "",
+          remarks: courseCodeValidation.error,
+          instructor: sanitizedInstructor,
+          academicYear,
+          semester,
+          action: "FAILED",
+          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+        });
+        continue;
+      }
+      let sanitizedCourseCode = courseCodeValidation.normalized;
+
+      const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
 
       const isFaculty = userRole === "faculty";
       let finalInstructorName = sanitizedInstructor;
@@ -574,8 +625,8 @@ export async function POST(req: Request) {
         processedKeys.add(batchKey);
       }
 
-      let standardizedGrade = normalizeGrade(grade);
-      let standardizedReExam = normalizeGrade(reExam);
+      const standardizedGrade = normalizeGrade(grade);
+      const standardizedReExam = normalizeGrade(reExam);
       if (!standardizedGrade) {
         results.push({
           identifier: targetStudent.studentNumber,
@@ -797,7 +848,7 @@ export async function POST(req: Request) {
       let action = "CREATED";
       let statusPrefix = "✅";
       let statusMsg = "Grade uploaded";
-      let finalInstructor = sanitizedInstructor;
+      const finalInstructor = sanitizedInstructor;
 
       if (identificationMethod === "NAME_CORRECTION") {
         statusMsg = `Grade uploaded (Corrected ID by Name match)`;
