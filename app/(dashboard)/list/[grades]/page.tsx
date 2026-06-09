@@ -31,8 +31,8 @@ export default function GradesPage() {
           setGrades(allGrades);
           setAvailableYears(
             Array.from(new Set(allGrades.map((g) => g.academicYear))).sort(
-              (a, b) => b.localeCompare(a)
-            )
+              (a, b) => b.localeCompare(a),
+            ),
           );
           setAvailableSemesters(
             Array.from(new Set(allGrades.map((g) => g.semester))).sort(
@@ -42,20 +42,25 @@ export default function GradesPage() {
                   (order[a as keyof typeof order] || 4) -
                   (order[b as keyof typeof order] || 4)
                 );
-              }
-            )
+              },
+            ),
           );
           setError(null);
           setGradesHidden(false);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (isMounted) {
-          if (err instanceof Error && err.message === "GRADES_HIDDEN") {
+          if (
+            typeof err === "object" &&
+            err !== null &&
+            "message" in err &&
+            (err as { message: string }).message === "GRADES_HIDDEN"
+          ) {
             setGradesHidden(true);
             setError(null);
           } else {
             setError(
-              "Failed to fetch grades data. Please try again in a moment."
+              "Failed to fetch grades data. Please try again in a moment.",
             );
             setGradesHidden(false);
           }
