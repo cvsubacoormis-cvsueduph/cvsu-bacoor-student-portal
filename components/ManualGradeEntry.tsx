@@ -1,24 +1,21 @@
 "use client";
 
-import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
-  Plus,
   CheckCircle,
   AlertCircle,
   User,
   Eye,
-  LocateIcon,
-  MailIcon,
-  PhoneCallIcon,
+  MapPin,
   BookOpen,
   GraduationCap,
   Save,
   Loader2,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,12 +102,12 @@ interface StudentDetails {
   studentNumber: string;
   firstName: string;
   lastName: string;
-  middleName?: string;
+  middleInit?: string;
   course: string;
   major: string | "";
   status: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   address: string;
 }
 
@@ -126,9 +123,21 @@ const formSchema = z.object({
 });
 
 const calculateRemarks = (gradeVal: string, reExamVal: string) => {
-  const basis = (reExamVal && reExamVal !== "none") ? reExamVal : gradeVal;
+  const basis = reExamVal && reExamVal !== "none" ? reExamVal : gradeVal;
 
-  if (["1.00", "1.25", "1.50", "1.75", "2.00", "2.25", "2.50", "2.75", "3.00"].includes(basis)) {
+  if (
+    [
+      "1.00",
+      "1.25",
+      "1.50",
+      "1.75",
+      "2.00",
+      "2.25",
+      "2.50",
+      "2.75",
+      "3.00",
+    ].includes(basis)
+  ) {
     return "PASSED";
   } else if (basis === "4.00") {
     return "CON. FAILURE";
@@ -156,30 +165,45 @@ export default function ManualGradeEntry() {
 
   // Initialize state from URL params
   const [academicYear, setAcademicYear] = useState<string>(
-    searchParams.get("academicYear") || ""
+    searchParams.get("academicYear") || "",
   );
   const [semester, setSemester] = useState<string>(
-    searchParams.get("semester") || ""
+    searchParams.get("semester") || "",
   );
   const [searchQuery, setSearchQuery] = useState<string>(
-    searchParams.get("q") || ""
+    searchParams.get("q") || "",
   );
   const [searchType, setSearchType] = useState<"studentNumber" | "name">(
-    (searchParams.get("type") as "studentNumber" | "name") || "studentNumber"
+    (searchParams.get("type") as "studentNumber" | "name") || "studentNumber",
   );
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Search UX state
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [searchResults, setSearchResults] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [studentDetails, setStudentDetails] = useState<StudentDetails | null>(
-    null
+    null,
   );
   const [showStudentDetails, setShowStudentDetails] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
+
+  // Keyboard navigation for search results
+  const [focusedResultIndex, setFocusedResultIndex] = useState<number>(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-detect search type based on query format
+  const effectiveSearchType = useMemo<"studentNumber" | "name">(() => {
+    if (searchType === "studentNumber") return "studentNumber";
+    if (searchType === "name") return "name";
+    // If "name" type but query looks like a student number (starts with digits), use studentNumber
+    return /^\d/.test(searchQuery) ? "studentNumber" : "name";
+  }, [searchQuery, searchType]);
 
   // Form
   const [courseOptions, setCourseOptions] = useState<CourseOption[]>([]);
@@ -225,12 +249,17 @@ export default function ManualGradeEntry() {
 
       return newSearchParams.toString();
     },
-    [searchParams]
+    [searchParams],
   );
 
-  const updateUrl = (params: Record<string, string | null>) => {
-    router.replace(`${pathname}?${createQueryString(params)}`, { scroll: false });
-  };
+  const updateUrl = useCallback(
+    (params: Record<string, string | null>) => {
+      router.replace(`${pathname}?${createQueryString(params)}`, {
+        scroll: false,
+      });
+    },
+    [router, pathname, createQueryString],
+  );
 
   // Sync state changes to URL (for dropdowns)
   const handleAcademicYearChange = (value: string) => {
@@ -248,12 +277,11 @@ export default function ManualGradeEntry() {
   useEffect(() => {
     const selectedId = searchParams.get("selected");
 
-    const fetchSelectedStudent = async () => {
-      if (!selectedId || selectedStudent?.studentNumber === selectedId) return;
+    if (!selectedId || selectedStudent?.studentNumber === selectedId) return;
 
+    const fetchSelected = async () => {
       setIsLoadingDetails(true);
       try {
-        // We reuse getStudentDetails to fetch the student by ID
         const details = await getStudentDetails(selectedId);
         if (details) {
           const student: Student = {
@@ -263,10 +291,8 @@ export default function ManualGradeEntry() {
             course: details.course,
             major: details.major,
           };
-
-          handleStudentSelect(student, false); // false = don't update URL again
+          handleStudentSelect(student, false);
         } else {
-          // Invalid ID in URL, remove it
           updateUrl({ selected: null });
         }
       } catch (error) {
@@ -276,44 +302,100 @@ export default function ManualGradeEntry() {
       }
     };
 
-    fetchSelectedStudent();
+    fetchSelected();
 
-    // Also perform search if query exists and results are empty (initial load)
+    // Auto-search hydration from URL (only on initial mount)
     const initialQuery = searchParams.get("q");
-    if (initialQuery && searchResults.length === 0 && !selectedId) {
-      // We can trigger search here, but need to be careful about infinite loops.
-      // It's safer to just let the user see the query in the box and click search, 
-      // OR trigger it once. 
-      // Let's rely on the user clicking search to avoid auto-triggering heavy queries 
-      // unless explicitly desired. 
-      // User request: "add search params when searching ... is that prod level"
-      // Prod level usually implies auto-hydration.
-      // Let's auto-search if not already searching.
-      if (!isSearching) {
-        performSearch(initialQuery, (searchParams.get("type") as "name" | "studentNumber") || "studentNumber");
+    const initialType =
+      (searchParams.get("type") as "name" | "studentNumber") || "studentNumber";
+    if (
+      initialQuery &&
+      searchResults.length === 0 &&
+      !selectedId &&
+      !isSearching
+    ) {
+      performSearch(initialQuery, initialType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount — URL hydration is a mount-time concern
+
+  // Clear search state
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setHasSearched(false);
+    setFocusedResultIndex(-1);
+    setValidationError("");
+    updateUrl({ q: null, type: null, selected: null });
+    searchInputRef.current?.focus();
+  }, [updateUrl]);
+
+  const performSearch = useCallback(
+    async (query: string, type: "studentNumber" | "name", page: number = 1) => {
+      if (!academicYear || !semester) {
+        if (!academicYear && !semester) return;
       }
-    }
-  }, [searchParams]); // Depend on searchParams to react to navigation
 
-  const performSearch = async (query: string, type: "studentNumber" | "name", page: number = 1) => {
-    if (!academicYear || !semester) {
-      if (!academicYear && !semester) return;
-    }
+      setIsSearching(true);
+      setHasSearched(true);
+      try {
+        const result = await searchStudent(query, type, page);
+        setSearchResults(result.data);
+        setTotalPages(result.meta.totalPages);
+        setCurrentPage(result.meta.page);
+        setFocusedResultIndex(-1);
+      } catch (error) {
+        console.error("Search failed:", error);
+        toast.error("An error occurred while searching");
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [academicYear, semester],
+  );
 
-    setIsSearching(true);
-    try {
-      const result = await searchStudent(query, type, page);
-      setSearchResults(result.data);
-      setTotalPages(result.meta.totalPages);
-      setCurrentPage(result.meta.page);
-    } catch (error) {
-      console.error("Search failed:", error);
-      toast.error("An error occurred while searching");
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }
+  // Debounced search: triggers on input change after 350ms
+  const debouncedSearch = useCallback(
+    (query: string, type: "studentNumber" | "name") => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
+      if (!academicYear || !semester || query.trim().length < 1) {
+        setSearchResults([]);
+        setHasSearched(false);
+        return;
+      }
+
+      debounceTimerRef.current = setTimeout(() => {
+        updateUrl({ q: query, type, selected: null });
+        performSearch(query.trim(), type, 1);
+      }, 350);
+    },
+    [academicYear, semester, updateUrl, performSearch],
+  );
+
+  const handleSearchInputChange = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      if (!value.trim()) {
+        clearSearch();
+        return;
+      }
+      debouncedSearch(value, effectiveSearchType);
+    },
+    [debouncedSearch, effectiveSearchType, clearSearch],
+  );
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleCourseSelect = (id: string) => {
     const selectedCourse = courseOptions.find((course) => course.id === id);
@@ -324,7 +406,7 @@ export default function ManualGradeEntry() {
     }
   };
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!academicYear || !semester) {
       setValidationError("Please select both academic year and semester first");
       return;
@@ -337,59 +419,98 @@ export default function ManualGradeEntry() {
 
     setValidationError("");
 
-    // Update URL with search params
     updateUrl({
       q: searchQuery,
       type: searchType,
-      selected: null // Clear selection on new search
+      selected: null,
     });
 
-    // Search is also triggered by the useEffect when URL changes, 
-    // but we can call it directly for immediate feedback logic if needed.
-    // However, sticking to "URL as source of truth" is cleaner.
-    // BUT, router.replace is async-ish. 
-    // Let's call performSearch directly AND update URL.
-    // Let's call performSearch directly AND update URL.
-    await performSearch(searchQuery, searchType, 1);
-  };
+    await performSearch(searchQuery.trim(), effectiveSearchType, 1);
+  }, [
+    academicYear,
+    semester,
+    searchQuery,
+    searchType,
+    effectiveSearchType,
+    updateUrl,
+    performSearch,
+  ]);
 
-  const handleStudentSelect = (student: Student, shouldUpdateUrl = true) => {
-    setSelectedStudent(student);
-    setSearchResults([]);
-    // Don't clear query from state so user sees what they searched, 
-    // but maybe clear from URL if we want "clean" selected state? 
-    // Usually keep it.
+  const handleStudentSelect = useCallback(
+    (student: Student, shouldUpdateUrl = true) => {
+      setSelectedStudent(student);
+      setSearchResults([]);
+      setHasSearched(false);
+      setFocusedResultIndex(-1);
 
-    setShowStudentDetails(false);
-    setStudentDetails(null);
-    setValidationError("");
+      setShowStudentDetails(false);
+      setStudentDetails(null);
+      setValidationError("");
 
-    if (shouldUpdateUrl) {
-      updateUrl({ selected: student.studentNumber });
-    }
+      if (shouldUpdateUrl) {
+        updateUrl({ selected: student.studentNumber });
+      }
 
-    // Reset Form
-    form.reset({
-      courseCode: "",
-      creditUnit: "",
-      courseTitle: "",
-      grade: "",
-      reExam: "",
-      remarks: "",
-      instructor: "",
-      selectedCourseId: "",
-    });
+      // Reset Form
+      form.reset({
+        courseCode: "",
+        creditUnit: "",
+        courseTitle: "",
+        grade: "",
+        reExam: "",
+        remarks: "",
+        instructor: "",
+        selectedCourseId: "",
+      });
 
-    // Update course options based on student's program
-    const options = getCourseOptions(student.course, student.major).map(
-      (course, index) => ({
-        id: `${course.code}_${index}_${Date.now()}`,
-        code: course.code,
-        title: course.title,
-      })
-    );
-    setCourseOptions(options);
-  };
+      // Update course options based on student's program
+      const options = getCourseOptions(student.course, student.major).map(
+        (course, index) => ({
+          id: `${course.code}_${index}_${Date.now()}`,
+          code: course.code,
+          title: course.title,
+        }),
+      );
+      setCourseOptions(options);
+    },
+    [updateUrl, form],
+  );
+
+  // Keyboard navigation handler for search results
+  const handleResultKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (searchResults.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setFocusedResultIndex((prev) =>
+            prev < searchResults.length - 1 ? prev + 1 : 0,
+          );
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setFocusedResultIndex((prev) =>
+            prev > 0 ? prev - 1 : searchResults.length - 1,
+          );
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (
+            focusedResultIndex >= 0 &&
+            focusedResultIndex < searchResults.length
+          ) {
+            handleStudentSelect(searchResults[focusedResultIndex]);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          clearSearch();
+          break;
+      }
+    },
+    [searchResults, focusedResultIndex, clearSearch, handleStudentSelect],
+  );
 
   const handleViewStudentDetails = async (student: Student) => {
     if (!academicYear || !semester) {
@@ -426,15 +547,15 @@ export default function ManualGradeEntry() {
 
     if (alreadyHasGrade) {
       Swal.fire({
-        icon: 'warning',
-        title: 'Grade Already Exists',
-        text: 'This student already has a grade for this course in the selected term.',
+        icon: "warning",
+        title: "Grade Already Exists",
+        text: "This student already has a grade for this course in the selected term.",
       });
       return;
     }
 
     const result = await Swal.fire({
-      title: 'Confirm Grade Submission',
+      title: "Confirm Grade Submission",
       html: `
             <div class="text-left text-sm">
                 <p><strong>Student:</strong> ${selectedStudent.firstName} ${selectedStudent.lastName}</p>
@@ -443,10 +564,10 @@ export default function ManualGradeEntry() {
                 <p><strong>Remarks:</strong> ${values.remarks}</p>
             </div>
         `,
-      icon: 'question',
+      icon: "question",
       showCancelButton: true,
-      confirmButtonText: 'Yes, Submit Grade',
-      confirmButtonColor: '#1d4ed8'
+      confirmButtonText: "Yes, Submit Grade",
+      confirmButtonColor: "#1d4ed8",
     });
 
     if (!result.isConfirmed) return;
@@ -472,15 +593,15 @@ export default function ManualGradeEntry() {
         ...gradeData,
         academicYear: gradeData.academicYear as AcademicYear,
         semester: gradeData.semester as Semester,
-        isResolved: false
+        isResolved: false,
       });
 
       Swal.fire({
-        icon: 'success',
-        title: 'Grade Added',
+        icon: "success",
+        title: "Grade Added",
         text: `Successfully added grade for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
         timer: 2000,
-        showConfirmButton: false
+        showConfirmButton: false,
       });
 
       // Reset form
@@ -501,13 +622,12 @@ export default function ManualGradeEntry() {
 
       setShowStudentDetails(false);
       setStudentDetails(null);
-
     } catch (error) {
       console.error("Failed to add grade:", error);
       Swal.fire({
-        icon: 'error',
-        title: 'Submission Failed',
-        text: 'An error occurred while saving the grade.',
+        icon: "error",
+        title: "Submission Failed",
+        text: "An error occurred while saving the grade.",
       });
     } finally {
       setIsSubmitting(false);
@@ -520,7 +640,7 @@ export default function ManualGradeEntry() {
   const currentYear = new Date().getFullYear() - 1;
   // Ensure we go at least up to next year or a bit more
   const endYear = currentYear + 1;
-  const numberOfYears = (endYear - startYear) + 2; // +2 buffer
+  const numberOfYears = endYear - startYear + 2; // +2 buffer
 
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
@@ -533,24 +653,34 @@ export default function ManualGradeEntry() {
       {/* 1. Academic Configuration */}
       <Card className="border-t-4 border-t-amber-500 shadow-sm">
         <CardHeader>
-
           <CardTitle className="flex items-center gap-2 text-xl">
             <BookOpen className="w-5 h-5 text-amber-500" />
             Configuration
           </CardTitle>
-          <CardDescription>Select the academic term before searching for students.</CardDescription>
+          <CardDescription>
+            Select the academic term before searching for students.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="academic-year">Academic Year <span className="text-red-500">*</span></Label>
-              <Select value={academicYear} onValueChange={handleAcademicYearChange}>
+              <Label htmlFor="academic-year">
+                Academic Year <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={academicYear}
+                onValueChange={handleAcademicYearChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Academic Year" />
                 </SelectTrigger>
                 <SelectContent>
                   {academicYears
-                    .filter((year) => role !== "faculty" || year === `AY_${currentYear}_${currentYear + 1}`)
+                    .filter(
+                      (year) =>
+                        role !== "faculty" ||
+                        year === `AY_${currentYear}_${currentYear + 1}`,
+                    )
                     .map((year: string) => (
                       <SelectItem key={year} value={year}>
                         {year.replace("AY_", "AY ").replace("_", "-")}
@@ -560,11 +690,10 @@ export default function ManualGradeEntry() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="semester">Semester <span className="text-red-500">*</span></Label>
-              <Select
-                value={semester}
-                onValueChange={handleSemesterChange}
-              >
+              <Label htmlFor="semester">
+                Semester <span className="text-red-500">*</span>
+              </Label>
+              <Select value={semester} onValueChange={handleSemesterChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
@@ -572,9 +701,7 @@ export default function ManualGradeEntry() {
                   <SelectItem value="FIRST" disabled={role === "faculty"}>
                     First Semester
                   </SelectItem>
-                  <SelectItem value="SECOND">
-                    Second Semester
-                  </SelectItem>
+                  <SelectItem value="SECOND">Second Semester</SelectItem>
                   <SelectItem value="MIDYEAR" disabled={role === "faculty"}>
                     Midyear
                   </SelectItem>
@@ -604,7 +731,7 @@ export default function ManualGradeEntry() {
             Find Student
           </CardTitle>
           <CardDescription>
-            Search by Student Number or Name (e.g., "Lastname" or "Firstname").
+            Search by Student Number or Name — just start typing.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -629,30 +756,86 @@ export default function ManualGradeEntry() {
             <div className="w-full md:flex-1 space-y-2">
               <Label>Search Query</Label>
               <div className="flex gap-2">
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={
-                    searchType === "studentNumber"
-                      ? "20XXXXXXX"
-                      : "Enter name..."
-                  }
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                />
+                <div className="relative flex-1">
+                  <Input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                    onKeyDown={handleResultKeyDown}
+                    placeholder={
+                      searchType === "studentNumber"
+                        ? "e.g. 202310001"
+                        : "e.g. Dela Cruz, Juan"
+                    }
+                    className="pr-9"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={clearSearch}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
                 <Button
                   onClick={handleSearch}
                   disabled={isSearching || !searchQuery.trim()}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700 shrink-0"
                 >
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+                  {isSearching ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Search"
+                  )}
                 </Button>
               </div>
+              {searchType === "name" && (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Tip: Numbers are auto-detected as student numbers.
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Loading skeleton */}
+          {isSearching && (
+            <div className="border rounded-md animate-pulse">
+              <div className="bg-gray-50 p-3 border-b">
+                <div className="h-4 w-32 bg-gray-200 rounded" />
+              </div>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={`skel-${i}`}
+                  className="flex items-center gap-4 p-4 border-b last:border-0"
+                >
+                  <div className="h-8 w-8 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-36 bg-gray-200 rounded" />
+                    <div className="h-3 w-20 bg-gray-100 rounded" />
+                  </div>
+                  <div className="h-6 w-24 bg-gray-100 rounded" />
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Search Results Table */}
-          {searchResults.length > 0 && (
+          {!isSearching && searchResults.length > 0 && (
             <div className="border rounded-md">
+              <div className="bg-gray-50 px-4 py-2 border-b flex items-center justify-between">
+                <span className="text-sm text-gray-500">
+                  Found {searchResults.length} result
+                  {searchResults.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {currentPage > 1
+                    ? `Page ${currentPage} of ${totalPages}`
+                    : ""}
+                </span>
+              </div>
               <Table>
                 <TableHeader className="bg-gray-50">
                   <TableRow>
@@ -662,16 +845,27 @@ export default function ManualGradeEntry() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {searchResults.map((student) => (
-                    <TableRow key={student.studentNumber}>
+                  {searchResults.map((student, index) => (
+                    <TableRow
+                      key={student.studentNumber}
+                      className={
+                        focusedResultIndex === index
+                          ? "bg-blue-50 ring-1 ring-inset ring-blue-200"
+                          : ""
+                      }
+                    >
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium">{student.firstName} {student.lastName}</p>
-                            <p className="text-xs text-gray-500">{student.studentNumber}</p>
+                            <p className="font-medium">
+                              {student.firstName} {student.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {student.studentNumber}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
@@ -703,7 +897,7 @@ export default function ManualGradeEntry() {
           )}
 
           {/* Pagination Controls */}
-          {searchResults.length > 0 && totalPages > 1 && (
+          {!isSearching && searchResults.length > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between mt-4 border-t pt-4">
               <div className="text-sm text-gray-500">
                 Page {currentPage} of {totalPages}
@@ -712,7 +906,13 @@ export default function ManualGradeEntry() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => performSearch(searchQuery, searchType, currentPage - 1)}
+                  onClick={() =>
+                    performSearch(
+                      searchQuery,
+                      effectiveSearchType,
+                      currentPage - 1,
+                    )
+                  }
                   disabled={currentPage <= 1 || isSearching}
                   className="flex items-center gap-1"
                 >
@@ -722,7 +922,13 @@ export default function ManualGradeEntry() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => performSearch(searchQuery, searchType, currentPage + 1)}
+                  onClick={() =>
+                    performSearch(
+                      searchQuery,
+                      effectiveSearchType,
+                      currentPage + 1,
+                    )
+                  }
                   disabled={currentPage >= totalPages || isSearching}
                   className="flex items-center gap-1"
                 >
@@ -733,10 +939,24 @@ export default function ManualGradeEntry() {
             </div>
           )}
 
-          {searchQuery && searchResults.length === 0 && !isSearching && (
+          {/* Empty state: has searched but no results */}
+          {!isSearching && hasSearched && searchResults.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <User className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-              <p>No students found matching your criteria.</p>
+              <p>No students matched &quot;{searchQuery}&quot;</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Try a different name or student number.
+              </p>
+            </div>
+          )}
+
+          {/* Initial idle state */}
+          {!isSearching && !hasSearched && (
+            <div className="text-center py-8 text-gray-400">
+              <Search className="w-10 h-10 mx-auto text-gray-200 mb-2" />
+              <p className="text-sm">
+                Type a student name or number to begin searching.
+              </p>
             </div>
           )}
         </CardContent>
@@ -753,7 +973,10 @@ export default function ManualGradeEntry() {
                   Grade Entry Form
                 </CardTitle>
                 <CardDescription className="my-2">
-                  Entering grades for <span className="font-semibold text-blue-700">{selectedStudent.firstName} {selectedStudent.lastName}</span>
+                  Entering grades for{" "}
+                  <span className="font-semibold text-blue-700">
+                    {selectedStudent.firstName} {selectedStudent.lastName}
+                  </span>
                 </CardDescription>
               </div>
               <Badge variant="secondary" className="text-lg px-3 py-1">
@@ -764,21 +987,31 @@ export default function ManualGradeEntry() {
           <CardContent>
             <div className="bg-amber-50 border-amber-200 border rounded-lg p-4 mb-6 text-sm text-amber-800 flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-              <p>Make sure the Course Code and Title match the student's actual enrollment for this semester.</p>
+              <p>
+                Make sure the Course Code and Title match the student&apos;s
+                actual enrollment for this semester.
+              </p>
             </div>
 
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
                   {/* Course Code */}
                   <FormField
                     control={form.control}
                     name="selectedCourseId"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
-                        <FormLabel>Course Code <span className="text-red-500">*</span></FormLabel>
-                        <Popover open={courseCodeOpen} onOpenChange={setCourseCodeOpen}>
+                        <FormLabel>
+                          Course Code <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <Popover
+                          open={courseCodeOpen}
+                          onOpenChange={setCourseCodeOpen}
+                        >
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
@@ -786,11 +1019,13 @@ export default function ManualGradeEntry() {
                                 role="combobox"
                                 className={cn(
                                   "w-full justify-between",
-                                  !field.value && "text-muted-foreground"
+                                  !field.value && "text-muted-foreground",
                                 )}
                               >
                                 {field.value
-                                  ? courseOptions.find((c) => c.id === field.value)?.code
+                                  ? courseOptions.find(
+                                      (c) => c.id === field.value,
+                                    )?.code
                                   : "Select course code..."}
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
@@ -811,7 +1046,14 @@ export default function ManualGradeEntry() {
                                         setCourseCodeOpen(false);
                                       }}
                                     >
-                                      <Check className={cn("mr-2 h-4 w-4", field.value === course.id ? "opacity-100" : "opacity-0")} />
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          field.value === course.id
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                        )}
+                                      />
                                       {course.code}
                                     </CommandItem>
                                   ))}
@@ -831,16 +1073,23 @@ export default function ManualGradeEntry() {
                     name="creditUnit"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
-                        <FormLabel>Credit Unit <span className="text-red-500">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormLabel>
+                          Credit Unit <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select Units" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {[0, 1, 2, 3, 4, 5].map(u => (
-                              <SelectItem key={u} value={u.toString()}>{u}</SelectItem>
+                            {[0, 1, 2, 3, 4, 5].map((u) => (
+                              <SelectItem key={u} value={u.toString()}>
+                                {u}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -855,9 +1104,16 @@ export default function ManualGradeEntry() {
                     name="courseTitle"
                     render={({ field }) => (
                       <FormItem className="col-span-1 md:col-span-2 space-y-2">
-                        <FormLabel>Course Title <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel>
+                          Course Title <span className="text-red-500">*</span>
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} readOnly className="bg-gray-50" placeholder="Auto-populated upon selecting course code" />
+                          <Input
+                            {...field}
+                            readOnly
+                            className="bg-gray-50"
+                            placeholder="Auto-populated upon selecting course code"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -870,8 +1126,14 @@ export default function ManualGradeEntry() {
                     name="grade"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
-                        <FormLabel>Grade <span className="text-red-500">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <FormLabel>
+                          Grade <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger className="font-medium text-blue-700">
                               <SelectValue placeholder="Select Grade" />
@@ -879,7 +1141,9 @@ export default function ManualGradeEntry() {
                           </FormControl>
                           <SelectContent>
                             {GRADE_HIERARCHY.map((g) => (
-                              <SelectItem key={g} value={g}>{g}</SelectItem>
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -894,12 +1158,23 @@ export default function ManualGradeEntry() {
                     name="remarks"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
-                        <FormLabel>Remarks <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel>
+                          Remarks <span className="text-red-500">*</span>
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} readOnly className={cn("font-medium",
-                            field.value === "PASSED" ? "text-green-600" :
-                              field.value === "FAILED" ? "text-red-600" : "text-gray-700"
-                          )} />
+                          <Input
+                            {...field}
+                            readOnly
+                            className={cn(
+                              "font-medium",
+                              field.value === "PASSED"
+                                ? "text-green-600"
+                                : field.value === "FAILED"
+                                  ? "text-red-600"
+                                  : "text-gray-700",
+                            )}
+                            disabled
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -913,13 +1188,23 @@ export default function ManualGradeEntry() {
                     render={({ field }) => (
                       <FormItem className="space-y-2">
                         <FormLabel>Re-exam Grade</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Optional" />
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">None</SelectItem>
-                            {GRADE_HIERARCHY.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                            {GRADE_HIERARCHY.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -933,18 +1218,16 @@ export default function ManualGradeEntry() {
                     name="instructor"
                     render={({ field }) => (
                       <FormItem className="space-y-2">
-                        <FormLabel>Instructor <span className="text-red-500">*</span></FormLabel>
+                        <FormLabel>
+                          Instructor <span className="text-red-500">*</span>
+                        </FormLabel>
                         <FormControl>
-                          <Input
-                            {...field}
-                            placeholder="Instructor Name"
-                          />
+                          <Input {...field} placeholder="Instructor Name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-
                 </div>
 
                 <div className="flex justify-end pt-6 border-t">
@@ -955,7 +1238,8 @@ export default function ManualGradeEntry() {
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
+                        Saving...
                       </>
                     ) : (
                       <>
@@ -970,8 +1254,7 @@ export default function ManualGradeEntry() {
         </Card>
       )}
 
-      {/* Student Details Dialog / Modal can remain as overlay or inline. Currently it's inline overlay in existing code? 
-          Wait, existing code had it as a conditional render.  */}
+      {/* Student Details Modal */}
       {showStudentDetails && studentDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-2xl bg-white shadow-xl max-h-[90vh]">
@@ -980,7 +1263,11 @@ export default function ManualGradeEntry() {
                 <CardTitle className=" text-blue-800 flex items-center gap-2">
                   <User className="h-5 w-5" /> Student Profile
                 </CardTitle>
-                <Button variant="ghost" size="icon" onClick={() => setShowStudentDetails(false)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowStudentDetails(false)}
+                >
                   <span className="text-xl">×</span>
                 </Button>
               </div>
@@ -989,19 +1276,32 @@ export default function ManualGradeEntry() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
                   <Label className="text-gray-500">Full Name</Label>
-                  <p className="font-semibold text-lg">{studentDetails.firstName} {studentDetails.middleName} {studentDetails.lastName}</p>
+                  <p className="font-semibold text-lg">
+                    {studentDetails.firstName} {studentDetails.middleInit}{" "}
+                    {studentDetails.lastName}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-gray-500">Student Number</Label>
-                  <p className="font-mono text-lg">{studentDetails.studentNumber}</p>
+                  <p className="font-mono text-lg">
+                    {studentDetails.studentNumber}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-gray-500">Course & Major</Label>
-                  <p>{courseMap(studentDetails.course)} {studentDetails.major !== "NONE" && `(${formatMajor(studentDetails.major)})`}</p>
+                  <p>
+                    {courseMap(studentDetails.course)}{" "}
+                    {studentDetails.major !== "NONE" &&
+                      `(${formatMajor(studentDetails.major)})`}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-gray-500 mr-2">Status</Label>
-                  <Badge className={`ml-auto ${studentDetails.status === "REGULAR" ? "bg-green-700" : "bg-blue-700"}`}>{studentDetails.status}</Badge>
+                  <Badge
+                    className={`ml-auto ${studentDetails.status === "REGULAR" ? "bg-green-700" : "bg-blue-700"}`}
+                  >
+                    {studentDetails.status}
+                  </Badge>
                 </div>
               </div>
 
@@ -1009,7 +1309,7 @@ export default function ManualGradeEntry() {
 
               <div className="space-y-4">
                 <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                  <LocateIcon className="w-4 h-4" /> Contact Information
+                  <MapPin className="w-4 h-4" /> Contact Information
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
@@ -1032,16 +1332,23 @@ export default function ManualGradeEntry() {
               </div>
 
               <div className="flex justify-end pt-4 border-t gap-2">
-                <Button variant="outline" onClick={() => setShowStudentDetails(false)}>Close</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowStudentDetails(false)}
+                >
+                  Close
+                </Button>
                 <Button
                   className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => handleStudentSelect({
-                    studentNumber: studentDetails.studentNumber,
-                    firstName: studentDetails.firstName,
-                    lastName: studentDetails.lastName,
-                    course: studentDetails.course,
-                    major: studentDetails.major,
-                  })}
+                  onClick={() =>
+                    handleStudentSelect({
+                      studentNumber: studentDetails.studentNumber,
+                      firstName: studentDetails.firstName,
+                      lastName: studentDetails.lastName,
+                      course: studentDetails.course,
+                      major: studentDetails.major,
+                    })
+                  }
                 >
                   Select for Grading
                 </Button>
