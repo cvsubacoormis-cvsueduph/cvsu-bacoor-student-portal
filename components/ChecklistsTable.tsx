@@ -17,6 +17,7 @@ import { courseMap, formatMajor } from "@/lib/courses";
 import GenerateChecklistPDF from "./GenerateChecklistsPDF";
 import { CurriculumChecklistSkeleton } from "./skeleton/CurriculumChecklistSkeleton";
 import { useCurriculumData, CurriculumData } from "@/hooks/use-curriculum-data";
+import { GradesHiddenMessage } from "@/components/GradesHiddenMessage";
 import { Subject } from "@/lib/types";
 import {
   getBetterGrade,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/checklist-utils";
 
 export function CurriculumChecklist() {
-  const { data, loading, error } = useCurriculumData();
+  const { data, loading, error, hidden } = useCurriculumData();
   const [selectedYear, setSelectedYear] = useState<string>("all");
 
   const groupedCurriculum = useMemo(() => {
@@ -55,6 +56,7 @@ export function CurriculumChecklist() {
   }, [groupedCurriculum, selectedYear]);
 
   if (loading) return <CurriculumChecklistSkeleton />;
+  if (hidden) return <GradesHiddenMessage />;
   if (error || !data) return <ErrorState />;
 
   return (

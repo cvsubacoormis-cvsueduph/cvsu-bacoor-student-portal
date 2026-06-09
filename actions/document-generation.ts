@@ -31,7 +31,14 @@ export async function generateCOGWithRateLimit(
     });
 
     // Fetch student grades (this also has its own rate limiting)
-    const { student } = await getStudentGradesWithReExam();
+    const result = await getStudentGradesWithReExam();
+    if (result.hidden) {
+      throw new Error("Grades are currently hidden by the faculty");
+    }
+    if (!result.student) {
+      throw new Error(result.error || "Student data not found");
+    }
+    const student = result.student;
 
     // Filter grades by academic year and semester
     const filteredGrades = student.grades.filter(
@@ -105,7 +112,11 @@ export async function generateCOGAdminWithRateLimit(
   });
 
   // Fetch student grades for the specific student
-  const { student } = await getStudentGradesWithReExam(studentId);
+  const admResult = await getStudentGradesWithReExam(studentId);
+  if (!admResult.student) {
+    throw new Error(admResult.error || "Student data not found");
+  }
+  const student = admResult.student;
 
   // Filter grades by academic year and semester
   const filteredGrades = student.grades.filter(

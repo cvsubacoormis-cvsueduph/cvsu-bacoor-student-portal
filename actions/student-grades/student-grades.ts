@@ -99,10 +99,42 @@ export async function getGrades(
   }
 }
 
-export async function getStudentGradesWithReExam(studentId?: string) {
+/** Shape returned by {@link getStudentGradesWithReExam}. */
+export type GetStudentWithGradesResult = {
+  student: {
+    studentNumber: string;
+    firstName: string;
+    lastName: string;
+    middleInit: string | null;
+    course: string;
+    major: string | null;
+    address: string;
+    phone: string | null;
+    grades: {
+      courseCode: string;
+      courseTitle: string;
+      creditUnit: number;
+      grade: string;
+      reExam: string | null;
+      remarks: string | null;
+      instructor: string;
+      attemptNumber: number;
+      isRetaken: boolean;
+      retakenAYSem: string | null;
+      academicYear: string;
+      semester: string;
+    }[];
+  } | null;
+  hidden: boolean;
+  error: string | null;
+};
+
+export async function getStudentGradesWithReExam(
+  studentId?: string,
+): Promise<GetStudentWithGradesResult> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-  const clerk = await clerkClient();
+  if (!userId)
+    return { student: null, hidden: false, error: "Unauthorized" };
 
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
@@ -113,13 +145,16 @@ export async function getStudentGradesWithReExam(studentId?: string) {
     role !== "faculty" &&
     role !== "registrar"
   ) {
-    throw new Error("Forbidden");
+    return { student: null, hidden: false, error: "Forbidden" };
   }
 
   // Block students from viewing grades if faculty has hidden them
   // Admin/faculty/registrar always bypass this check
   if (role === "student") {
-    await enforceGradeVisibility(userId);
+    const isVisible = await getSetting("GRADES_VISIBLE_TO_STUDENTS");
+    if (isVisible === "false") {
+      return { student: null, hidden: true, error: null };
+    }
   }
 
   const student = await prisma.student.findUnique({
@@ -157,9 +192,10 @@ export async function getStudentGradesWithReExam(studentId?: string) {
     },
   });
 
-  if (!student) throw new Error("Student not found");
+  if (!student)
+    return { student: null, hidden: false, error: "Student not found" };
 
-  return { student };
+  return { student, hidden: false, error: null };
 }
 
 export async function getAvailableAcademicOptions() {

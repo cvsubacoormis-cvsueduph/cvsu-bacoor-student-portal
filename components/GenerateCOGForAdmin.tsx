@@ -83,8 +83,11 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     if (isDialogOpen && !studentData) {
       const fetchData = async () => {
         try {
-          const { student } = await getStudentGradesWithReExam(studentId);
-          const data = student as StudentData;
+          const result = await getStudentGradesWithReExam(studentId);
+          if (!result.student) {
+            throw new Error(result.error || "Student data not found");
+          }
+          const data = result.student as StudentData;
           const formattedData = {
             ...data,
             grades: data.grades.map((grade) => ({

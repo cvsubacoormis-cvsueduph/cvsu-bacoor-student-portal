@@ -22,22 +22,31 @@ export function useCurriculumData() {
   const [data, setData] = useState<CurriculumData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
     async function loadCurriculum() {
       try {
         setLoading(true);
-        const student = await getStudentGradesWithReExam();
+        const result = await getStudentGradesWithReExam();
 
-        if (!student || !student.student) {
-          throw new Error("Student data not found");
+        if (result.hidden) {
+          setHidden(true);
+          setError(null);
+          setLoading(false);
+          return;
         }
 
-        const grades = student.student.grades || [];
+        if (result.error || !result.student) {
+          throw new Error(result.error || "Student data not found");
+        }
+
+        const student = result.student;
+        const grades = result.student.grades || [];
 
         const curriculum = await getCurriculumChecklist(
-          student.student.course,
-          student.student.major
+          student.course,
+          student.major,
         );
 
         const gradesByCourse: Record<string, typeof grades> = {};
@@ -238,12 +247,12 @@ export function useCurriculumData() {
             ).length,
           },
           studentInfo: {
-            fullName: `${student.student.firstName} ${student.student.lastName}`,
-            studentNumber: student.student.studentNumber,
-            course: student.student.course,
-            major: student.student.major,
-            address: student.student.address,
-            phone: student.student.phone,
+            fullName: `${student.firstName} ${student.lastName}`,
+            studentNumber: student.studentNumber,
+            course: student.course,
+            major: student.major,
+            address: student.address,
+            phone: student.phone,
           },
         });
       } catch (error: any) {
@@ -256,5 +265,5 @@ export function useCurriculumData() {
     loadCurriculum();
   }, []);
 
-  return { data, loading, error };
+  return { data, loading, error, hidden };
 }
