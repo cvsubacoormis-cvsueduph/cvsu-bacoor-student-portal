@@ -12,6 +12,7 @@ export default function GradesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [grades, setGrades] = useState<any[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [availableSemesters, setAvailableSemesters] = useState<string[]>([]);
@@ -26,44 +27,49 @@ export default function GradesPage() {
     let isMounted = true;
     const fetchAllGrades = async () => {
       try {
-        const allGrades = await getGrades(undefined, undefined);
-        if (isMounted) {
-          setGrades(allGrades);
-          setAvailableYears(
-            Array.from(new Set(allGrades.map((g) => g.academicYear))).sort(
-              (a, b) => b.localeCompare(a),
-            ),
-          );
-          setAvailableSemesters(
-            Array.from(new Set(allGrades.map((g) => g.semester))).sort(
-              (a, b) => {
-                const order = { FIRST: 1, SECOND: 2, MIDYEAR: 3 };
-                return (
-                  (order[a as keyof typeof order] || 4) -
-                  (order[b as keyof typeof order] || 4)
-                );
-              },
-            ),
-          );
+        const result = await getGrades(undefined, undefined);
+        if (!isMounted) return;
+
+        if (result.hidden) {
+          setGradesHidden(true);
           setError(null);
-          setGradesHidden(false);
+          setLoading(false);
+          return;
         }
-      } catch (err: unknown) {
-        if (isMounted) {
-          if (
-            typeof err === "object" &&
-            err !== null &&
-            "message" in err &&
-            (err as { message: string }).message === "GRADES_HIDDEN"
-          ) {
-            setGradesHidden(true);
-            setError(null);
-          } else {
-            setError(
-              "Failed to fetch grades data. Please try again in a moment.",
+
+        if (result.error) {
+          setError(
+            "Failed to fetch grades data. Please try again in a moment.",
+          );
+          setGradesHidden(false);
+          setLoading(false);
+          return;
+        }
+
+        const allGrades = result.data ?? [];
+        setGrades(allGrades);
+        setAvailableYears(
+          Array.from(new Set(allGrades.map((g) => g.academicYear))).sort(
+            (a, b) => b.localeCompare(a),
+          ),
+        );
+        setAvailableSemesters(
+          Array.from(new Set(allGrades.map((g) => g.semester))).sort((a, b) => {
+            const order = { FIRST: 1, SECOND: 2, MIDYEAR: 3 };
+            return (
+              (order[a as keyof typeof order] || 4) -
+              (order[b as keyof typeof order] || 4)
             );
-            setGradesHidden(false);
-          }
+          }),
+        );
+        setError(null);
+        setGradesHidden(false);
+      } catch (err) {
+        if (isMounted) {
+          setError(
+            "Failed to fetch grades data. Please try again in a moment.",
+          );
+          setGradesHidden(false);
         }
       } finally {
         if (isMounted) setLoading(false);
