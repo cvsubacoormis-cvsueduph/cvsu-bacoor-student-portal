@@ -23,6 +23,39 @@ export interface GetFacultyUploadStatusParams {
   status?: "all" | "uploaded" | "not-uploaded";
 }
 
+/** A time-clustered grouping of GradeLog entries representing one upload batch. */
+export interface UploadSession {
+  /** Unique key derived from the session timestamp. */
+  id: string;
+  /** ISO-8601 timestamp when this session started. */
+  startedAt: string;
+  /** Number of successful GradeLog actions in this session. */
+  successCount: number;
+  /** Number of FAILED GradeLog actions in this session. */
+  failureCount: number;
+  /** Total rows processed in this session. */
+  totalCount: number;
+}
+
+/** Full upload history for a single faculty member. */
+export interface FacultyUploadHistory {
+  sessions: UploadSession[];
+  totalSuccessAllTime: number;
+  totalFailuresAllTime: number;
+  /** Success rate as a percentage (0-100). */
+  successRate: number;
+  lastUploadAt: string | null;
+  firstUploadAt: string | null;
+}
+
+/** All the name variants used to match a faculty record against loose string fields. */
+interface FacultyNamePermutations {
+  /** Normalised variants (titles stripped, uppercased, no punctuation). */
+  normalized: Set<string>;
+  /** Raw lowercased variants (used for uploadedBy matching). */
+  raw: Set<string>;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -45,6 +78,65 @@ function normalizeInstructorName(name: string): string {
   return filtered.join(" ");
 }
 
+/**
+ * Builds all name permutations for a faculty record.
+ * These are used to match against Grade.uploadedBy and Grade.instructor
+ * (which are free-text fields without a FK to User).
+ */
+function buildFacultyNamePermutations(faculty: {
+  firstName: string;
+  lastName: string;
+  middleInit: string | null;
+  username: string;
+}): FacultyNamePermutations {
+  const fn = faculty.firstName;
+  const ln = faculty.lastName;
+  const mi = faculty.middleInit ?? "";
+
+  const rawVariants = [
+    `${fn} ${ln}`,
+    `${ln} ${fn}`,
+    mi ? `${fn} ${mi} ${ln}` : null,
+    faculty.username,
+  ].filter(Boolean) as string[];
+
+  const normalized = new Set<string>();
+  const raw = new Set<string>();
+
+  for (const v of rawVariants) {
+    raw.add(v.toLowerCase().replace(/\s+/g, " ").trim());
+    const norm = normalizeInstructorName(v).toLowerCase();
+    if (norm) normalized.add(norm);
+  }
+
+  return { normalized, raw };
+}
+
+/**
+ * Checks whether a raw instructor/uploadedBy string matches a faculty's
+ * pre-computed name permutations.
+ */
+function nameMatchesFaculty(
+  target: string,
+  permutations: FacultyNamePermutations,
+): boolean {
+  if (!target) return false;
+
+  const rawTarget = target.toLowerCase().replace(/\s+/g, " ").trim();
+  if (permutations.raw.has(rawTarget)) return true;
+
+  const normTarget = normalizeInstructorName(target).toLowerCase();
+  if (!normTarget) return false;
+  if (permutations.normalized.has(normTarget)) return true;
+
+  // Partial match: normalized target contains one of the normalized permutations
+  for (const perm of permutations.normalized) {
+    if (normTarget.includes(perm)) return true;
+  }
+
+  return false;
+}
+
 // ── Auth guard ──────────────────────────────────────────────────────────────
 
 async function authorizeAccess(): Promise<void> {
@@ -57,7 +149,7 @@ async function authorizeAccess(): Promise<void> {
   }
 }
 
-// ── Main action ─────────────────────────────────────────────────────────────
+// ── Main action: per-term upload status ─────────────────────────────────────
 
 export async function getFacultyUploadStatus(
   params: GetFacultyUploadStatusParams,
@@ -80,10 +172,7 @@ export async function getFacultyUploadStatus(
 
     // ── 2. Fetch all matching faculties ─────────────────────────────────
     const allFaculties = await prisma.user.findMany({
-      where: {
-        role: "faculty",
-        ...searchFilter,
-      },
+      where: { role: "faculty", ...searchFilter },
       select: {
         id: true,
         username: true,
@@ -112,17 +201,11 @@ export async function getFacultyUploadStatus(
     for (const group of gradesGrouped) {
       if (group.uploadedBy) {
         const cleanName = group.uploadedBy.toLowerCase().replace(/\s+/g, " ").trim();
-        uploadedByMap.set(
-          cleanName,
-          (uploadedByMap.get(cleanName) ?? 0) + group._count.id,
-        );
+        uploadedByMap.set(cleanName, (uploadedByMap.get(cleanName) ?? 0) + group._count.id);
       }
       if (group.instructor) {
         const cleanInst = normalizeInstructorName(group.instructor).toLowerCase();
-        instructorMap.set(
-          cleanInst,
-          (instructorMap.get(cleanInst) ?? 0) + group._count.id,
-        );
+        instructorMap.set(cleanInst, (instructorMap.get(cleanInst) ?? 0) + group._count.id);
       }
     }
 
@@ -135,41 +218,26 @@ export async function getFacultyUploadStatus(
         .join("")
         .trim();
 
-      // Multiple name permutations for matching against uploadedBy / instructor
-      const clerkFull = `${faculty.firstName} ${faculty.lastName}`
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
-      const clerkFullMid = faculty.middleInit
-        ? `${faculty.firstName} ${faculty.middleInit} ${faculty.lastName}`
-            .toLowerCase()
-            .replace(/\s+/g, " ")
-            .trim()
-        : clerkFull;
-      const reversed = `${faculty.lastName} ${faculty.firstName}`
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
-      const usernameLower = faculty.username.toLowerCase();
+      const perms = buildFacultyNamePermutations(faculty);
 
-      // Normalized instructor names for this faculty
-      const norm1 = normalizeInstructorName(
-        `${faculty.firstName} ${faculty.lastName}`,
-      ).toLowerCase();
-      const norm2 = normalizeInstructorName(
-        `${faculty.firstName} ${faculty.middleInit ?? ""} ${faculty.lastName}`,
-      ).toLowerCase();
-
-      // Try uploadedBy first, then instructor
-      let count =
-        uploadedByMap.get(clerkFull) ??
-        uploadedByMap.get(usernameLower) ??
-        uploadedByMap.get(reversed) ??
-        uploadedByMap.get(clerkFullMid) ??
-        0;
+      // Try uploadedBy first (raw matching), then instructor (normalized)
+      let count = 0;
+      for (const rawName of perms.raw) {
+        const found = uploadedByMap.get(rawName);
+        if (found) {
+          count = found;
+          break;
+        }
+      }
 
       if (count === 0) {
-        count = instructorMap.get(norm1) ?? instructorMap.get(norm2) ?? 0;
+        for (const normName of perms.normalized) {
+          const found = instructorMap.get(normName);
+          if (found) {
+            count = found;
+            break;
+          }
+        }
       }
 
       return {
@@ -190,7 +258,7 @@ export async function getFacultyUploadStatus(
 
     const total = statusResults.length;
 
-    // ── 7. Paginate: pageSize of 0 means "return all" (used for export) ─
+    // ── 7. Paginate ─────────────────────────────────────────────────────
     const data =
       pageSize === 0
         ? statusResults
@@ -201,4 +269,145 @@ export async function getFacultyUploadStatus(
     console.error("Failed to fetch faculty upload status", error);
     throw new Error("Failed to fetch faculty upload status");
   }
+}
+
+// ── History action: per-faculty upload tracking ─────────────────────────────
+
+/** Maximum GradeLog rows to fetch for history (pre-filtered by name). */
+const HISTORY_LOG_LIMIT = 500;
+
+/** Time window (ms) used to cluster consecutive GradeLog entries into one session. */
+const SESSION_GAP_MS = 5 * 60 * 1000; // 5 minutes
+
+export async function getFacultyHistory(
+  facultyId: string,
+): Promise<FacultyUploadHistory> {
+  await authorizeAccess();
+
+  try {
+    // ── 1. Fetch the faculty record ─────────────────────────────────────
+    const faculty = await prisma.user.findUnique({
+      where: { id: facultyId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleInit: true,
+        username: true,
+      },
+    });
+
+    if (!faculty) {
+      throw new Error("Faculty not found");
+    }
+
+    // ── 2. Build name permutations for matching ─────────────────────────
+    const perms = buildFacultyNamePermutations(faculty);
+
+    // ── 3. Query GradeLog with a rough Prisma pre-filter ────────────────
+    // We use lastName as the most selective pre-filter; the JS pass refines.
+    const logs = await prisma.gradeLog.findMany({
+      where: {
+        instructor: { contains: faculty.lastName, mode: "insensitive" },
+      },
+      orderBy: { performedAt: "desc" },
+      take: HISTORY_LOG_LIMIT,
+      select: {
+        id: true,
+        action: true,
+        performedAt: true,
+        instructor: true,
+        studentNumber: true,
+        courseCode: true,
+        courseTitle: true,
+        grade: true,
+        remarks: true,
+      },
+    });
+
+    // ── 4. Refine matches in JS using the full matching logic ───────────
+    const matched = logs.filter((log) =>
+      nameMatchesFaculty(log.instructor, perms),
+    );
+
+    if (matched.length === 0) {
+      return {
+        sessions: [],
+        totalSuccessAllTime: 0,
+        totalFailuresAllTime: 0,
+        successRate: 0,
+        lastUploadAt: null,
+        firstUploadAt: null,
+      };
+    }
+
+    // ── 5. Group into sessions (time-clustered) ─────────────────────────
+    const sorted = [...matched].sort(
+      (a, b) => a.performedAt.getTime() - b.performedAt.getTime(),
+    );
+
+    const sessions: UploadSession[] = [];
+    let currentBucket: typeof sorted = [];
+
+    for (const log of sorted) {
+      if (currentBucket.length === 0) {
+        currentBucket.push(log);
+      } else {
+        const lastTime = currentBucket[currentBucket.length - 1].performedAt.getTime();
+        const gap = log.performedAt.getTime() - lastTime;
+        if (gap <= SESSION_GAP_MS) {
+          currentBucket.push(log);
+        } else {
+          sessions.push(buildSession(currentBucket));
+          currentBucket = [log];
+        }
+      }
+    }
+
+    if (currentBucket.length > 0) {
+      sessions.push(buildSession(currentBucket));
+    }
+
+    // Most recent first
+    sessions.reverse();
+
+    // ── 6. Compute aggregate stats ──────────────────────────────────────
+    const totalSuccess = matched.filter((l) => l.action !== "FAILED").length;
+    const totalFailures = matched.filter((l) => l.action === "FAILED").length;
+    const total = totalSuccess + totalFailures;
+
+    return {
+      sessions,
+      totalSuccessAllTime: totalSuccess,
+      totalFailuresAllTime: totalFailures,
+      successRate: total > 0 ? Math.round((totalSuccess / total) * 100) : 0,
+      lastUploadAt: matched[0]?.performedAt.toISOString() ?? null,
+      firstUploadAt:
+        matched[matched.length - 1]?.performedAt.toISOString() ?? null,
+    };
+  } catch (error) {
+    console.error("Failed to fetch faculty history", error);
+    throw new Error("Failed to fetch faculty history");
+  }
+}
+
+// ── Session builder ─────────────────────────────────────────────────────────
+
+function buildSession(
+  bucket: {
+    id: string;
+    action: string;
+    performedAt: Date;
+  }[],
+): UploadSession {
+  const successCount = bucket.filter((l) => l.action !== "FAILED").length;
+  const failureCount = bucket.filter((l) => l.action === "FAILED").length;
+
+  return {
+    id: `session-${bucket[0].performedAt.getTime()}`,
+    startedAt: bucket[0].performedAt.toISOString(),
+    successCount,
+    failureCount,
+    totalCount: bucket.length,
+  };
 }

@@ -8,7 +8,14 @@ import { z } from "zod";
 // ── SearchParams validation schema ──────────────────────────────────────────
 const searchParamsSchema = z.object({
   page: z.coerce.number().int().positive().max(10_000).optional().default(1),
-  pageSize: z.coerce.number().int().positive().min(1).max(100).optional().default(10),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(1)
+    .max(100)
+    .optional()
+    .default(10),
   search: z.string().max(100).optional().default(""),
   status: z.enum(["all", "uploaded", "not-uploaded"]).optional().default("all"),
   academicYear: z.string().max(20).optional().default(""),
@@ -17,13 +24,32 @@ const searchParamsSchema = z.object({
 
 // ── AcademicYear enum guard ─────────────────────────────────────────────────
 const VALID_ACADEMIC_YEARS: Set<string> = new Set([
-  "AY_2014_2015", "AY_2015_2016", "AY_2016_2017", "AY_2017_2018",
-  "AY_2018_2019", "AY_2019_2020", "AY_2020_2021", "AY_2021_2022",
-  "AY_2022_2023", "AY_2023_2024", "AY_2024_2025", "AY_2025_2026",
-  "AY_2026_2027", "AY_2027_2028", "AY_2028_2029", "AY_2029_2030",
-  "AY_2030_2031", "AY_2031_2032", "AY_2032_2033", "AY_2033_2034",
-  "AY_2034_2035", "AY_2035_2036", "AY_2036_2037", "AY_2037_2038",
-  "AY_2038_2039", "AY_2039_2040",
+  "AY_2014_2015",
+  "AY_2015_2016",
+  "AY_2016_2017",
+  "AY_2017_2018",
+  "AY_2018_2019",
+  "AY_2019_2020",
+  "AY_2020_2021",
+  "AY_2021_2022",
+  "AY_2022_2023",
+  "AY_2023_2024",
+  "AY_2024_2025",
+  "AY_2025_2026",
+  "AY_2026_2027",
+  "AY_2027_2028",
+  "AY_2028_2029",
+  "AY_2029_2030",
+  "AY_2030_2031",
+  "AY_2031_2032",
+  "AY_2032_2033",
+  "AY_2033_2034",
+  "AY_2034_2035",
+  "AY_2035_2036",
+  "AY_2036_2037",
+  "AY_2037_2038",
+  "AY_2038_2039",
+  "AY_2039_2040",
 ]);
 
 const VALID_SEMESTERS: Set<string> = new Set(["FIRST", "SECOND", "MIDYEAR"]);
@@ -64,10 +90,19 @@ export default async function FacultyMonitoringPage({
     semester: sem,
   } = parsed.success
     ? parsed.data
-    : { page: 1, pageSize: 10, search: "", status: "all" as const, academicYear: "", semester: "" };
+    : {
+        page: 1,
+        pageSize: 10,
+        search: "",
+        status: "all" as const,
+        academicYear: "",
+        semester: "",
+      };
 
   // ── Guard enum values from URL tampering ───────────────────────────────
-  const safeAcademicYear = VALID_ACADEMIC_YEARS.has(ay) ? (ay as AcademicYear) : null;
+  const safeAcademicYear = VALID_ACADEMIC_YEARS.has(ay)
+    ? (ay as AcademicYear)
+    : null;
   const safeSemester = VALID_SEMESTERS.has(sem) ? (sem as Semester) : null;
   const canFetch = safeAcademicYear !== null && safeSemester !== null;
 

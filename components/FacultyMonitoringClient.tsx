@@ -44,13 +44,20 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
   getFacultyUploadStatus,
+  getFacultyHistory,
   type FacultyUploadStatus,
+  type FacultyUploadHistory,
 } from "@/actions/faculty-monitoring";
 import type { AcademicYear, Semester } from "@prisma/client";
+
+// ── Constants ───────────────────────────────────────────────────────────────
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50] as const;
 
@@ -59,6 +66,8 @@ const STATUS_OPTIONS = [
   { value: "uploaded", label: "Uploaded" },
   { value: "not-uploaded", label: "Not Uploaded" },
 ] as const;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function generateAcademicYears(): AcademicYear[] {
   const now = new Date();
@@ -90,12 +99,213 @@ function formatSemester(sem: string): string {
   }
 }
 
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDateOnly(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatTimeOnly(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// ── Props ───────────────────────────────────────────────────────────────────
+
 interface FacultyMonitoringClientProps {
   data: FacultyUploadStatus[];
   total: number;
   page: number;
   pageSize: number;
 }
+
+// ── Sub-component: Faculty History Panel ────────────────────────────────────
+
+function FacultyHistoryPanel({
+  facultyId,
+  facultyName,
+}: {
+  facultyId: string;
+  facultyName: string;
+}) {
+  const [history, setHistory] = useState<FacultyUploadHistory | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(function fetchHistory() {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    getFacultyHistory(facultyId)
+      .then(function (result) {
+        if (!cancelled) {
+          setHistory(result);
+          setIsLoading(false);
+        }
+      })
+      .catch(function (err) {
+        if (!cancelled) {
+          console.error("Failed to load faculty history", err);
+          setError("Failed to load upload history.");
+          setIsLoading(false);
+        }
+      });
+
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [facultyId]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-sm text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading upload history...
+      </div>
+    );
+  }
+
+  if (error || !history) {
+    return (
+      <div className="py-4 text-sm text-red-500">
+        {error ?? "Unable to load history."}
+      </div>
+    );
+  }
+
+  if (history.sessions.length === 0) {
+    return (
+      <div className="py-4 text-sm text-gray-400">
+        No upload history found for {facultyName}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Aggregate stats */}
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <span className="text-gray-600">
+          All-time:{" "}
+          <strong className="text-green-700">
+            {history.totalSuccessAllTime} successful
+          </strong>{" "}
+          &bull;{" "}
+          <strong className="text-red-600">
+            {history.totalFailuresAllTime} failed
+          </strong>{" "}
+          &bull;{" "}
+          <strong
+            className={
+              history.successRate >= 80 ? "text-green-700" : "text-amber-600"
+            }
+          >
+            {history.successRate}% success rate
+          </strong>
+        </span>
+        <span className="text-gray-400 text-xs">
+          Last upload: {formatDateTime(history.lastUploadAt)}
+        </span>
+      </div>
+
+      {/* Session table */}
+      <div className="rounded-md border border-gray-200 overflow-hidden">
+        <Table>
+          <TableHeader className="bg-gray-50/80">
+            <TableRow>
+              <TableHead className="w-40">Date</TableHead>
+              <TableHead className="w-20 text-center">
+                <span className="inline-flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                  Success
+                </span>
+              </TableHead>
+              <TableHead className="w-20 text-center">
+                <span className="inline-flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 text-red-500" />
+                  Failed
+                </span>
+              </TableHead>
+              <TableHead className="w-16 text-center">Total</TableHead>
+              <TableHead className="text-right">Rate</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {history.sessions.map(function (session) {
+              const sRate =
+                session.totalCount > 0
+                  ? Math.round(
+                      (session.successCount / session.totalCount) * 100,
+                    )
+                  : 0;
+              return (
+                <TableRow key={session.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-medium">
+                          {formatDateOnly(session.startedAt)}
+                        </div>
+                        <div className="text-[11px] text-gray-400">
+                          {formatTimeOnly(session.startedAt)}
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center text-green-700 font-medium text-xs">
+                    {session.successCount}
+                  </TableCell>
+                  <TableCell className="text-center text-red-600 font-medium text-xs">
+                    {session.failureCount}
+                  </TableCell>
+                  <TableCell className="text-center text-xs font-medium">
+                    {session.totalCount}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span
+                      className={
+                        "text-xs font-semibold px-1.5 py-0.5 rounded " +
+                        (sRate >= 80
+                          ? "bg-green-50 text-green-700"
+                          : sRate >= 50
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-red-50 text-red-700")
+                      }
+                    >
+                      {sRate}%
+                    </span>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────────────────────────
 
 export function FacultyMonitoringClient({
   data,
@@ -122,22 +332,45 @@ export function FacultyMonitoringClient({
   const [searchInput, setSearchInput] = useState(searchQuery);
   const prevSearchQuery = useRef(searchQuery);
 
-  useEffect(() => {
-    if (searchQuery !== prevSearchQuery.current) {
-      setSearchInput(searchQuery);
-      prevSearchQuery.current = searchQuery;
-    }
-  }, [searchQuery]);
+  useEffect(
+    function syncSearchFromURL() {
+      if (searchQuery !== prevSearchQuery.current) {
+        setSearchInput(searchQuery);
+        prevSearchQuery.current = searchQuery;
+      }
+    },
+    [searchQuery],
+  );
 
   const [isExporting, setIsExporting] = useState(false);
+  const [expandedFacultyId, setExpandedFacultyId] = useState<string | null>(
+    null,
+  );
 
   const academicYears = useMemo(() => generateAcademicYears(), []);
 
+  const toggleExpand = useCallback(function (id: string) {
+    setExpandedFacultyId(function (prev) {
+      return prev === id ? null : id;
+    });
+  }, []);
+
+  // Reset expanded row when data changes (filters/pagination)
+  useEffect(
+    function resetExpandOnDataChange() {
+      setExpandedFacultyId(null);
+    },
+    [data],
+  );
+
   const updateURL = useCallback(
-    (updates: Record<string, string | number | null>) => {
+    function (updates: Record<string, string | number | null>) {
       const params = new URLSearchParams(searchParams.toString());
 
-      for (const [key, value] of Object.entries(updates)) {
+      const entries = Object.entries(updates);
+      for (let i = 0; i < entries.length; i++) {
+        const key = entries[i][0];
+        const value = entries[i][1];
         if (value === null || value === "" || value === "all") {
           params.delete(key);
         } else {
@@ -145,7 +378,7 @@ export function FacultyMonitoringClient({
         }
       }
 
-      startTransition(() => {
+      startTransition(function () {
         router.push(pathname + "?" + params.toString());
       });
     },
@@ -153,21 +386,23 @@ export function FacultyMonitoringClient({
   );
 
   const handleTermChange = useCallback(
-    (field: "academicYear" | "semester", value: string) => {
-      updateURL({ [field]: value, page: 1 });
+    function (field: "academicYear" | "semester", value: string) {
+      const patch: Record<string, string | number | null> = { page: 1 };
+      patch[field] = value;
+      updateURL(patch);
     },
     [updateURL],
   );
 
   const debouncedSearch = useDebouncedCallback(
-    (value: string) => {
+    function (value: string) {
       updateURL({ search: value || null, page: 1 });
     },
     400,
   );
 
   const handleSearchInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    function (e: React.ChangeEvent<HTMLInputElement>) {
       const value = e.target.value;
       setSearchInput(value);
       debouncedSearch(value);
@@ -176,60 +411,63 @@ export function FacultyMonitoringClient({
   );
 
   const handleStatusChange = useCallback(
-    (value: string) => {
+    function (value: string) {
       updateURL({ status: value, page: 1 });
     },
     [updateURL],
   );
 
   const handlePageChange = useCallback(
-    (newPage: number) => {
+    function (newPage: number) {
       updateURL({ page: newPage });
     },
     [updateURL],
   );
 
   const handlePageSizeChange = useCallback(
-    (newPageSize: number) => {
+    function (newPageSize: number) {
       updateURL({ pageSize: newPageSize, page: 1 });
     },
     [updateURL],
   );
 
-  const handleExport = useCallback(async () => {
-    if (!hasTermSelected || isExporting || total === 0) return;
+  const handleExport = useCallback(
+    async function () {
+      if (!hasTermSelected || isExporting || total === 0) return;
 
-    setIsExporting(true);
-    try {
-      const result = await getFacultyUploadStatus({
-        academicYear: academicYear as AcademicYear,
-        semester: semester as Semester,
-        page: 1,
-        pageSize: 0,
-      });
+      setIsExporting(true);
+      try {
+        const result = await getFacultyUploadStatus({
+          academicYear: academicYear as AcademicYear,
+          semester: semester as Semester,
+          page: 1,
+          pageSize: 0,
+        });
 
-      const exportData = result.data.map(function (faculty) {
-        return {
-          Name: faculty.name,
-          Username: faculty.username,
-          Status: faculty.hasUploaded ? "Uploaded" : "Not Uploaded",
-          "Records Uploaded": faculty.gradesUploadedCount,
-        };
-      });
+        const exportData = result.data.map(function (faculty) {
+          return {
+            Name: faculty.name,
+            Username: faculty.username,
+            Status: faculty.hasUploaded ? "Uploaded" : "Not Uploaded",
+            "Records Uploaded": faculty.gradesUploadedCount,
+          };
+        });
 
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Upload Status");
-      XLSX.writeFile(
-        wb,
-        "Faculty_Upload_Status_" + academicYear + "_" + semester + ".xlsx",
-      );
-    } catch (error) {
-      console.error("Export failed", error);
-    } finally {
-      setIsExporting(false);
-    }
-  }, [academicYear, hasTermSelected, isExporting, semester, total]);
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Upload Status");
+        XLSX.writeFile(
+          wb,
+          "Faculty_Upload_Status_" + academicYear + "_" + semester + ".xlsx",
+        );
+      } catch (error) {
+        console.error("Export failed", error);
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [academicYear, hasTermSelected, isExporting, semester, total],
+  );
 
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
@@ -369,6 +607,7 @@ export function FacultyMonitoringClient({
                   <Table>
                     <TableHeader className="bg-gray-50">
                       <TableRow>
+                        <TableHead className="w-8" />
                         <TableHead>Faculty Name</TableHead>
                         <TableHead>Username</TableHead>
                         <TableHead>Status</TableHead>
@@ -379,31 +618,70 @@ export function FacultyMonitoringClient({
                     </TableHeader>
                     <TableBody>
                       {data.map(function (faculty) {
+                        var isExpanded = expandedFacultyId === faculty.id;
                         return (
-                          <TableRow key={faculty.id}>
-                            <TableCell className="font-medium">
-                              {faculty.name}
-                            </TableCell>
-                            <TableCell className="text-gray-500 text-xs">
-                              {faculty.username}
-                            </TableCell>
-                            <TableCell>
-                              {faculty.hasUploaded ? (
-                                <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200 flex w-fit items-center gap-1 font-semibold">
-                                  <CheckCircle2 className="w-3 h-3" /> Uploaded
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-red-200 flex w-fit items-center gap-1 font-semibold">
-                                  <XCircle className="w-3 h-3" /> Not Uploaded
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {faculty.gradesUploadedCount > 0
-                                ? faculty.gradesUploadedCount
-                                : "-"}
-                            </TableCell>
-                          </TableRow>
+                          <React.Fragment key={faculty.id}>
+                            <TableRow
+                              className={
+                                "cursor-pointer transition-colors " +
+                                (isExpanded
+                                  ? "bg-amber-50/50 hover:bg-amber-50"
+                                  : "hover:bg-gray-50")
+                              }
+                              onClick={function () {
+                                toggleExpand(faculty.id);
+                              }}
+                            >
+                              <TableCell>
+                                <ChevronDown
+                                  className={
+                                    "h-4 w-4 text-gray-400 transition-transform " +
+                                    (isExpanded ? "rotate-180" : "")
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {faculty.name}
+                              </TableCell>
+                              <TableCell className="text-gray-500 text-xs">
+                                {faculty.username}
+                              </TableCell>
+                              <TableCell>
+                                {faculty.hasUploaded ? (
+                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200 flex w-fit items-center gap-1 font-semibold">
+                                    <CheckCircle2 className="w-3 h-3" />{" "}
+                                    Uploaded
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-red-200 flex w-fit items-center gap-1 font-semibold">
+                                    <XCircle className="w-3 h-3" /> Not Uploaded
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {faculty.gradesUploadedCount > 0
+                                  ? faculty.gradesUploadedCount
+                                  : "-"}
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Expanded history row */}
+                            {isExpanded && (
+                              <TableRow className="bg-gray-50/70 hover:bg-gray-50/70">
+                                <TableCell colSpan={5} className="p-4">
+                                  <div className="pl-6">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                                      Upload History &mdash; {faculty.name}
+                                    </p>
+                                    <FacultyHistoryPanel
+                                      facultyId={faculty.id}
+                                      facultyName={faculty.name}
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </TableBody>
