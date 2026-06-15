@@ -705,7 +705,9 @@ export function UploadGrades() {
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST">First Semester</SelectItem>
+                  <SelectItem value="FIRST" disabled={role === "faculty"}>
+                    First Semester
+                  </SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
                   <SelectItem value="MIDYEAR" disabled>
                     Midyear
