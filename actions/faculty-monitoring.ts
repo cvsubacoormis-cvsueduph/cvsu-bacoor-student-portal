@@ -1,63 +1,88 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { AcademicYear, Semester } from "@prisma/client";
+import { AcademicYear, Semester, Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
-export type FacultyUploadStatus = {
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export interface FacultyUploadStatus {
   id: string;
   username: string;
   name: string;
   hasUploaded: boolean;
   gradesUploadedCount: number;
-};
+}
 
-function normalizeInstructorName(name: string) {
+export interface GetFacultyUploadStatusParams {
+  academicYear: AcademicYear;
+  semester: Semester;
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: "all" | "uploaded" | "not-uploaded";
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Normalizes an instructor name by removing titles, suffixes, and special chars.
+ * Used to robustly match Grade.instructor / Grade.uploadedBy fields to User records.
+ */
+function normalizeInstructorName(name: string): string {
   if (!name) return "";
   const cleaned = String(name).replace(/['.,]/g, "").toUpperCase();
   const tokens = cleaned.split(/\s+/);
 
   const ignoredWords = new Set([
-    "MR", "MS", "MRS", "DR", "PROF", "ENGR", "ARCH", "ATTY", "REV", "FR", "HON",
-    "LPT", "MIT", "MSCS", "MAED", "PHD", "EDD", "MAT", "MBA", "MPA", "RN", "CPA", "MD", "JD", "DMD", "DBA", "DPA",
-    "INSTRUCTOR", "FACULTY", "PROFESSOR"
+    "MR", "MS", "MRS", "DR", "PROF", "ENGR", "ARCH", "ATTY", "REV", "FR",
+    "HON", "LPT", "MIT", "MSCS", "MAED", "PHD", "EDD", "MAT", "MBA", "MPA",
+    "RN", "CPA", "MD", "JD", "DMD", "DBA", "DPA", "INSTRUCTOR", "FACULTY",
+    "PROFESSOR",
   ]);
 
-  const filtered = tokens.filter(t => !ignoredWords.has(t));
+  const filtered = tokens.filter((t) => !ignoredWords.has(t));
   return filtered.join(" ");
 }
 
-export async function getFacultyUploadStatus(
-  academicYear: AcademicYear,
-  semester: Semester,
-  page: number = 1,
-  limit: number = 10
-): Promise<{ data: FacultyUploadStatus[]; total: number }> {
+// ── Auth guard ──────────────────────────────────────────────────────────────
+
+async function authorizeAccess(): Promise<void> {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
-
   const role = (sessionClaims?.metadata as { role?: string })?.role;
   const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
+}
+
+// ── Main action ─────────────────────────────────────────────────────────────
+
+export async function getFacultyUploadStatus(
+  params: GetFacultyUploadStatusParams,
+): Promise<{ data: FacultyUploadStatus[]; total: number }> {
+  const { academicYear, semester, page, pageSize, search, status } = params;
+
+  await authorizeAccess();
 
   try {
-    const isExport = limit === 0;
+    // ── 1. Build Prisma search filter ───────────────────────────────────
+    const searchFilter: Prisma.UserWhereInput = search
+      ? {
+          OR: [
+            { firstName: { contains: search, mode: "insensitive" } },
+            { lastName: { contains: search, mode: "insensitive" } },
+            { username: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {};
 
-    // 1. Get total count of faculties
-    const total = await prisma.user.count({
+    // ── 2. Fetch all matching faculties ─────────────────────────────────
+    const allFaculties = await prisma.user.findMany({
       where: {
         role: "faculty",
-      },
-    });
-
-    if (total === 0) return { data: [], total: 0 };
-
-    // 2. Get faculties with pagination (or all if export)
-    const faculties = await prisma.user.findMany({
-      where: {
-        role: "faculty",
+        ...searchFilter,
       },
       select: {
         id: true,
@@ -66,75 +91,85 @@ export async function getFacultyUploadStatus(
         lastName: true,
         middleInit: true,
       },
-      orderBy: {
-        lastName: "asc",
-      },
-      ...(isExport ? {} : {
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
+      orderBy: { lastName: "asc" },
     });
 
-    // 3. Get grades uploaded for the active term.
-    // We group ALL grades by uploadedBy and instructor to map them properly.
+    if (allFaculties.length === 0) {
+      return { data: [], total: 0 };
+    }
+
+    // ── 3. Fetch grades for the active term ─────────────────────────────
     const gradesGrouped = await prisma.grade.groupBy({
       by: ["uploadedBy", "instructor"],
-      where: {
-        academicYear,
-        semester,
-      },
-      _count: {
-        id: true,
-      },
+      where: { academicYear, semester },
+      _count: { id: true },
     });
 
-    // Create a map for robust lookup
+    // ── 4. Build lookup maps for robust matching ────────────────────────
     const uploadedByMap = new Map<string, number>();
     const instructorMap = new Map<string, number>();
 
-    gradesGrouped.forEach((group) => {
-      // Map by who uploaded it
+    for (const group of gradesGrouped) {
       if (group.uploadedBy) {
         const cleanName = group.uploadedBy.toLowerCase().replace(/\s+/g, " ").trim();
-        uploadedByMap.set(cleanName, (uploadedByMap.get(cleanName) || 0) + group._count.id);
+        uploadedByMap.set(
+          cleanName,
+          (uploadedByMap.get(cleanName) ?? 0) + group._count.id,
+        );
       }
-
-      // Map by who the instructor is
       if (group.instructor) {
         const cleanInst = normalizeInstructorName(group.instructor).toLowerCase();
-        instructorMap.set(cleanInst, (instructorMap.get(cleanInst) || 0) + group._count.id);
+        instructorMap.set(
+          cleanInst,
+          (instructorMap.get(cleanInst) ?? 0) + group._count.id,
+        );
       }
-    });
+    }
 
-    // 4. Map faculties to their upload status
-    const statusResult: FacultyUploadStatus[] = faculties.map((faculty) => {
-      const name = `${faculty.lastName}, ${faculty.firstName} ${faculty.middleInit ? faculty.middleInit + "." : ""
-        }`.trim();
+    // ── 5. Map each faculty to upload status ────────────────────────────
+    let statusResults: FacultyUploadStatus[] = allFaculties.map((faculty) => {
+      const name = [
+        `${faculty.lastName}, ${faculty.firstName}`,
+        faculty.middleInit ? ` ${faculty.middleInit}.` : "",
+      ]
+        .join("")
+        .trim();
 
-      const clerkFullName = `${faculty.firstName} ${faculty.lastName}`.toLowerCase().replace(/\s+/g, " ").trim();
-      const clerkFullNameWithMiddle = faculty.middleInit
-        ? `${faculty.firstName} ${faculty.middleInit} ${faculty.lastName}`.toLowerCase().replace(/\s+/g, " ").trim()
-        : clerkFullName;
-      const reverseName = `${faculty.lastName} ${faculty.firstName}`.toLowerCase().replace(/\s+/g, " ").trim();
+      // Multiple name permutations for matching against uploadedBy / instructor
+      const clerkFull = `${faculty.firstName} ${faculty.lastName}`
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+      const clerkFullMid = faculty.middleInit
+        ? `${faculty.firstName} ${faculty.middleInit} ${faculty.lastName}`
+            .toLowerCase()
+            .replace(/\s+/g, " ")
+            .trim()
+        : clerkFull;
+      const reversed = `${faculty.lastName} ${faculty.firstName}`
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
       const usernameLower = faculty.username.toLowerCase();
 
-      const possibleName1 = clerkFullName;
-      const possibleName2 = usernameLower;
-      const possibleName3 = reverseName;
-      const possibleName4 = clerkFullNameWithMiddle;
+      // Normalized instructor names for this faculty
+      const norm1 = normalizeInstructorName(
+        `${faculty.firstName} ${faculty.lastName}`,
+      ).toLowerCase();
+      const norm2 = normalizeInstructorName(
+        `${faculty.firstName} ${faculty.middleInit ?? ""} ${faculty.lastName}`,
+      ).toLowerCase();
 
-      // Also generate the normalized instructor name for this faculty
-      const normalInst1 = normalizeInstructorName(`${faculty.firstName} ${faculty.lastName}`).toLowerCase();
-      const normalInst2 = normalizeInstructorName(`${faculty.firstName} ${faculty.middleInit || ""} ${faculty.lastName}`).toLowerCase();
+      // Try uploadedBy first, then instructor
+      let count =
+        uploadedByMap.get(clerkFull) ??
+        uploadedByMap.get(usernameLower) ??
+        uploadedByMap.get(reversed) ??
+        uploadedByMap.get(clerkFullMid) ??
+        0;
 
-      let count = uploadedByMap.get(possibleName1) ||
-        uploadedByMap.get(possibleName2) ||
-        uploadedByMap.get(possibleName3) ||
-        uploadedByMap.get(possibleName4) || 0;
-
-      // If we didn't find it by uploadedBy, try finding it by instructor
       if (count === 0) {
-        count = instructorMap.get(normalInst1) || instructorMap.get(normalInst2) || 0;
+        count = instructorMap.get(norm1) ?? instructorMap.get(norm2) ?? 0;
       }
 
       return {
@@ -146,10 +181,22 @@ export async function getFacultyUploadStatus(
       };
     });
 
-    return {
-      data: statusResult,
-      total,
-    };
+    // ── 6. Apply status filter (after mapping) ──────────────────────────
+    if (status === "uploaded") {
+      statusResults = statusResults.filter((f) => f.hasUploaded);
+    } else if (status === "not-uploaded") {
+      statusResults = statusResults.filter((f) => !f.hasUploaded);
+    }
+
+    const total = statusResults.length;
+
+    // ── 7. Paginate: pageSize of 0 means "return all" (used for export) ─
+    const data =
+      pageSize === 0
+        ? statusResults
+        : statusResults.slice((page - 1) * pageSize, page * pageSize);
+
+    return { data, total };
   } catch (error) {
     console.error("Failed to fetch faculty upload status", error);
     throw new Error("Failed to fetch faculty upload status");
