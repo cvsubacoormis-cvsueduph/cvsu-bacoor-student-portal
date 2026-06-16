@@ -10,11 +10,11 @@ import { RateLimiterRedis } from "rate-limiter-flexible";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-// Rate limiter: 3 uploads per 15 minutes for faculty
+// Rate limiter: 30 uploads per 15 minutes for faculty
 const uploadLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: "rl:upload_grades",
-  points: 15,
+  points: 30,
   duration: 15 * 60,
 });
 

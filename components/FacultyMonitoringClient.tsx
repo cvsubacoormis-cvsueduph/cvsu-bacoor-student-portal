@@ -54,7 +54,9 @@ import {
   getFacultyHistory,
   type FacultyUploadStatus,
   type FacultyUploadHistory,
+  type UploadSession,
 } from "@/actions/faculty-monitoring";
+import { FacultyGradesDetailPanel } from "@/components/FacultyGradesDetailPanel";
 import type { AcademicYear, Semester } from "@prisma/client";
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -142,13 +144,20 @@ interface FacultyMonitoringClientProps {
 function FacultyHistoryPanel({
   facultyId,
   facultyName,
+  academicYear,
+  semester,
 }: {
   facultyId: string;
   facultyName: string;
+  academicYear: AcademicYear;
+  semester: Semester;
 }) {
   const [history, setHistory] = useState<FacultyUploadHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
 
   useEffect(function fetchHistory() {
     let cancelled = false;
@@ -174,6 +183,23 @@ function FacultyHistoryPanel({
       cancelled = true;
     };
   }, [facultyId]);
+
+  // Reset expanded session when history reloads
+  useEffect(
+    function resetExpandOnHistoryChange() {
+      setExpandedSessionId(null);
+    },
+    [history],
+  );
+
+  const toggleSession = useCallback(
+    function (sessionId: string) {
+      setExpandedSessionId(function (prev) {
+        return prev === sessionId ? null : sessionId;
+      });
+    },
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -232,6 +258,7 @@ function FacultyHistoryPanel({
         <Table>
           <TableHeader className="bg-gray-50/80">
             <TableRow>
+              <TableHead className="w-8" />
               <TableHead className="w-40">Date</TableHead>
               <TableHead className="w-20 text-center">
                 <span className="inline-flex items-center gap-1">
@@ -257,45 +284,88 @@ function FacultyHistoryPanel({
                       (session.successCount / session.totalCount) * 100,
                     )
                   : 0;
+              const isExpanded = expandedSessionId === session.id;
               return (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="h-3 w-3 text-gray-400 shrink-0" />
-                      <div>
-                        <div className="text-xs font-medium">
-                          {formatDateOnly(session.startedAt)}
-                        </div>
-                        <div className="text-[11px] text-gray-400">
-                          {formatTimeOnly(session.startedAt)}
+                <React.Fragment key={session.id}>
+                  <TableRow
+                    className={
+                      "cursor-pointer transition-colors " +
+                      (isExpanded
+                        ? "bg-blue-50/50 hover:bg-blue-50"
+                        : "hover:bg-gray-50")
+                    }
+                    onClick={function () {
+                      toggleSession(session.id);
+                    }}
+                  >
+                    <TableCell>
+                      <ChevronDown
+                        className={
+                          "h-4 w-4 text-gray-400 transition-transform " +
+                          (isExpanded ? "rotate-180" : "")
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+                        <div>
+                          <div className="text-xs font-medium">
+                            {formatDateOnly(session.startedAt)}
+                          </div>
+                          <div className="text-[11px] text-gray-400">
+                            {formatTimeOnly(session.startedAt)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center text-green-700 font-medium text-xs">
-                    {session.successCount}
-                  </TableCell>
-                  <TableCell className="text-center text-red-600 font-medium text-xs">
-                    {session.failureCount}
-                  </TableCell>
-                  <TableCell className="text-center text-xs font-medium">
-                    {session.totalCount}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span
-                      className={
-                        "text-xs font-semibold px-1.5 py-0.5 rounded " +
-                        (sRate >= 80
-                          ? "bg-green-50 text-green-700"
-                          : sRate >= 50
-                            ? "bg-amber-50 text-amber-700"
-                            : "bg-red-50 text-red-700")
-                      }
-                    >
-                      {sRate}%
-                    </span>
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell className="text-center text-green-700 font-medium text-xs">
+                      {session.successCount}
+                    </TableCell>
+                    <TableCell className="text-center text-red-600 font-medium text-xs">
+                      {session.failureCount}
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-medium">
+                      {session.totalCount}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className={
+                          "text-xs font-semibold px-1.5 py-0.5 rounded " +
+                          (sRate >= 80
+                            ? "bg-green-50 text-green-700"
+                            : sRate >= 50
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-700")
+                        }
+                      >
+                        {sRate}%
+                      </span>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Expanded grades detail row */}
+                  {isExpanded && (
+                    <TableRow className="bg-blue-50/30 hover:bg-blue-50/30">
+                      <TableCell colSpan={6} className="p-4">
+                        <div className="pl-6">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                            Uploaded Grades &mdash; {facultyName} &mdash;{" "}
+                            {formatDateOnly(session.startedAt)}{" "}
+                            {formatTimeOnly(session.startedAt)}
+                          </p>
+                          <FacultyGradesDetailPanel
+                            facultyId={facultyId}
+                            facultyName={facultyName}
+                            academicYear={academicYear}
+                            semester={semester}
+                            session={session}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               );
             })}
           </TableBody>
@@ -676,6 +746,8 @@ export function FacultyMonitoringClient({
                                     <FacultyHistoryPanel
                                       facultyId={faculty.id}
                                       facultyName={faculty.name}
+                                      academicYear={academicYear as AcademicYear}
+                                      semester={semester as Semester}
                                     />
                                   </div>
                                 </TableCell>
