@@ -613,6 +613,10 @@ export interface RollbackFacultyGradesParams {
   semester: Semester;
   sessionStartedAt: string;
   sessionEndedAt: string;
+  /** If provided, only rollback grades matching this course code. */
+  courseCode?: string;
+  /** If provided, only rollback grades matching this course title. */
+  courseTitle?: string;
 }
 
 export interface RollbackFacultyGradesResult {
@@ -624,7 +628,7 @@ export interface RollbackFacultyGradesResult {
 export async function rollbackFacultyGrades(
   params: RollbackFacultyGradesParams,
 ): Promise<RollbackFacultyGradesResult> {
-  const { facultyId, academicYear, semester, sessionStartedAt, sessionEndedAt } =
+  const { facultyId, academicYear, semester, sessionStartedAt, sessionEndedAt, courseCode, courseTitle } =
     params;
 
   await authorizeAccess();
@@ -671,6 +675,8 @@ export async function rollbackFacultyGrades(
           { OR: instructorFilters },
           { OR: uploadedByFilters },
         ],
+        ...(courseCode ? { courseCode: { equals: courseCode, mode: "insensitive" } } : {}),
+        ...(courseTitle ? { courseTitle: { contains: courseTitle, mode: "insensitive" } } : {}),
       },
       select: {
         id: true,

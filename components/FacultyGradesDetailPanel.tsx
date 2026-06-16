@@ -187,22 +187,34 @@ export function FacultyGradesDetailPanel({
   }, []);
 
   // ── Rollback handler ──────────────────────────────────────────────────
+  const isFilteredRollback = courseCodeFilter !== "all" || courseTitleFilter !== "all";
+
   const handleRollback = useCallback(
     async function () {
       if (rollbackInput !== "DELETE") return;
 
       setIsRollingBack(true);
       try {
-        const result = await rollbackFacultyGrades({
+        const rollbackParams: Parameters<typeof rollbackFacultyGrades>[0] = {
           facultyId,
           academicYear,
           semester,
           sessionStartedAt: session.startedAt,
           sessionEndedAt: session.endedAt,
-        });
+        };
 
+        if (courseCodeFilter !== "all") {
+          rollbackParams.courseCode = courseCodeFilter;
+        }
+        if (courseTitleFilter !== "all") {
+          rollbackParams.courseTitle = courseTitleFilter;
+        }
+
+        const result = await rollbackFacultyGrades(rollbackParams);
+
+        const scope = isFilteredRollback ? "filtered" : "";
         toast.success(
-          `Rollback complete: ${result.deletedCount} grade(s) deleted successfully.`,
+          `Rollback complete: ${result.deletedCount} ${scope} grade(s) deleted successfully.`,
         );
         setRollbackConfirmOpen(false);
         setRollbackInput("");
@@ -220,11 +232,14 @@ export function FacultyGradesDetailPanel({
     },
     [
       rollbackInput,
+      isFilteredRollback,
       facultyId,
       academicYear,
       semester,
       session.startedAt,
       session.endedAt,
+      courseCodeFilter,
+      courseTitleFilter,
       fetchGrades,
     ],
   );
@@ -284,13 +299,22 @@ export function FacultyGradesDetailPanel({
               size="sm"
               disabled={total === 0 || isRollingBack}
               className="flex items-center gap-1.5"
+              title={
+                isFilteredRollback
+                  ? "Rollback only the currently filtered grades"
+                  : "Rollback all grades in this session"
+              }
             >
               {isRollingBack ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Trash2 className="h-3.5 w-3.5" />
               )}
-              {isRollingBack ? "Rolling back..." : "Rollback Upload"}
+              {isRollingBack
+                ? "Rolling back..."
+                : isFilteredRollback
+                  ? "Rollback Filtered"
+                  : "Rollback Upload"}
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
@@ -301,8 +325,18 @@ export function FacultyGradesDetailPanel({
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
                 <p>
-                  You are about to <strong>permanently delete</strong> all grade
-                  records uploaded by{" "}
+                  You are about to <strong>permanently delete</strong>{" "}
+                  {isFilteredRollback ? (
+                    <>
+                      the <strong className="text-gray-800">filtered</strong>{" "}
+                      grade records
+                    </>
+                  ) : (
+                    <>
+                      all grade records
+                    </>
+                  )}{" "}
+                  uploaded by{" "}
                   <strong className="text-gray-800">{facultyName}</strong>{" "}
                   during this session.
                 </p>
@@ -319,6 +353,17 @@ export function FacultyGradesDetailPanel({
                     {academicYear.replace("AY_", "AY ").replace("_", "-")} /{" "}
                     {semester}
                   </p>
+                  {isFilteredRollback && (
+                    <p>
+                      <strong>Active filters:</strong>{" "}
+                      {[
+                        courseCodeFilter !== "all" ? `Code: ${courseCodeFilter}` : "",
+                        courseTitleFilter !== "all" ? `Title: ${courseTitleFilter}` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
                 </div>
                 <p className="text-red-600 font-semibold">
                   This action cannot be undone.
@@ -361,6 +406,8 @@ export function FacultyGradesDetailPanel({
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Deleting...
                   </>
+                ) : isFilteredRollback ? (
+                  "Yes, Delete Filtered Records"
                 ) : (
                   "Yes, Delete All Records"
                 )}
