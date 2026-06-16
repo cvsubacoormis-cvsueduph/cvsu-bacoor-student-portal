@@ -36,7 +36,7 @@ import toast from "react-hot-toast";
 import { mutate } from "swr";
 import { useState } from "react";
 import type { Student } from "@prisma/client";
-import { UploadCloudIcon, FileSpreadsheetIcon, EyeIcon } from "lucide-react";
+import { UploadCloudIcon, FileSpreadsheetIcon, EyeIcon, DownloadIcon } from "lucide-react";
 import type { CreateStudentSchema } from "@/lib/formValidationSchemas";
 import axios from "axios";
 
@@ -54,6 +54,58 @@ export default function UploadStudents() {
   function resetUploadState() {
     setFile(null);
     setJsonData("");
+  }
+
+  const studentTemplateData = [
+    {
+      studentNumber: "202310001",
+      firstName: "Juan",
+      lastName: "Dela Cruz",
+      middleInit: "S",
+      email: "juan.delacruz@email.com",
+      phone: "09123456789",
+      address: "123 Rizal St, Manila",
+      sex: "MALE",
+      course: "BSIT",
+      major: "NONE",
+      status: "REGULAR",
+    },
+    {
+      studentNumber: "202310002",
+      firstName: "Maria",
+      lastName: "Santos",
+      middleInit: "L",
+      email: "maria.santos@email.com",
+      phone: "09987654321",
+      address: "456 Bonifacio Ave, Quezon City",
+      sex: "FEMALE",
+      course: "BSBA",
+      major: "MARKETING_MANAGEMENT",
+      status: "REGULAR",
+    },
+  ];
+
+  function handleDownloadTemplate() {
+    const ws = XLSX.utils.json_to_sheet(studentTemplateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+
+    const colWidths = [
+      { wch: 15 }, // studentNumber
+      { wch: 15 }, // firstName
+      { wch: 15 }, // lastName
+      { wch: 12 }, // middleInit
+      { wch: 30 }, // email
+      { wch: 14 }, // phone
+      { wch: 35 }, // address
+      { wch: 8 },  // sex
+      { wch: 10 }, // course
+      { wch: 28 }, // major
+      { wch: 16 }, // status
+    ];
+    ws["!cols"] = colWidths;
+
+    XLSX.writeFile(wb, "bulk-create-students-template.xlsx");
   }
 
   function previewData() {
@@ -148,6 +200,25 @@ export default function UploadStudents() {
           </DialogHeader>
 
           <div className="space-y-6">
+            {/* Template Download Notice */}
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-blue-700 text-sm">
+                  Need the correct format? Download the template with sample
+                  data and required columns.
+                </p>
+                <Button
+                  onClick={handleDownloadTemplate}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-300 text-blue-700 hover:bg-blue-100 whitespace-nowrap"
+                >
+                  <DownloadIcon className="h-4 w-4 mr-2" />
+                  Download Template
+                </Button>
+              </div>
+            </div>
+
             {/* File Upload Section */}
             <Card>
               <CardContent className="pt-6">
