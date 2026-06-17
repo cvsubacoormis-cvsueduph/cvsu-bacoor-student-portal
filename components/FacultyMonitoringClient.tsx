@@ -137,6 +137,8 @@ interface FacultyMonitoringClientProps {
   total: number;
   page: number;
   pageSize: number;
+  isFacultyView?: boolean;
+  currentFacultyId?: string | null;
 }
 
 // ── Sub-component: Faculty History Panel ────────────────────────────────────
@@ -146,11 +148,13 @@ function FacultyHistoryPanel({
   facultyName,
   academicYear,
   semester,
+  isFacultyView,
 }: {
   facultyId: string;
   facultyName: string;
   academicYear: AcademicYear;
   semester: Semester;
+  isFacultyView: boolean;
 }) {
   const [history, setHistory] = useState<FacultyUploadHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -360,6 +364,7 @@ function FacultyHistoryPanel({
                             academicYear={academicYear}
                             semester={semester}
                             session={session}
+                            isFacultyView={isFacultyView}
                           />
                         </div>
                       </TableCell>
@@ -382,6 +387,8 @@ export function FacultyMonitoringClient({
   total,
   page,
   pageSize,
+  isFacultyView = false,
+  currentFacultyId = null,
 }: FacultyMonitoringClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -603,53 +610,65 @@ export function FacultyMonitoringClient({
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
-              <CardTitle>Faculty Status</CardTitle>
+              <CardTitle>
+                {isFacultyView ? "My Upload Status" : "Faculty Status"}
+              </CardTitle>
               <CardDescription>
-                Showing data for {formatAcademicYear(academicYear)},{" "}
-                {formatSemester(semester)} Semester
+                {isFacultyView
+                  ? `Showing your data for ${formatAcademicYear(academicYear)}, ${formatSemester(semester)} Semester`
+                  : `Showing data for ${formatAcademicYear(academicYear)}, ${formatSemester(semester)} Semester`}
               </CardDescription>
             </div>
-            <Button
-              onClick={handleExport}
-              disabled={isPending || isExporting || data.length === 0}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {isExporting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="mr-2 h-4 w-4" />
-              )}
-              {isExporting ? "Exporting..." : "Export to XLSX"}
-            </Button>
+            {!isFacultyView && (
+              <Button
+                onClick={handleExport}
+                disabled={isPending || isExporting || data.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {isExporting ? "Exporting..." : "Export to XLSX"}
+              </Button>
+            )}
           </CardHeader>
 
           {/* Filters bar */}
           <CardContent className="pb-0">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by name or username..."
-                  value={searchInput}
-                  onChange={handleSearchInputChange}
-                  className="pl-9 h-10"
-                />
-              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                {!isFacultyView && (
+                  <>
+                    <div className="relative w-full sm:max-w-xs">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by name or username..."
+                        value={searchInput}
+                        onChange={handleSearchInputChange}
+                        className="pl-9 h-10"
+                      />
+                    </div>
 
-              <Select value={statusFilter} onValueChange={handleStatusChange}>
-                <SelectTrigger className="h-10 w-full sm:w-[180px]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map(function (opt) {
-                    return (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={handleStatusChange}
+                    >
+                      <SelectTrigger className="h-10 w-full sm:w-[180px]">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map(function (opt) {
+                          return (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
 
               {isPending && (
                 <Loader2 className="h-4 w-4 animate-spin text-amber-600 ml-2" />
@@ -748,6 +767,7 @@ export function FacultyMonitoringClient({
                                       facultyName={faculty.name}
                                       academicYear={academicYear as AcademicYear}
                                       semester={semester as Semester}
+                                      isFacultyView={isFacultyView}
                                     />
                                   </div>
                                 </TableCell>

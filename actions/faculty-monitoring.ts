@@ -21,6 +21,8 @@ export interface GetFacultyUploadStatusParams {
   pageSize: number;
   search?: string;
   status?: "all" | "uploaded" | "not-uploaded";
+  /** If provided, only return status for this specific faculty (used for faculty self-view). */
+  facultyId?: string;
 }
 
 /** A time-clustered grouping of GradeLog entries representing one upload batch. */
@@ -156,7 +158,8 @@ async function authorizeAccess(): Promise<void> {
 export async function getFacultyUploadStatus(
   params: GetFacultyUploadStatusParams,
 ): Promise<{ data: FacultyUploadStatus[]; total: number }> {
-  const { academicYear, semester, page, pageSize, search, status } = params;
+  const { academicYear, semester, page, pageSize, search, status, facultyId } =
+    params;
 
   await authorizeAccess();
 
@@ -173,8 +176,14 @@ export async function getFacultyUploadStatus(
       : {};
 
     // ── 2. Fetch all matching faculties ─────────────────────────────────
+    const userWhere: Prisma.UserWhereInput = {
+      role: "faculty",
+      ...searchFilter,
+      ...(facultyId ? { id: facultyId } : {}),
+    };
+
     const allFaculties = await prisma.user.findMany({
-      where: { role: "faculty", ...searchFilter },
+      where: userWhere,
       select: {
         id: true,
         username: true,
@@ -640,6 +649,13 @@ export async function rollbackFacultyGrades(
     params;
 
   await authorizeAccess();
+
+  // Only admin, superuser, and registrar can rollback
+  const { sessionClaims } = await auth();
+  const userRole = (sessionClaims?.metadata as { role?: string })?.role;
+  if (userRole === "faculty") {
+    throw new Error("Forbidden: faculty users cannot perform rollbacks.");
+  }
 
   try {
     // ── 1. Fetch faculty & build name permutations ────────────────────

@@ -74,6 +74,7 @@ interface FacultyGradesDetailPanelProps {
   academicYear: AcademicYear;
   semester: Semester;
   session: UploadSession;
+  isFacultyView?: boolean;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export function FacultyGradesDetailPanel({
   academicYear,
   semester,
   session,
+  isFacultyView = false,
 }: FacultyGradesDetailPanelProps) {
   // ── Data state ────────────────────────────────────────────────────────
   const [grades, setGrades] = useState<UploadedGradeRecord[]>([]);
@@ -288,133 +290,140 @@ export function FacultyGradesDetailPanel({
           </span>
         </div>
 
-        {/* Rollback button */}
-        <AlertDialog
-          open={rollbackConfirmOpen}
-          onOpenChange={setRollbackConfirmOpen}
-        >
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={total === 0 || isRollingBack}
-              className="flex items-center gap-1.5"
-              title={
-                isFilteredRollback
-                  ? "Rollback only the currently filtered grades"
-                  : "Rollback all grades in this session"
-              }
-            >
-              {isRollingBack ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
-              {isRollingBack
-                ? "Rolling back..."
-                : isFilteredRollback
-                  ? "Rollback Filtered"
-                  : "Rollback Upload"}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                Confirm Rollback
-              </AlertDialogTitle>
-              <AlertDialogDescription className="space-y-3">
-                <p>
-                  You are about to <strong>permanently delete</strong>{" "}
-                  {isFilteredRollback ? (
-                    <>
-                      the <strong className="text-gray-800">filtered</strong>{" "}
-                      grade records
-                    </>
-                  ) : (
-                    <>
-                      all grade records
-                    </>
-                  )}{" "}
-                  uploaded by{" "}
-                  <strong className="text-gray-800">{facultyName}</strong>{" "}
-                  during this session.
-                </p>
-                <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-xs space-y-1">
-                  <p>
-                    <strong>Session:</strong>{" "}
-                    {formatDateTime(session.startedAt)}
-                  </p>
-                  <p>
-                    <strong>Records to delete:</strong> {total}
-                  </p>
-                  <p>
-                    <strong>Term:</strong>{" "}
-                    {academicYear.replace("AY_", "AY ").replace("_", "-")} /{" "}
-                    {semester}
-                  </p>
-                  {isFilteredRollback && (
-                    <p>
-                      <strong>Active filters:</strong>{" "}
-                      {[
-                        courseCodeFilter !== "all" ? `Code: ${courseCodeFilter}` : "",
-                        courseTitleFilter !== "all" ? `Title: ${courseTitleFilter}` : "",
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </p>
-                  )}
-                </div>
-                <p className="text-red-600 font-semibold">
-                  This action cannot be undone.
-                </p>
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="rollback-confirm-input"
-                    className="text-xs font-medium"
-                  >
-                    Type <code className="bg-gray-200 px-1 rounded">DELETE</code>{" "}
-                    to confirm:
-                  </Label>
-                  <Input
-                    id="rollback-confirm-input"
-                    value={rollbackInput}
-                    onChange={function (e) {
-                      setRollbackInput(e.target.value);
-                    }}
-                    placeholder="Type DELETE to confirm"
-                    className="h-9 text-sm"
-                  />
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel
-                onClick={function () {
-                  setRollbackInput("");
-                }}
-              >
-                Cancel
-              </AlertDialogCancel>
+        {/* Rollback button — admin/registrar/superuser only */}
+        {!isFacultyView && (
+          <AlertDialog
+            open={rollbackConfirmOpen}
+            onOpenChange={setRollbackConfirmOpen}
+          >
+            <AlertDialogTrigger asChild>
               <Button
-                onClick={handleRollback}
-                disabled={rollbackInput !== "DELETE" || isRollingBack}
-                className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white"
+                variant="destructive"
+                size="sm"
+                disabled={total === 0 || isRollingBack}
+                className="flex items-center gap-1.5"
+                title={
+                  isFilteredRollback
+                    ? "Rollback only the currently filtered grades"
+                    : "Rollback all grades in this session"
+                }
               >
                 {isRollingBack ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Deleting...
-                  </>
-                ) : isFilteredRollback ? (
-                  "Yes, Delete Filtered Records"
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  "Yes, Delete All Records"
+                  <Trash2 className="h-3.5 w-3.5" />
                 )}
+                {isRollingBack
+                  ? "Rolling back..."
+                  : isFilteredRollback
+                    ? "Rollback Filtered"
+                    : "Rollback Upload"}
               </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  Confirm Rollback
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    You are about to <strong>permanently delete</strong>{" "}
+                    {isFilteredRollback ? (
+                      <>
+                        the <strong className="text-gray-800">filtered</strong>{" "}
+                        grade records
+                      </>
+                    ) : (
+                      <>
+                        all grade records
+                      </>
+                    )}{" "}
+                    uploaded by{" "}
+                    <strong className="text-gray-800">{facultyName}</strong>{" "}
+                    during this session.
+                  </p>
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-xs space-y-1">
+                    <p>
+                      <strong>Session:</strong>{" "}
+                      {formatDateTime(session.startedAt)}
+                    </p>
+                    <p>
+                      <strong>Records to delete:</strong> {total}
+                    </p>
+                    <p>
+                      <strong>Term:</strong>{" "}
+                      {academicYear.replace("AY_", "AY ").replace("_", "-")} /{" "}
+                      {semester}
+                    </p>
+                    {isFilteredRollback && (
+                      <p>
+                        <strong>Active filters:</strong>{" "}
+                        {[
+                          courseCodeFilter !== "all"
+                            ? `Code: ${courseCodeFilter}`
+                            : "",
+                          courseTitleFilter !== "all"
+                            ? `Title: ${courseTitleFilter}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-red-600 font-semibold">
+                    This action cannot be undone.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="rollback-confirm-input"
+                      className="text-xs font-medium"
+                    >
+                      Type{" "}
+                      <code className="bg-gray-200 px-1 rounded">DELETE</code>{" "}
+                      to confirm:
+                    </Label>
+                    <Input
+                      id="rollback-confirm-input"
+                      value={rollbackInput}
+                      onChange={function (e) {
+                        setRollbackInput(e.target.value);
+                      }}
+                      placeholder="Type DELETE to confirm"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  onClick={function () {
+                    setRollbackInput("");
+                  }}
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <Button
+                  onClick={handleRollback}
+                  disabled={rollbackInput !== "DELETE" || isRollingBack}
+                  className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white"
+                >
+                  {isRollingBack ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : isFilteredRollback ? (
+                    "Yes, Delete Filtered Records"
+                  ) : (
+                    "Yes, Delete All Records"
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* ── Filters bar ───────────────────────────────────────────────── */}

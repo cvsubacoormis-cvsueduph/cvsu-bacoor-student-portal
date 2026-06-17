@@ -2,6 +2,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { FacultyMonitoringClient } from "@/components/FacultyMonitoringClient";
 import { getFacultyUploadStatus } from "@/actions/faculty-monitoring";
+import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
 
@@ -64,10 +65,11 @@ export default async function FacultyMonitoringPage({
   // ── Auth check ─────────────────────────────────────────────────────────
   const user = await currentUser();
   const role = user?.publicMetadata?.role as string | undefined;
-  const isAuthorized =
+  const isAdminOrRegistrar =
     role === "admin" || role === "superuser" || role === "registrar";
+  const isFaculty = role === "faculty";
 
-  if (!isAuthorized) {
+  if (!isAdminOrRegistrar && !isFaculty) {
     return (
       <div className="p-4 m-4 mt-0 bg-white rounded-md flex items-center justify-center h-64">
         <p className="text-gray-500">
@@ -75,6 +77,20 @@ export default async function FacultyMonitoringPage({
         </p>
       </div>
     );
+  }
+
+  // ── Resolve faculty User record for faculty self-view ──────────────────
+  let currentFacultyId: string | null = null;
+
+  if (isFaculty && user) {
+    const clerkUsername = user.username;
+    if (clerkUsername) {
+      const facultyRecord = await prisma.user.findFirst({
+        where: { username: clerkUsername, role: "faculty" },
+        select: { id: true },
+      });
+      currentFacultyId = facultyRecord?.id ?? null;
+    }
   }
 
   // ── Parse & validate searchParams ──────────────────────────────────────
@@ -118,6 +134,9 @@ export default async function FacultyMonitoringPage({
         pageSize,
         search,
         status,
+        ...(isFaculty && currentFacultyId
+          ? { facultyId: currentFacultyId }
+          : {}),
       });
     } catch (error) {
       console.error("Error fetching faculty monitoring data:", error);
@@ -133,17 +152,20 @@ export default async function FacultyMonitoringPage({
       <SignedIn>
         <div className="bg-white p-4 rounded-md m-4 mt-0">
           <h2 className="text-lg font-semibold mb-1">
-            Faculty Upload Monitoring
+            {isFaculty ? "My Uploaded Grades" : "Faculty Upload Monitoring"}
           </h2>
           <p className="text-sm text-gray-500 mb-6">
-            Monitor which faculties have uploaded grades for specific academic
-            terms.
+            {isFaculty
+              ? "View your uploaded grades for specific academic terms."
+              : "Monitor which faculties have uploaded grades for specific academic terms."}
           </p>
           <FacultyMonitoringClient
             data={items}
             total={total}
             page={page}
             pageSize={pageSize}
+            isFacultyView={isFaculty}
+            currentFacultyId={currentFacultyId}
           />
         </div>
       </SignedIn>
