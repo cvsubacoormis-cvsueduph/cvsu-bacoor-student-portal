@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     const { studentNumber: validStudentNumber, academicYear: validAcademicYear, semester: validSemester } = validationResult.data;
 
     // Authorization - Role-based access control
-    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
 
     // Students can only view their own grades
     if (role === "student") {
@@ -140,7 +140,7 @@ export async function PATCH(request: Request) {
     }
 
     // Authorization - Only admin, superuser, and registrar can edit grades
-    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
     const allowedRoles = ["admin", "superuser", "registrar"];
 
     if (!role || !allowedRoles.includes(role)) {
@@ -246,7 +246,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
     const allowedRoles = ["admin", "superuser", "registrar"];
     if (!role || !allowedRoles.includes(role)) {
       return NextResponse.json(
@@ -333,7 +333,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
     const allowedRoles = ["admin", "superuser", "registrar"];
     if (!role || !allowedRoles.includes(role)) {
       return NextResponse.json(

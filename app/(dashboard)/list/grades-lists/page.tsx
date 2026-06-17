@@ -11,7 +11,14 @@ import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 // Input validation schema
 const searchParamsSchema = z.object({
   page: z.coerce.number().int().positive().max(10000).optional().default(1),
-  pageSize: z.coerce.number().int().positive().min(1).max(100).optional().default(10),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(1)
+    .max(100)
+    .optional()
+    .default(10),
   search: z.string().max(100).optional().default(""),
 });
 
@@ -30,13 +37,13 @@ async function getData({ page, pageSize, search }: GetDataParams): Promise<{
   // Build search filter with sanitized input
   const searchFilter = search
     ? {
-      OR: [
-        { studentNumber: { contains: search, mode: "insensitive" as const } },
-        { firstName: { contains: search, mode: "insensitive" as const } },
-        { lastName: { contains: search, mode: "insensitive" as const } },
-        { email: { contains: search, mode: "insensitive" as const } },
-      ],
-    }
+        OR: [
+          { studentNumber: { contains: search, mode: "insensitive" as const } },
+          { firstName: { contains: search, mode: "insensitive" as const } },
+          { lastName: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
     : {};
 
   // Get total count for pagination
@@ -93,7 +100,7 @@ export default async function GradesListsPage({
   }
   const role = (user?.publicMetadata as { role?: string })?.role;
 
-  const allowedRoles = ["admin", "faculty", "registrar"];
+  const allowedRoles = ["admin", "superuser", "registrar"];
   if (!allowedRoles.includes(role || "")) {
     redirect("/");
   }
@@ -108,9 +115,13 @@ export default async function GradesListsPage({
       return (
         <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
           <div className="text-center p-8">
-            <h2 className="text-xl font-bold text-red-600">Rate Limit Exceeded</h2>
+            <h2 className="text-xl font-bold text-red-600">
+              Rate Limit Exceeded
+            </h2>
             <p className="text-gray-600 mt-2">{error.message}</p>
-            <p className="text-sm text-gray-500 mt-4">Please try again in a moment.</p>
+            <p className="text-sm text-gray-500 mt-4">
+              Please try again in a moment.
+            </p>
           </div>
         </div>
       );
@@ -153,7 +164,9 @@ export default async function GradesListsPage({
     return (
       <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
         <div className="text-center p-8">
-          <h2 className="text-xl font-bold text-red-600">Error Loading Grades</h2>
+          <h2 className="text-xl font-bold text-red-600">
+            Error Loading Grades
+          </h2>
           <p className="text-gray-600 mt-2">
             Failed to load the grades list. Please try again later.
           </p>
