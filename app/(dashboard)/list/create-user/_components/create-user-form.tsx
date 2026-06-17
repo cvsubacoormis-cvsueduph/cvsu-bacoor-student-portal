@@ -30,12 +30,23 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import toast from "react-hot-toast";
-import { Loader2, Mail, Phone, MapPin } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Download, Copy, Check, AlertTriangle } from "lucide-react";
 import { createUser } from "@/actions/user/user-action";
 import { createUserSchema, type CreateUserFormValues } from "@/schemas/user-schema";
+import * as XLSX from "xlsx";
+
+interface CreatedUserResult {
+  username: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  generatedPassword: string;
+}
 
 export function CreateUserForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [createdUserResult, setCreatedUserResult] = useState<CreatedUserResult | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
@@ -76,12 +87,60 @@ export function CreateUserForm() {
         `User ${values.firstName} ${values.lastName} created successfully!`
       );
 
+      // Store the generated password result for display/download
+      if (result.generatedPassword) {
+        setCreatedUserResult({
+          username: result.user.username,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          email: result.user.email ?? undefined,
+          generatedPassword: result.generatedPassword,
+        });
+      }
+
       form.reset();
     } catch (error) {
       toast.error("Failed to create user. Please try again.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopyPassword = async () => {
+    if (!createdUserResult) return;
+    try {
+      await navigator.clipboard.writeText(createdUserResult.generatedPassword);
+      setPasswordCopied(true);
+      toast.success("Password copied to clipboard!");
+      setTimeout(() => setPasswordCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy password.");
+    }
+  };
+
+  const handleDownloadCredentials = () => {
+    if (!createdUserResult) return;
+    const data = [
+      {
+        Username: createdUserResult.username,
+        "First Name": createdUserResult.firstName,
+        "Last Name": createdUserResult.lastName,
+        Email: createdUserResult.email || "",
+        Password: createdUserResult.generatedPassword,
+      },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Credentials");
+    XLSX.writeFile(
+      workbook,
+      `credentials-${createdUserResult.username}.xlsx`
+    );
+  };
+
+  const handleCreateAnother = () => {
+    setCreatedUserResult(null);
+    setPasswordCopied(false);
   };
 
   return (
@@ -313,6 +372,104 @@ export function CreateUserForm() {
             </div>
           </form>
         </Form>
+
+        {/* Generated Credentials Display */}
+        {createdUserResult && (
+          <div className="mt-8 border-t pt-6">
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-amber-800">
+                    User Created — Save These Credentials
+                  </h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    This generated password will <strong>not</strong> be shown
+                    again. Please copy or download it now.
+                  </p>
+                </div>
+              </div>
+
+              {/* User Info Summary */}
+              <div className="bg-white rounded-md border border-amber-200 p-4 space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Name:</span>{" "}
+                    <span className="font-medium">
+                      {createdUserResult.firstName} {createdUserResult.lastName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Username:</span>{" "}
+                    <span className="font-medium">
+                      {createdUserResult.username}
+                    </span>
+                  </div>
+                  {createdUserResult.email && (
+                    <div className="col-span-2">
+                      <span className="text-gray-500">Email:</span>{" "}
+                      <span className="font-medium">
+                        {createdUserResult.email}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Password Display */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-gray-500 text-sm">Password:</span>
+                  <code className="bg-gray-100 px-3 py-1.5 rounded text-sm font-mono text-gray-900 select-all border border-gray-200">
+                    {createdUserResult.generatedPassword}
+                  </code>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={passwordCopied ? "default" : "outline"}
+                  onClick={handleCopyPassword}
+                  className="text-sm"
+                >
+                  {passwordCopied ? (
+                    <>
+                      <Check className="mr-1.5 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-1.5 h-4 w-4" />
+                      Copy Password
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownloadCredentials}
+                  className="text-sm"
+                >
+                  <Download className="mr-1.5 h-4 w-4" />
+                  Download Credentials (.xlsx)
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCreateAnother}
+                  className="text-sm ml-auto"
+                >
+                  Create Another User
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
