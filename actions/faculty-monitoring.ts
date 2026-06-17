@@ -423,6 +423,7 @@ function buildSession(
 export interface UploadedGradeRecord {
   id: string;
   studentNumber: string;
+  studentName: string;
   courseCode: string;
   courseTitle: string;
   creditUnit: number;
@@ -566,6 +567,12 @@ export async function getFacultyUploadedGrades(
         select: {
           id: true,
           studentNumber: true,
+          student: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
           courseCode: true,
           courseTitle: true,
           creditUnit: true,
@@ -593,6 +600,7 @@ export async function getFacultyUploadedGrades(
     return {
       data: matched.map((g) => ({
         ...g,
+        studentName: `${g.student.lastName}, ${g.student.firstName}`,
         createdAt: g.createdAt.toISOString(),
       })),
       total,

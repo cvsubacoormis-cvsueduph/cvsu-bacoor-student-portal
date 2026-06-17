@@ -489,7 +489,8 @@ export function FacultyGradesDetailPanel({
             <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
-                  <TableHead className="w-[120px]">Student #</TableHead>
+                  <TableHead className="w-[100px]">Student #</TableHead>
+                  <TableHead>Student Name</TableHead>
                   <TableHead className="w-[100px]">Course Code</TableHead>
                   <TableHead>Course Title</TableHead>
                   <TableHead className="w-[72px] text-center">
@@ -506,6 +507,9 @@ export function FacultyGradesDetailPanel({
                     <TableRow key={g.id} className="hover:bg-gray-50">
                       <TableCell className="font-mono text-xs">
                         {g.studentNumber}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium max-w-[160px] truncate">
+                        {g.studentName}
                       </TableCell>
                       <TableCell className="font-mono text-xs font-medium">
                         {g.courseCode}

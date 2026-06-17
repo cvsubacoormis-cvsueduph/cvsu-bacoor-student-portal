@@ -239,7 +239,7 @@ export async function POST(req: Request) {
       grades
         .map((g) => g.studentNumber)
         .filter(Boolean)
-        .map((sn) => String(sn).replace(/-/g, ""))
+        .map((sn) => String(sn).replace(/[-]/g, "").trim())
     ),
   ];
 
@@ -437,7 +437,7 @@ export async function POST(req: Request) {
       } = entry;
 
       const normalizedStudentNumber = studentNumber
-        ? String(studentNumber).replace(/-/g, "")
+        ? String(studentNumber).replace(/[-]/g, "").trim()
         : null;
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedInstructor =
@@ -1003,7 +1003,7 @@ export async function POST(req: Request) {
       } = entry;
 
       const normalizedStudentNumber = studentNumber
-        ? String(studentNumber).replace(/-/g, "")
+        ? String(studentNumber).replace(/[-]/g, "").trim()
         : null;
       const sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);

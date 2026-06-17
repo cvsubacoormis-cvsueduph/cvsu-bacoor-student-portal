@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   // --- Input extraction ---
   const searchParams = request.nextUrl.searchParams;
 
-  let query = searchParams.get("query") || "";
+  let query = (searchParams.get("query") || "").trim();
   // Truncate overly long search strings
   if (query.length > MAX_QUERY_LENGTH) {
     query = query.slice(0, MAX_QUERY_LENGTH);
@@ -74,14 +74,35 @@ export async function GET(request: NextRequest) {
   };
 
   if (query) {
-    whereClause.OR = [
-      { firstName: { contains: query, mode: "insensitive" } },
-      { lastName: { contains: query, mode: "insensitive" } },
+    const tokens = query.split(/\s+/).filter(Boolean);
+
+    // Base: full query on single-field columns (studentNumber, phone, username, address)
+    const singleFieldConditions: Record<string, unknown>[] = [
       { username: { contains: query, mode: "insensitive" } },
       { studentNumber: { contains: query, mode: "insensitive" } },
       { phone: { contains: query, mode: "insensitive" } },
       { address: { contains: query, mode: "insensitive" } },
     ];
+
+    if (tokens.length === 1) {
+      singleFieldConditions.push(
+        { firstName: { contains: query, mode: "insensitive" } },
+        { lastName: { contains: query, mode: "insensitive" } },
+      );
+      whereClause.OR = singleFieldConditions;
+    } else {
+      // Multi-token: cross-field name matching — each token must appear in
+      // firstName OR lastName (handles "danilo borreros", "borreros danilo", etc.)
+      singleFieldConditions.push({
+        AND: tokens.map((token) => ({
+          OR: [
+            { firstName: { contains: token, mode: "insensitive" } },
+            { lastName: { contains: token, mode: "insensitive" } },
+          ],
+        })),
+      });
+      whereClause.OR = singleFieldConditions;
+    }
   }
 
   if (courseParam && courseParam !== "ALL") {
@@ -100,9 +121,6 @@ export async function GET(request: NextRequest) {
 
   if ((whereClause.AND as Record<string, unknown>[]).length === 0) {
     delete whereClause.AND;
-  }
-  if (!query) {
-    delete whereClause.OR;
   }
 
   // --- Database query with hard limit ---

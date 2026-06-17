@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const query = searchParams.get("query") || "";
+  const query = (searchParams.get("query") || "").trim();
   const page = Number(searchParams.get("page")) || 1;
   const limit = Number(searchParams.get("limit")) || 10;
   const course = searchParams.get("course");
@@ -24,15 +24,40 @@ export async function GET(request: NextRequest) {
 
   const whereClause: any = {
     AND: [],
-    OR: [
-      { firstName: { contains: query, mode: "insensitive" } },
-      { lastName: { contains: query, mode: "insensitive" } },
+  };
+
+  if (query) {
+    const tokens = query.split(/\s+/).filter(Boolean);
+
+    // Base: full query on single-field columns (studentNumber, phone, username, address)
+    const singleFieldConditions: any[] = [
       { username: { contains: query, mode: "insensitive" } },
       { studentNumber: { contains: query, mode: "insensitive" } },
       { phone: { contains: query, mode: "insensitive" } },
       { address: { contains: query, mode: "insensitive" } },
-    ],
-  };
+    ];
+
+    // Single token: search across all fields including firstName/lastName
+    if (tokens.length === 1) {
+      singleFieldConditions.push(
+        { firstName: { contains: query, mode: "insensitive" } },
+        { lastName: { contains: query, mode: "insensitive" } },
+      );
+      whereClause.OR = singleFieldConditions;
+    } else {
+      // Multi-token: cross-field name matching — each token must appear in
+      // firstName OR lastName (handles "danilo borreros", "borreros danilo", etc.)
+      singleFieldConditions.push({
+        AND: tokens.map((token) => ({
+          OR: [
+            { firstName: { contains: token, mode: "insensitive" } },
+            { lastName: { contains: token, mode: "insensitive" } },
+          ],
+        })),
+      });
+      whereClause.OR = singleFieldConditions;
+    }
+  }
 
   if (course && course !== "ALL") {
     whereClause.AND.push({ course: course });
@@ -40,13 +65,6 @@ export async function GET(request: NextRequest) {
 
   if (status && status !== "ALL") {
     whereClause.AND.push({ status: status });
-  }
-
-  // If query is empty, remove the OR clause to avoid matching failures on partial empty checks if sensitive, 
-  // but usually empty string contains matches everything. 
-  // However, optimization:
-  if (!query) {
-    delete whereClause.OR;
   }
 
   try {

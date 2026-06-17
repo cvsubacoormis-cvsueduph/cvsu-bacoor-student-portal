@@ -51,7 +51,7 @@ export default function StudentsTable({
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
-        query,
+        query: query.trim(),
         page: page.toString(),
         limit: "10",
       });
