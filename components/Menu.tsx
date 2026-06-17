@@ -156,7 +156,7 @@ export default async function Menu() {
           icon: "/profile.png",
           label: "Create User",
           href: "/list/create-user",
-          visible: ["admin"],
+          visible: ["admin", "superuser"],
         },
         {
           icon: "/subject.png",
