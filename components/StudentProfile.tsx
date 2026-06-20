@@ -37,6 +37,7 @@ import { courseMap, formatMajor } from "@/lib/courses";
 import { StudentCardSkeleton } from "./skeleton/StudentCardSkeleton";
 import { humanizeMajor, humanizeSex, humanizeStatus } from "@/lib/student-utils";
 import { useStudentPagination } from "@/hooks/use-student-pagination";
+import { GradesHiddenMessage } from "@/components/GradesHiddenMessage";
 
 export default function StudentProfile({ data }: { data: Student }) {
   const { user } = useUser();
@@ -79,7 +80,11 @@ export default function StudentProfile({ data }: { data: Student }) {
 
         <CardContent className="grid gap-6 lg:grid-cols-3">
           <div className="order-2 space-y-6 lg:order-1 lg:col-span-2">
-            <GradesSection grades={data.grades} />
+            {"gradesHidden" in data && data.gradesHidden ? (
+              <GradesHiddenMessage />
+            ) : (
+              <GradesSection grades={data.grades} />
+            )}
           </div>
 
           <div className="order-1 space-y-6 lg:order-2">

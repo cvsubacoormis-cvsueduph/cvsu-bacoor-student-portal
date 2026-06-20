@@ -49,6 +49,7 @@ export interface StudentData {
   course: Courses;
   major: Major | null;
   grades: Grade[];
+  gradesHidden?: boolean;
   status: Status;
   email?: string;
   img?: string;
@@ -164,6 +165,7 @@ export type Student = {
   role: Role;
   createdAt: Date;
   grades: Grade[];
+  gradesHidden?: boolean;
   isPasswordSet: boolean;
   isApproved: boolean;
   avatarUrl?: string;

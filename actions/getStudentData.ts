@@ -4,37 +4,45 @@
 import prisma from "@/lib/prisma";
 import { StudentData } from "@/lib/types";
 import { auth } from "@clerk/nextjs/server";
+import { getSetting } from "@/actions/settings";
 
 export async function getStudentData(): Promise<StudentData> {
   try {
     const { userId } = await auth();
     if (!userId) throw new Error("User not authenticated");
 
+    const gradesVisible = await getSetting("GRADES_VISIBLE_TO_STUDENTS");
+    const gradesHidden = gradesVisible === "false";
+
     const student = await prisma.student.findUnique({
       where: { id: userId },
       include: {
-        grades: {
-          include: {
-            subjectOffering: {
+        grades: gradesHidden
+          ? false
+          : {
               include: {
-                curriculum: true,
+                subjectOffering: {
+                  include: {
+                    curriculum: true,
+                  },
+                },
               },
+              orderBy: [
+                { academicYear: "asc" },
+                { semester: "asc" },
+                { courseCode: "asc" },
+              ],
             },
-          },
-          orderBy: [
-            { academicYear: "asc" },
-            { semester: "asc" },
-            { courseCode: "asc" },
-          ],
-        },
       },
     });
 
     if (!student) throw new Error("Student not found");
 
+    const rawGrades = "grades" in student ? student.grades : [];
+
     // Group grades by course code to calculate attempt numbers
-    const gradesByCourse: Record<string, typeof student.grades> = {};
-    student.grades.forEach((grade) => {
+    const gradesByCourse: Record<string, typeof rawGrades> = {};
+    rawGrades.forEach((grade) => {
       if (!gradesByCourse[grade.courseCode]) {
         gradesByCourse[grade.courseCode] = [];
       }
@@ -75,7 +83,7 @@ export async function getStudentData(): Promise<StudentData> {
       phone: student.phone || "",
       course: student.course,
       major: student.major,
-      grades: student.grades.map((grade) => ({
+      grades: rawGrades.map((grade) => ({
         courseCode: grade.courseCode,
         courseTitle:
           grade.subjectOffering?.curriculum.courseTitle || grade.courseTitle,
@@ -91,6 +99,7 @@ export async function getStudentData(): Promise<StudentData> {
         creditUnit: grade.creditUnit,
         createdAt: grade.createdAt,
       })),
+      gradesHidden,
       status: student.status,
       email: student.email || "",
       sex: student.sex,
