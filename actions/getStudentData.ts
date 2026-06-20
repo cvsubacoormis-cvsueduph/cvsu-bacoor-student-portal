@@ -17,28 +17,28 @@ export async function getStudentData(): Promise<StudentData> {
     const student = await prisma.student.findUnique({
       where: { id: userId },
       include: {
-        grades: gradesHidden
-          ? false
-          : {
+        grades: {
+          include: {
+            subjectOffering: {
               include: {
-                subjectOffering: {
-                  include: {
-                    curriculum: true,
-                  },
-                },
+                curriculum: true,
               },
-              orderBy: [
-                { academicYear: "asc" },
-                { semester: "asc" },
-                { courseCode: "asc" },
-              ],
             },
+          },
+          orderBy: [
+            { academicYear: "asc" },
+            { semester: "asc" },
+            { courseCode: "asc" },
+          ],
+        },
       },
     });
 
     if (!student) throw new Error("Student not found");
 
-    const rawGrades = "grades" in student ? student.grades : [];
+    const emptyGrades: typeof student.grades = [];
+
+    const rawGrades = gradesHidden ? emptyGrades : student.grades;
 
     // Group grades by course code to calculate attempt numbers
     const gradesByCourse: Record<string, typeof rawGrades> = {};
