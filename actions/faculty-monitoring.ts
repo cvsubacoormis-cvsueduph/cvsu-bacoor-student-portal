@@ -317,101 +317,233 @@ export async function getFacultyHistory(
     // ── 2. Build name permutations for matching ─────────────────────────
     const perms = buildFacultyNamePermutations(faculty);
 
-    // ── 3. Query GradeLog with a rough Prisma pre-filter ────────────────
-    // We use lastName as the most selective pre-filter; the JS pass refines.
-    // When term is provided, scope the history to the selected term.
-    const gradeLogWhere: Prisma.GradeLogWhereInput = {
-      instructor: { contains: faculty.lastName, mode: "insensitive" },
-    };
-
-    if (academicYear) {
-      gradeLogWhere.academicYear = academicYear;
-    }
-    if (semester) {
-      gradeLogWhere.semester = semester;
+    // ── 3. Branch: term-scoped vs all-time ──────────────────────────────
+    if (academicYear && semester) {
+      return await getTermScopedHistory(faculty, perms, academicYear, semester);
     }
 
-    const logs = await prisma.gradeLog.findMany({
-      where: gradeLogWhere,
-      orderBy: { performedAt: "desc" },
-      take: HISTORY_LOG_LIMIT,
-      select: {
-        id: true,
-        action: true,
-        performedAt: true,
-        instructor: true,
-        studentNumber: true,
-        courseCode: true,
-        courseTitle: true,
-        grade: true,
-        remarks: true,
-      },
-    });
-
-    // ── 4. Refine matches in JS using the full matching logic ───────────
-    const matched = logs.filter((log) =>
-      nameMatchesFaculty(log.instructor, perms),
-    );
-
-    if (matched.length === 0) {
-      return {
-        sessions: [],
-        totalSuccessAllTime: 0,
-        totalFailuresAllTime: 0,
-        successRate: 0,
-        lastUploadAt: null,
-        firstUploadAt: null,
-      };
-    }
-
-    // ── 5. Group into sessions (time-clustered) ─────────────────────────
-    const sorted = [...matched].sort(
-      (a, b) => a.performedAt.getTime() - b.performedAt.getTime(),
-    );
-
-    const sessions: UploadSession[] = [];
-    let currentBucket: typeof sorted = [];
-
-    for (const log of sorted) {
-      if (currentBucket.length === 0) {
-        currentBucket.push(log);
-      } else {
-        const lastTime = currentBucket[currentBucket.length - 1].performedAt.getTime();
-        const gap = log.performedAt.getTime() - lastTime;
-        if (gap <= SESSION_GAP_MS) {
-          currentBucket.push(log);
-        } else {
-          sessions.push(buildSession(currentBucket));
-          currentBucket = [log];
-        }
-      }
-    }
-
-    if (currentBucket.length > 0) {
-      sessions.push(buildSession(currentBucket));
-    }
-
-    // Most recent first
-    sessions.reverse();
-
-    // ── 6. Compute aggregate stats ──────────────────────────────────────
-    const totalSuccess = matched.filter((l) => l.action !== "FAILED").length;
-    const totalFailures = matched.filter((l) => l.action === "FAILED").length;
-    const total = totalSuccess + totalFailures;
-
-    return {
-      sessions,
-      totalSuccessAllTime: totalSuccess,
-      totalFailuresAllTime: totalFailures,
-      successRate: total > 0 ? Math.round((totalSuccess / total) * 100) : 0,
-      lastUploadAt: matched[0]?.performedAt.toISOString() ?? null,
-      firstUploadAt:
-        matched[matched.length - 1]?.performedAt.toISOString() ?? null,
-    };
+    return await getAllTimeHistory(faculty, perms);
   } catch (error) {
     console.error("Failed to fetch faculty history", error);
     throw new Error("Failed to fetch faculty history");
   }
+}
+
+// ── Term-scoped history: uses Grade table to discover upload time windows ───
+
+async function getTermScopedHistory(
+  faculty: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    middleInit: string | null;
+    username: string;
+  },
+  perms: FacultyNamePermutations,
+  academicYear: AcademicYear,
+  semester: Semester,
+): Promise<FacultyUploadHistory> {
+  // Step 1: Find ALL Grade entries attributed to this faculty for this term.
+  // Uses the same dual-match logic as getFacultyUploadStatus (uploadedBy + instructor).
+  const rawNames = Array.from(perms.raw);
+  const instructorFilters = rawNames.map(
+    (n) => ({ instructor: { contains: n, mode: "insensitive" as const } }),
+  );
+  const uploadedByFilters = rawNames.map(
+    (n) => ({ uploadedBy: { contains: n, mode: "insensitive" as const } }),
+  );
+
+  const candidateGrades = await prisma.grade.findMany({
+    where: {
+      academicYear,
+      semester,
+      OR: [
+        { OR: instructorFilters },
+        { OR: uploadedByFilters },
+      ],
+    },
+    select: {
+      createdAt: true,
+      instructor: true,
+      uploadedBy: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // JS-refine: keep only grades actually matching this faculty
+  const attributed = candidateGrades.filter(
+    (g) =>
+      nameMatchesFaculty(g.instructor, perms) ||
+      nameMatchesFaculty(g.uploadedBy ?? "", perms),
+  );
+
+  if (attributed.length === 0) {
+    return {
+      sessions: [],
+      totalSuccessAllTime: 0,
+      totalFailuresAllTime: 0,
+      successRate: 0,
+      lastUploadAt: null,
+      firstUploadAt: null,
+    };
+  }
+
+  // Step 2: Derive time window from attributed grades
+  const minTime = attributed[0].createdAt;
+  const maxTime = attributed[attributed.length - 1].createdAt;
+  const windowStart = new Date(minTime.getTime() - SESSION_GAP_MS);
+  const windowEnd = new Date(maxTime.getTime() + SESSION_GAP_MS);
+
+  // Collect all instructor names seen in attributed grades so we can
+  // include GradeLog entries whose instructor matches those names (even
+  // when they don't directly match the faculty's own name permutations).
+  const attributedInstructorKeys = new Set<string>();
+  for (const g of attributed) {
+    const key = g.instructor.toLowerCase().replace(/\s+/g, " ").trim();
+    if (key) attributedInstructorKeys.add(key);
+  }
+
+  // Step 3: Query GradeLog within the time window for this term
+  const logs = await prisma.gradeLog.findMany({
+    where: {
+      academicYear,
+      semester,
+      performedAt: { gte: windowStart, lte: windowEnd },
+    },
+    orderBy: { performedAt: "asc" },
+    take: HISTORY_LOG_LIMIT,
+    select: {
+      id: true,
+      action: true,
+      performedAt: true,
+      instructor: true,
+      studentNumber: true,
+      courseCode: true,
+      courseTitle: true,
+      grade: true,
+      remarks: true,
+    },
+  });
+
+  // Step 4: Refine — keep logs whose instructor matches either the faculty
+  // directly, or one of the instructor names seen in attributed grades.
+  const matched = logs.filter((log) => {
+    if (nameMatchesFaculty(log.instructor, perms)) return true;
+    const key = log.instructor.toLowerCase().replace(/\s+/g, " ").trim();
+    return attributedInstructorKeys.has(key);
+  });
+
+  return buildHistoryResult(matched);
+}
+
+// ── All-time history: uses instructor name matching only ────────────────────
+
+async function getAllTimeHistory(
+  faculty: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    middleInit: string | null;
+    username: string;
+  },
+  perms: FacultyNamePermutations,
+): Promise<FacultyUploadHistory> {
+  const logs = await prisma.gradeLog.findMany({
+    where: {
+      instructor: { contains: faculty.lastName, mode: "insensitive" },
+    },
+    orderBy: { performedAt: "desc" },
+    take: HISTORY_LOG_LIMIT,
+    select: {
+      id: true,
+      action: true,
+      performedAt: true,
+      instructor: true,
+      studentNumber: true,
+      courseCode: true,
+      courseTitle: true,
+      grade: true,
+      remarks: true,
+    },
+  });
+
+  const matched = logs.filter((log) =>
+    nameMatchesFaculty(log.instructor, perms),
+  );
+
+  return buildHistoryResult(matched);
+}
+
+// ── Shared: build sessions + aggregate stats from matched logs ──────────────
+
+function buildHistoryResult(
+  matched: {
+    id: string;
+    action: string;
+    performedAt: Date;
+    instructor: string;
+    studentNumber: string;
+    courseCode: string;
+    courseTitle: string;
+    grade: string;
+    remarks: string | null;
+  }[],
+): FacultyUploadHistory {
+  if (matched.length === 0) {
+    return {
+      sessions: [],
+      totalSuccessAllTime: 0,
+      totalFailuresAllTime: 0,
+      successRate: 0,
+      lastUploadAt: null,
+      firstUploadAt: null,
+    };
+  }
+
+  // Sort ascending for session clustering
+  const sorted = [...matched].sort(
+    (a, b) => a.performedAt.getTime() - b.performedAt.getTime(),
+  );
+
+  const sessions: UploadSession[] = [];
+  let currentBucket: typeof sorted = [];
+
+  for (const log of sorted) {
+    if (currentBucket.length === 0) {
+      currentBucket.push(log);
+    } else {
+      const lastTime =
+        currentBucket[currentBucket.length - 1].performedAt.getTime();
+      const gap = log.performedAt.getTime() - lastTime;
+      if (gap <= SESSION_GAP_MS) {
+        currentBucket.push(log);
+      } else {
+        sessions.push(buildSession(currentBucket));
+        currentBucket = [log];
+      }
+    }
+  }
+
+  if (currentBucket.length > 0) {
+    sessions.push(buildSession(currentBucket));
+  }
+
+  // Most recent first
+  sessions.reverse();
+
+  const totalSuccess = matched.filter((l) => l.action !== "FAILED").length;
+  const totalFailures = matched.filter((l) => l.action === "FAILED").length;
+  const total = totalSuccess + totalFailures;
+
+  return {
+    sessions,
+    totalSuccessAllTime: totalSuccess,
+    totalFailuresAllTime: totalFailures,
+    successRate: total > 0 ? Math.round((totalSuccess / total) * 100) : 0,
+    lastUploadAt: matched[0]?.performedAt.toISOString() ?? null,
+    firstUploadAt:
+      matched[matched.length - 1]?.performedAt.toISOString() ?? null,
+  };
 }
 
 // ── Session builder ─────────────────────────────────────────────────────────
