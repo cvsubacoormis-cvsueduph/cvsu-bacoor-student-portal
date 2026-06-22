@@ -292,6 +292,8 @@ const SESSION_GAP_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function getFacultyHistory(
   facultyId: string,
+  academicYear?: AcademicYear,
+  semester?: Semester,
 ): Promise<FacultyUploadHistory> {
   await authorizeAccess();
 
@@ -317,10 +319,20 @@ export async function getFacultyHistory(
 
     // ── 3. Query GradeLog with a rough Prisma pre-filter ────────────────
     // We use lastName as the most selective pre-filter; the JS pass refines.
+    // When term is provided, scope the history to the selected term.
+    const gradeLogWhere: Prisma.GradeLogWhereInput = {
+      instructor: { contains: faculty.lastName, mode: "insensitive" },
+    };
+
+    if (academicYear) {
+      gradeLogWhere.academicYear = academicYear;
+    }
+    if (semester) {
+      gradeLogWhere.semester = semester;
+    }
+
     const logs = await prisma.gradeLog.findMany({
-      where: {
-        instructor: { contains: faculty.lastName, mode: "insensitive" },
-      },
+      where: gradeLogWhere,
       orderBy: { performedAt: "desc" },
       take: HISTORY_LOG_LIMIT,
       select: {

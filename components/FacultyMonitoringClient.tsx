@@ -168,7 +168,7 @@ function FacultyHistoryPanel({
     setIsLoading(true);
     setError(null);
 
-    getFacultyHistory(facultyId)
+    getFacultyHistory(facultyId, academicYear, semester)
       .then(function (result) {
         if (!cancelled) {
           setHistory(result);
@@ -186,7 +186,7 @@ function FacultyHistoryPanel({
     return function cleanup() {
       cancelled = true;
     };
-  }, [facultyId]);
+  }, [facultyId, academicYear, semester]);
 
   // Reset expanded session when history reloads
   useEffect(
@@ -235,7 +235,7 @@ function FacultyHistoryPanel({
       {/* Aggregate stats */}
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <span className="text-gray-600">
-          All-time:{" "}
+          {formatAcademicYear(academicYear)}, {formatSemester(semester)}:{" "}
           <strong className="text-green-700">
             {history.totalSuccessAllTime} successful
           </strong>{" "}
