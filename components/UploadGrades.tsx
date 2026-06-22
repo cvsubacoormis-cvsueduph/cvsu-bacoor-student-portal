@@ -110,19 +110,19 @@ const QUALITY_CONFIG: Record<
   { label: string; badgeClass: string; icon: typeof CheckCircle }
 > = {
   exact: {
-    label: "Exact Match",
+    label: "Saved",
     badgeClass:
       "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100",
     icon: CheckCircle,
   },
   fuzzy: {
-    label: "Partial Match",
+    label: "Corrected",
     badgeClass:
       "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100",
     icon: AlertCircle,
   },
   warning: {
-    label: "Warning",
+    label: "Needs Review",
     badgeClass:
       "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100",
     icon: AlertCircle,
@@ -133,12 +133,12 @@ const QUALITY_CONFIG: Record<
     icon: RefreshCcw,
   },
   error: {
-    label: "Failed",
+    label: "Not Saved",
     badgeClass: "bg-red-100 text-red-800 border-red-200 hover:bg-red-100",
     icon: XCircle,
   },
   unchanged: {
-    label: "No Change",
+    label: "Unchanged",
     badgeClass: "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100",
     icon: CheckCircle,
   },
@@ -382,12 +382,12 @@ export function UploadGrades() {
 
     if (validationErrors > 0) {
       const proceed = await Swal.fire({
-        title: "Validation Issues",
-        text: `Found ${validationErrors} records with missing required fields (Student Number, Course Code, or Grade). These will likely fail. Continue?`,
+        title: "Missing Information Detected",
+        text: `${validationErrors} out of ${previewData.length} rows are missing a student number, course code, or grade. These rows will be skipped during upload.\n\nDo you want to continue with the remaining rows?`,
         icon: "warning",
         showCancelButton: true,
-        confirmButtonText: "Yes, proceed",
-        cancelButtonText: "No, cancel",
+        confirmButtonText: "Continue Anyway",
+        cancelButtonText: "Cancel",
       });
 
       if (!proceed.isConfirmed) {
@@ -425,14 +425,14 @@ export function UploadGrades() {
               const errorData = await res.json().catch(() => ({}));
               Swal.fire({
                 icon: "warning",
-                title: "Rate Limit Exceeded",
+                title: "Too Many Uploads",
                 text:
                   errorData.error ||
-                  "Too many upload attempts. Please try again in 15 minutes.",
+                  "You've reached the upload limit. Please wait about 15 minutes before trying again.",
               });
               addLog(
                 "error",
-                "Upload aborted: Rate Limit Exceeded Please wait 15 minutes",
+                "Upload stopped — too many attempts. Please wait 15 minutes before trying again.",
               );
               rateLimitExceeded = true;
               break; // Abort remaining chunks
@@ -466,12 +466,13 @@ export function UploadGrades() {
 
               const parts = [];
               if (successes.length > 0)
-                parts.push(`${successes.length} success`);
+                parts.push(`${successes.length} saved`);
               if (warnings.length > 0)
-                parts.push(`${warnings.length} warnings`);
-              if (failures.length > 0) parts.push(`${failures.length} errors`);
+                parts.push(`${warnings.length} with warnings`);
+              if (failures.length > 0)
+                parts.push(`${failures.length} failed`);
 
-              const message = `Batch ${i + 1}: ${parts.join(", ")}`;
+              const message = `Batch ${i + 1}: ${parts.join(" · ")}`;
 
               if (failures.length > 0) addLog("error", message);
               else if (warnings.length > 0) addLog("warning", message);
@@ -481,7 +482,7 @@ export function UploadGrades() {
         } catch (err: any) {
           if (err.name === "AbortError") throw err;
           console.error(err);
-          addLog("error", `Batch ${i + 1} Network Error`);
+          addLog("error", `Batch ${i + 1}: Connection issue — please check your network and try again`);
         }
 
         completed += chunk.length;
@@ -493,17 +494,58 @@ export function UploadGrades() {
         if (isDryRun) {
           setHasValidated(true);
           clearPersistedState(); // validation complete — clean up
+
+          const successes = uploadResults.filter((r: any) =>
+            r.status.includes("✅"),
+          ).length;
+          const warnings = uploadResults.filter((r: any) =>
+            r.status.includes("⚠️"),
+          ).length;
+          const failures = uploadResults.filter((r: any) =>
+            r.status.includes("❌"),
+          ).length;
+
+          const summaryParts = [`${totalRecords} records checked.`];
+          if (successes > 0)
+            summaryParts.push(`${successes} would be saved without issues.`);
+          if (warnings > 0)
+            summaryParts.push(`${warnings} would be saved with corrections.`);
+          if (failures > 0)
+            summaryParts.push(`${failures} could not be processed.`);
+          summaryParts.push("No changes have been made to the database.");
+
           await Swal.fire({
             icon: "info",
             title: "Validation Complete",
-            text: `checked ${totalRecords} records. Check the results tab for errors/warnings. No changes were made.`,
+            text: summaryParts.join(" "),
           });
         } else {
           clearPersistedState(); // upload complete — clean up
+
+          const successes = uploadResults.filter((r: any) =>
+            r.status.includes("✅"),
+          ).length;
+          const warnings = uploadResults.filter((r: any) =>
+            r.status.includes("⚠️"),
+          ).length;
+          const failures = uploadResults.filter((r: any) =>
+            r.status.includes("❌"),
+          ).length;
+
+          const summaryParts = [`${totalRecords} records processed.`];
+          if (successes > 0)
+            summaryParts.push(`${successes} saved successfully.`);
+          if (warnings > 0)
+            summaryParts.push(`${warnings} saved with corrections.`);
+          if (failures > 0) summaryParts.push(`${failures} could not be saved.`);
+          summaryParts.push(
+            "Check the Results tab below for a detailed breakdown.",
+          );
+
           await Swal.fire({
             icon: "success",
-            title: "Processing Complete",
-            text: `Processed ${totalRecords} records. Check the logs for details.`,
+            title: "Upload Complete",
+            text: summaryParts.join(" "),
           });
         }
       }
@@ -988,7 +1030,7 @@ export function UploadGrades() {
                 </CardTitle>
                 <CardDescription>
                   {isUploading || uploadResults.length > 0
-                    ? "Real-time results of the upload process."
+                    ? "Detailed results from the upload process — use the tabs to filter by status."
                     : `Previewing first ${Math.min(previewData.length, 50)} records of ${previewData.length}.`}
                 </CardDescription>
               </CardHeader>
@@ -998,8 +1040,8 @@ export function UploadGrades() {
                   <div className="flex flex-col">
                     <div className="bg-blue-50/50 p-2 mb-2 rounded text-xs text-center border border-blue-100 text-blue-800">
                       {hasValidated && !isUploading
-                        ? "Validation Mode: No changes were made to the database."
-                        : "Displaying latest results."}
+                        ? "Validation mode — no changes were saved to the database. Review results below, then click Upload to save."
+                        : "Results are updated in real time as each batch is processed."}
                     </div>
 
                     {/* Summary Bar */}
@@ -1046,7 +1088,7 @@ export function UploadGrades() {
                             value="exact"
                             className="text-xs px-2 py-1"
                           >
-                            Exact (
+                            Saved (
                             {
                               uploadResults.filter(
                                 (r) => getMatchQuality(r) === "exact",
@@ -1058,7 +1100,7 @@ export function UploadGrades() {
                             value="fuzzy"
                             className="text-xs px-2 py-1"
                           >
-                            Partial (
+                            Corrected (
                             {
                               uploadResults.filter(
                                 (r) => getMatchQuality(r) === "fuzzy",
@@ -1070,7 +1112,7 @@ export function UploadGrades() {
                             value="warning"
                             className="text-xs px-2 py-1"
                           >
-                            Warning (
+                            Needs Review (
                             {
                               uploadResults.filter(
                                 (r) => getMatchQuality(r) === "warning",
@@ -1094,7 +1136,7 @@ export function UploadGrades() {
                             value="error"
                             className="text-xs px-2 py-1 text-red-600 data-[state=active]:text-red-700"
                           >
-                            Failed (
+                            Not Saved (
                             {
                               uploadResults.filter(
                                 (r) => getMatchQuality(r) === "error",

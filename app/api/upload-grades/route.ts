@@ -107,7 +107,7 @@ function validateCourseCode(rawCode: any): { valid: true; normalized: string } |
   if (!match) {
     return {
       valid: false,
-      error: `Invalid course code format: "${cleanStr}". Expected format like CS101 or MATH204A.`,
+      error: `Invalid course code format: "${cleanStr}". Course codes should look like "CS101" or "MATH204A" (letters followed by numbers).`,
     };
   }
 
@@ -487,7 +487,7 @@ export async function POST(req: Request) {
             results.push({
               identifier: `${firstName} ${lastName}`,
               courseCode: sanitizedCourseCode,
-              status: `❌ Upload rejected: Instructor name '${sanitizedInstructor}' does not match your account.`,
+              status: `❌ Instructor name mismatch: the file lists "${sanitizedInstructor}" but you are signed in as "${userFullName}". Faculty members can only upload under their own name.`,
             });
             failedLogsToCreate.push({
               studentNumber: normalizedStudentNumber || "UNKNOWN",
@@ -563,11 +563,12 @@ export async function POST(req: Request) {
       }
 
       if (!resolvedStudent) {
-        let errorMsg = "Student not found";
+        let errorMsg = "Student not found in the database";
         if (studentByNum && fileFullName) {
-          errorMsg = `Name mismatch: ID belongs to ${studentByNum.firstName} ${studentByNum.lastName}, but file says ${firstName} ${lastName}`;
+          const dbName = `${studentByNum.firstName} ${studentByNum.lastName}`;
+          errorMsg = `Name mismatch: student ID belongs to "${dbName}" but the file lists "${firstName} ${lastName}". Please verify the correct student.`;
         } else if (normalizedStudentNumber && !studentByNum && !studentByName) {
-          errorMsg = `Student # ${normalizedStudentNumber} not found, and name search failed`;
+          errorMsg = `Student ID "${normalizedStudentNumber}" was not found, and searching by name also returned no results. Please check the student number.`;
         }
 
         results.push({
@@ -598,7 +599,7 @@ export async function POST(req: Request) {
         results.push({
           identifier: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode,
-          status: "❌ Missing required fields",
+          status: "❌ Missing required information — both a course code and a grade must be provided",
         });
         failedLogsToCreate.push({
           studentNumber: targetStudent.studentNumber,
@@ -631,7 +632,7 @@ export async function POST(req: Request) {
         results.push({
           identifier: targetStudent.studentNumber,
           courseCode: sanitizedCourseCode,
-          status: "❌ Invalid grade value",
+          status: "❌ Invalid grade value — accepted grades are 1.00–5.00, INC, DRP, or NFE",
         });
         failedLogsToCreate.push({
           studentNumber: targetStudent.studentNumber,
@@ -689,7 +690,7 @@ export async function POST(req: Request) {
             results.push({
               studentNumber: targetStudent.studentNumber,
               courseCode: sanitizedCourseCode,
-              status: `❌ Wrong program: ${studentName} is ${studentProgram} but ${sanitizedCourseCode} belongs to ${subjectProgram} curriculum`,
+              status: `❌ Wrong program — "${studentName}" is enrolled in ${studentProgram}, but "${sanitizedCourseCode}" belongs to the ${subjectProgram} curriculum. This subject cannot be assigned to this student.`,
               studentName,
             });
             failedLogsToCreate.push({
@@ -817,7 +818,7 @@ export async function POST(req: Request) {
           results.push({
             studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
-            status: `❌ Subject not found in any curriculum`,
+            status: `❌ Course code "${sanitizedCourseCode}" was not found in any active curriculum. If this is a valid legacy subject, enable "Allow Legacy / Unmatched Subjects" and try again.`,
           });
 
           failedLogsToCreate.push({
@@ -847,38 +848,38 @@ export async function POST(req: Request) {
 
       let action = "CREATED";
       let statusPrefix = "✅";
-      let statusMsg = "Grade uploaded";
+      let statusMsg = "Successfully saved";
       const finalInstructor = sanitizedInstructor;
 
       if (identificationMethod === "NAME_CORRECTION") {
-        statusMsg = `Grade uploaded (Corrected ID by Name match)`;
+        statusMsg = `Saved with correction — student was matched by name, and their ID record was updated`;
         statusPrefix = "⚠️"; // Warn user we changed the ID
       } else if (identificationMethod === "NAME_RECOVERY") {
-        const reason = normalizedStudentNumber ? "ID invalid" : "ID missing";
-        statusMsg = `Grade uploaded (Found by Name, ${reason})`;
+        const reason = normalizedStudentNumber ? "the provided ID was not found" : "no student ID was provided";
+        statusMsg = `Saved by name match — ${reason}, but the student was identified successfully`;
         statusPrefix = "⚠️";
       } else if (isFuzzyCode && checklistSubject) {
-        statusMsg = `Grade uploaded (Fuzzy Match: ${sanitizedCourseCode} -> ${checklistSubject.courseCode})`;
+        statusMsg = `Course code auto-corrected: "${entry.courseCode}" → "${checklistSubject.courseCode}" (best match found)`;
         statusPrefix = "⚠️";
       } else if (isTitleFallback && checklistSubject) {
-        statusMsg = `Grade uploaded (Corrected Code by Title: ${entry.courseCode || "MISSING"} -> ${checklistSubject.courseCode})`;
+        statusMsg = `Course matched by title — mapped "${entry.courseCode || "missing code"}" to "${checklistSubject.courseCode}"`;
         statusPrefix = "⚠️";
       } else if (isCrossProgramMatch && checklistSubject) {
-        statusMsg = `Grade uploaded (Cross-program: ${checklistSubject.courseCode} from ${checklistSubject.course})`;
+        statusMsg = `Saved from another program — "${checklistSubject.courseCode}" belongs to ${checklistSubject.course}, not the student's program`;
         statusPrefix = "⚠️";
       }
 
       // Credit unit correction warning
       if (creditUnitCorrected && checklistSubject) {
         const curriculumCredits = (checklistSubject.creditLec || 0) + (checklistSubject.creditLab || 0);
-        const suffix = `[Credits corrected: ${Number(creditUnit) || 0} → ${curriculumCredits}]`;
-        statusMsg = `${statusMsg} ${suffix}`;
+        const suffix = ` [credit units adjusted: ${Number(creditUnit) || 0} → ${curriculumCredits}]`;
+        statusMsg = `${statusMsg}${suffix}`;
         statusPrefix = "⚠️";
       }
 
       // Duplicate row in this batch warning
       if (isDuplicated) {
-        statusMsg = `${statusMsg} [Duplicate row — using last entry]`;
+        statusMsg = `${statusMsg} [duplicate in file — last entry was used]`;
         statusPrefix = "⚠️";
       }
 
@@ -891,7 +892,7 @@ export async function POST(req: Request) {
             results.push({
               studentNumber: targetStudent.studentNumber,
               courseCode: sanitizedCourseCode,
-              status: `❌ Cannot overwrite grade uploaded by '${existingGrade.uploadedBy}'`,
+              status: `❌ Cannot overwrite — this grade was originally uploaded by "${existingGrade.uploadedBy}". Only the original uploader or an administrator can modify it.`,
               studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
             });
             continue;
@@ -913,7 +914,7 @@ export async function POST(req: Request) {
           results.push({
             studentNumber: targetStudent.studentNumber,
             courseCode: sanitizedCourseCode,
-            status: "✅ Grade already exists, no changes",
+            status: "✅ Already up to date — no changes were needed",
             studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
           });
           continue;
@@ -924,16 +925,16 @@ export async function POST(req: Request) {
         // Build a descriptive status showing what changed
         const changes: string[] = [];
         if (existingGrade.grade !== standardizedGrade) changes.push("grade");
-        if (existingGrade.reExam !== standardizedReExam) changes.push("reExam");
+        if (existingGrade.reExam !== standardizedReExam) changes.push("re-exam");
         if (existingGrade.remarks !== sanitizedRemarks) changes.push("remarks");
         if (existingGrade.instructor !== finalInstructorName) changes.push("instructor");
 
         statusMsg = changes.length > 0
-          ? `Grade updated (${changes.join(", ")})`
-          : "Grade updated";
+          ? `Updated — changed: ${changes.join(", ")}`
+          : "Updated — minor changes applied";
       } else if (isLegacyMode && !subjectOfferingId) {
         action = "LEGACY_ENTRY";
-        statusMsg = "Legacy Grade uploaded";
+        statusMsg = "Saved without curriculum validation — may need manual review";
         statusPrefix = "⚠️";
       }
 
