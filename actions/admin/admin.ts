@@ -332,7 +332,7 @@ export async function getUserProfile() {
     where: { id: userId },
   });
 
-  if (user && (user.role === Role.faculty || user.role === Role.registrar)) {
+  if (user && (user.role === Role.faculty || user.role === Role.registrar || user.role === Role.registrar_staff)) {
     return {
       ...user,
       role: user.role,
