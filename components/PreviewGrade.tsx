@@ -162,6 +162,7 @@ export default function PreviewGrade({
     const router = useRouter();
     const { user } = useUser();
     const role = user?.publicMetadata?.role as string | undefined;
+    const canEditGrades = role === "admin" || role === "superuser" || role === "registrar";
 
     const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
     const [academicYear, setAcademicYear] = useState("");
@@ -442,7 +443,7 @@ export default function PreviewGrade({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {role !== "faculty" && academicYear && semester && (
+                    {canEditGrades && academicYear && semester && (
                         <Button
                             onClick={handleAddRow}
                             size="sm"
@@ -452,7 +453,7 @@ export default function PreviewGrade({
                             Add Grade
                         </Button>
                     )}
-                    {role !== "faculty" && grades.length > 0 && (
+                    {canEditGrades && grades.length > 0 && (
                         <Button
                             onClick={handleSaveAll}
                             size="sm"
@@ -491,7 +492,7 @@ export default function PreviewGrade({
                                 <TableHead>Remarks</TableHead>
                                 <TableHead>Instructor</TableHead>
                                 <TableHead>Uploaded By</TableHead>
-                                {role !== "faculty" && <TableHead>Actions</TableHead>}
+                                {canEditGrades && <TableHead>Actions</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -593,7 +594,7 @@ export default function PreviewGrade({
                                         )}
                                     </TableCell>
                                     <TableCell>{grade.uploadedBy || "System"}</TableCell>
-                                    {role !== "faculty" && (
+                                    {canEditGrades && (
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <Button

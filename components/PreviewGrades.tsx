@@ -149,6 +149,7 @@ export function PreviewGrades({
   lastName,
   role,
 }: PreviewGradesProps) {
+  const canEditGrades = role === "admin" || role === "superuser" || role === "registrar";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
   const [academicYear, setAcademicYear] = useState<string>("");
@@ -549,7 +550,7 @@ export function PreviewGrades({
                 </SelectContent>
               </Select>
             </div>
-            {role !== "faculty" && academicYear && semester && (
+            {canEditGrades && academicYear && semester && (
               <Button onClick={handleAddRow} size="sm" className="bg-blue-700 hover:bg-blue-600">
                 <PlusIcon className="w-4 h-4 mr-2" /> Add Grade
               </Button>
@@ -584,7 +585,7 @@ export function PreviewGrades({
                   <TableHead className="text-sm">Remarks</TableHead>
                   <TableHead className="text-sm">Instructor</TableHead>
                   <TableHead className="text-sm">Uploaded by</TableHead>
-                  {role !== "faculty" && (
+                      {canEditGrades && (
                     <TableHead className="text-sm">Actions</TableHead>
                   )}
                 </TableRow>
@@ -712,7 +713,7 @@ export function PreviewGrades({
                     </TableCell>
                     <TableCell>{grade.uploadedBy || "System"}</TableCell>
                     <TableCell>
-                      {role !== "faculty" && (
+                  {canEditGrades && (
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => toggleEditRow(index)}
@@ -741,7 +742,7 @@ export function PreviewGrades({
             </Table>
           )}
           <DialogFooter>
-            {role !== "faculty" && (
+            {canEditGrades && (
               <Button
                 className="bg-blue-700 hover:bg-blue-500"
                 type="submit"

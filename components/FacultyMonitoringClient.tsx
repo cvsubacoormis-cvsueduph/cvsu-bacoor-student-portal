@@ -139,6 +139,7 @@ interface FacultyMonitoringClientProps {
   pageSize: number;
   isFacultyView?: boolean;
   currentFacultyId?: string | null;
+  canRollback?: boolean;
 }
 
 // ── Sub-component: Faculty History Panel ────────────────────────────────────
@@ -365,6 +366,7 @@ function FacultyHistoryPanel({
                             semester={semester}
                             session={session}
                             isFacultyView={isFacultyView}
+                            canRollback={canRollback}
                           />
                         </div>
                       </TableCell>
@@ -389,6 +391,7 @@ export function FacultyMonitoringClient({
   pageSize,
   isFacultyView = false,
   currentFacultyId = null,
+  canRollback = !isFacultyView,
 }: FacultyMonitoringClientProps) {
   const router = useRouter();
   const pathname = usePathname();

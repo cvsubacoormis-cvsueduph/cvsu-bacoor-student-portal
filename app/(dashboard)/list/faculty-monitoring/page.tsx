@@ -68,6 +68,7 @@ export default async function FacultyMonitoringPage({
   const isAdminOrRegistrar =
     role === "admin" || role === "superuser" || role === "registrar" || role === "registrar_staff";
   const isFaculty = role === "faculty";
+  const canRollback = role === "admin" || role === "superuser" || role === "registrar";
 
   if (!isAdminOrRegistrar && !isFaculty) {
     return (
@@ -166,6 +167,7 @@ export default async function FacultyMonitoringPage({
             pageSize={pageSize}
             isFacultyView={isFaculty}
             currentFacultyId={currentFacultyId}
+            canRollback={canRollback}
           />
         </div>
       </SignedIn>

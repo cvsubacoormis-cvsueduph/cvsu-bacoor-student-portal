@@ -797,8 +797,8 @@ export async function rollbackFacultyGrades(
   // Only admin, superuser, and registrar can rollback
   const { sessionClaims } = await auth();
   const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-  if (userRole === "faculty") {
-    throw new Error("Forbidden: faculty users cannot perform rollbacks.");
+  if (userRole !== "admin" && userRole !== "superuser" && userRole !== "registrar") {
+    throw new Error("Forbidden: only admin, superuser, and registrar can perform rollbacks.");
   }
 
   try {

@@ -75,6 +75,7 @@ interface FacultyGradesDetailPanelProps {
   semester: Semester;
   session: UploadSession;
   isFacultyView?: boolean;
+  canRollback?: boolean;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ export function FacultyGradesDetailPanel({
   semester,
   session,
   isFacultyView = false,
+  canRollback = !isFacultyView,
 }: FacultyGradesDetailPanelProps) {
   // ── Data state ────────────────────────────────────────────────────────
   const [grades, setGrades] = useState<UploadedGradeRecord[]>([]);
@@ -290,8 +292,8 @@ export function FacultyGradesDetailPanel({
           </span>
         </div>
 
-        {/* Rollback button — admin/registrar/registrar_staff/superuser only */}
-        {!isFacultyView && (
+        {/* Rollback button — admin/registrar/superuser only */}
+        {canRollback && (
           <AlertDialog
             open={rollbackConfirmOpen}
             onOpenChange={setRollbackConfirmOpen}
