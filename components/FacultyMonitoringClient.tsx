@@ -150,12 +150,14 @@ function FacultyHistoryPanel({
   academicYear,
   semester,
   isFacultyView,
+  canRollback,
 }: {
   facultyId: string;
   facultyName: string;
   academicYear: AcademicYear;
   semester: Semester;
   isFacultyView: boolean;
+  canRollback: boolean;
 }) {
   const [history, setHistory] = useState<FacultyUploadHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -771,6 +773,7 @@ export function FacultyMonitoringClient({
                                       academicYear={academicYear as AcademicYear}
                                       semester={semester as Semester}
                                       isFacultyView={isFacultyView}
+                                      canRollback={canRollback}
                                     />
                                   </div>
                                 </TableCell>
