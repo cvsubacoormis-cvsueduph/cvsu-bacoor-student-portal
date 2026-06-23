@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

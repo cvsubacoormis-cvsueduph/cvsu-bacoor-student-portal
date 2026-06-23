@@ -9,7 +9,7 @@ import { AdminEntry, AdminListEntry, UserEntry } from "@/lib/types";
 import { createAdminSchema } from "@/lib/formValidationSchemas";
 import { z } from "zod";
 
-const ALLOWED_ROLES = ["admin", "superuser", "faculty", "registrar"] as const;
+const ALLOWED_ROLES = ["admin", "superuser", "faculty", "registrar", "registrar_staff"] as const;
 
 const BULK_DELETE_ALLOWED_ROLES = [
   "admin",

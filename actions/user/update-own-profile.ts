@@ -5,7 +5,7 @@ import { clerkClient, auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { updateOwnProfileSchema } from "@/schemas/user-schema";
 
-const ALLOWED_ROLES = ["faculty", "registrar"] as const;
+const ALLOWED_ROLES = ["faculty", "registrar", "registrar_staff"] as const;
 
 export async function updateOwnProfile(formData: {
   email?: string;

@@ -39,7 +39,7 @@ export default function PendingApprovalPage() {
 
       if (
         isApproved &&
-        (role === "admin" || role === "faculty" || role === "registrar")
+        (role === "admin" || role === "faculty" || role === "registrar" || role === "registrar_staff")
       ) {
         router.push("/admin");
       }

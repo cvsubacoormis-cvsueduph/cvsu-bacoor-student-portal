@@ -42,6 +42,7 @@ export default function LoginForm({
         case "superuser":
         case "faculty":
         case "registrar":
+        case "registrar_staff":
           router.push("/admin");
           break;
         case "student":

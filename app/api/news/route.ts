@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  if (role !== "admin" && role !== "superuser") {
+  if (role !== "admin" && role !== "superuser" && role !== "registrar_staff") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -66,7 +66,7 @@ export async function PATCH(request: Request) {
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  if (role !== "admin" && role !== "superuser") {
+  if (role !== "admin" && role !== "superuser" && role !== "registrar_staff") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -119,7 +119,7 @@ export async function DELETE(request: Request) {
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  if (role !== "admin" && role !== "superuser") {
+  if (role !== "admin" && role !== "superuser" && role !== "registrar_staff") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -100,7 +100,7 @@ export default async function GradesListsPage({
   }
   const role = (user?.publicMetadata as { role?: string })?.role;
 
-  const allowedRoles = ["admin", "superuser", "registrar"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff"];
   if (!allowedRoles.includes(role || "")) {
     redirect("/");
   }

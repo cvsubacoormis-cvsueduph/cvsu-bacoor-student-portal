@@ -302,7 +302,7 @@ export function NewsAndUpdates() {
               Latest news and updates from university
             </CardDescription>
           </div>
-          {role === "admin" && (
+          {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
             <Button
               className="bg-blue-600 hover:bg-blue-500"
               onClick={() => setIsPostModalOpen(true)}
@@ -333,7 +333,7 @@ export function NewsAndUpdates() {
                     </div>
                     <h3 className="mt-2 text-lg font-bold">{item.title}</h3>
                   </div>
-                  {(role === "admin" || role === "superuser") && (
+                  {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
                     <div className="flex space-x-2">
                       <Button
                         className="bg-blue-600 hover:bg-blue-500"
@@ -395,7 +395,7 @@ export function NewsAndUpdates() {
                     </div>
                     <h3 className="mt-1 text-lg font-medium">{item.title}</h3>
                   </div>
-                  {(role === "admin" || role === "superuser") && (
+                  {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
                     <div className="flex space-x-2">
                       <Button
                         className="bg-blue-600 hover:bg-blue-500"

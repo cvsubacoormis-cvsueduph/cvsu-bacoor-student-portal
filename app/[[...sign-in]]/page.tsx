@@ -24,6 +24,7 @@ const Homepage = () => {
         case "superuser":
         case "faculty":
         case "registrar":
+        case "registrar_staff":
           router.replace("/admin");
           break;
         case "student":

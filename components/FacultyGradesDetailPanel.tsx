@@ -290,7 +290,7 @@ export function FacultyGradesDetailPanel({
           </span>
         </div>
 
-        {/* Rollback button — admin/registrar/superuser only */}
+        {/* Rollback button — admin/registrar/registrar_staff/superuser only */}
         {!isFacultyView && (
           <AlertDialog
             open={rollbackConfirmOpen}

@@ -90,7 +90,7 @@ export default function UpdateUserDialog({ user }: { user: UserEntry }) {
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit {user.role}</DialogTitle>
-          <DialogDescription>Update {user.firstName}'s information</DialogDescription>
+          <DialogDescription>Update {user.firstName}&rsquo;s information</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

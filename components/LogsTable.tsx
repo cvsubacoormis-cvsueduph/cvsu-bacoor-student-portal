@@ -648,7 +648,7 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
                         <DialogTitle>Bulk Edit & Resolve ({selectedLogIds.size} items)</DialogTitle>
                         <DialogDescription>
                             Apply values to all selected logs. Leave fields blank to keep original values.
-                            Clicking "Resolve All" will attempt to resolve all selected logs with these changes.
+                            Clicking &quot;Resolve All&quot; will attempt to resolve all selected logs with these changes.
                         </DialogDescription>
                     </DialogHeader>
                     <Form {...bulkForm}>

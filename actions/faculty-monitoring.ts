@@ -147,7 +147,7 @@ async function authorizeAccess(): Promise<void> {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }

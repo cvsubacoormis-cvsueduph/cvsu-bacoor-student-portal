@@ -139,7 +139,7 @@ function AccessDenied({
             {role === "student" ? (
               <>
                 <p className="text-sm text-slate-500 mb-4">
-                  Grade verification is only available to faculty, registrar, and admin personnel.
+                  Grade verification is only available to faculty, registrar, registrar staff, and admin personnel.
                   Students cannot verify documents through this page.
                 </p>
                 <p className="text-sm text-slate-400 mb-6">
@@ -150,7 +150,7 @@ function AccessDenied({
             ) : (
               <p className="text-sm text-slate-500 mb-6">
                 You do not have permission to access grade verification. Only faculty, registrar,
-                and admin personnel can verify student documents.
+                registrar staff, and admin personnel can verify student documents.
               </p>
             )}
             <a
@@ -254,7 +254,7 @@ function RevokedBanner({ record, dashboardUrl }: { record: any; dashboardUrl: st
           <div>
             <h2 className="text-xl font-bold text-red-800">✗ Verification Revoked</h2>
             <p className="text-sm text-red-700 mt-0.5">
-              This Certificate of Grades has been revoked by the registrar. The grades on this
+              This Certificate of Grades has been revoked by the registrar or registrar staff. The grades on this
               document are no longer considered valid.
             </p>
           </div>
@@ -302,7 +302,7 @@ function ExpiredBanner({ record, dashboardUrl }: { record: any; dashboardUrl: st
 
 function getDashboardUrl(sessionClaims: any): string {
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  if (role && ["admin", "student", "faculty", "registrar", "superuser", "csg"].includes(role)) {
+  if (role && ["admin", "student", "faculty", "registrar", "registrar_staff", "superuser", "csg"].includes(role)) {
     return `/${role}`;
   }
   return "/sign-in";
@@ -340,7 +340,7 @@ export default async function VerifyPage({
     // Not authenticated — middleware will redirect
   }
 
-  const allowedRoles = ["admin", "registrar", "faculty", "superuser"];
+  const allowedRoles = ["admin", "registrar", "registrar_staff", "faculty", "superuser"];
   if (!userRole || !allowedRoles.includes(userRole)) {
     return <AccessDenied isLoggedIn={!!userRole} dashboardUrl={dashboardUrl} role={userRole} />;
   }

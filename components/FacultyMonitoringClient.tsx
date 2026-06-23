@@ -707,7 +707,7 @@ export function FacultyMonitoringClient({
                     </TableHeader>
                     <TableBody>
                       {data.map(function (faculty) {
-                        var isExpanded = expandedFacultyId === faculty.id;
+                        const isExpanded = expandedFacultyId === faculty.id;
                         return (
                           <React.Fragment key={faculty.id}>
                             <TableRow

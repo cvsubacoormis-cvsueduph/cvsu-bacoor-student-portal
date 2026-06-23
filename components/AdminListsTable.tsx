@@ -43,6 +43,7 @@ const ROLE_OPTIONS = [
   { value: "superuser", label: "Superuser" },
   { value: "faculty", label: "Faculty" },
   { value: "registrar", label: "Registrar" },
+  { value: "registrar_staff", label: "Registrar Staff" },
   { value: "csg", label: "CSG" },
 ] as const;
 
@@ -51,6 +52,7 @@ const roleBadgeClass: Record<string, string> = {
   superuser: "bg-purple-100 text-purple-700",
   faculty: "bg-green-100 text-green-700",
   registrar: "bg-yellow-100 text-yellow-700",
+  registrar_staff: "bg-amber-100 text-amber-700",
   csg: "bg-orange-100 text-orange-700",
 };
 

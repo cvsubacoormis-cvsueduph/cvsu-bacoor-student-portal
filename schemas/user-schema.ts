@@ -9,7 +9,7 @@ export const createUserSchema = z.object({
   phone: z.string().min(7, "Phone number is too short").max(20).optional().or(z.literal("")),
   address: z.string().min(5, "Address must be at least 5 characters"),
   sex: z.enum(["MALE", "FEMALE"], { required_error: "Sex is required" }),
-  role: z.enum(["faculty", "registrar"], { required_error: "Role is required" }),
+  role: z.enum(["faculty", "registrar", "registrar_staff"], { required_error: "Role is required" }),
 });
 
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;

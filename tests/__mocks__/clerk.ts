@@ -49,6 +49,10 @@ export function setAuthRegistrar() {
   setAuth({ userId: "registrar-123", role: "registrar" });
 }
 
+export function setAuthRegistrarStaff() {
+  setAuth({ userId: "registrar-staff-123", role: "registrar_staff" });
+}
+
 export function setAuthStudent() {
   setAuth({ userId: "student-123", role: "student" });
 }

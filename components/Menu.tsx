@@ -13,7 +13,7 @@ export default async function Menu() {
           icon: "/home.png",
           label: "Dashboard",
           href: "/admin",
-          visible: ["admin", "superuser", "faculty", "registrar"],
+          visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/home.png",
@@ -31,7 +31,7 @@ export default async function Menu() {
           icon: "/calendar.png",
           label: "Course Curriculum",
           href: "/list/curriculum",
-          visible: ["admin", "superuser", "faculty", "registrar"],
+          visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/calendar.png",
@@ -43,7 +43,7 @@ export default async function Menu() {
           icon: "/student.png",
           label: "Students",
           href: "/list/students",
-          visible: ["admin", "superuser", "registrar", "faculty"],
+          visible: ["admin", "superuser", "registrar", "registrar_staff", "faculty"],
         },
         {
           icon: "/student.png",
@@ -73,7 +73,7 @@ export default async function Menu() {
           icon: "/calendar.png",
           label: "Events",
           href: "/list/events",
-          visible: ["admin", "student", "superuser", "faculty", "registrar"],
+          visible: ["admin", "student", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/result.png",
@@ -91,13 +91,13 @@ export default async function Menu() {
           icon: "/calendar.png",
           label: "Grades Lists",
           href: "/list/grades-lists",
-          visible: ["admin", "superuser", "registrar"],
+          visible: ["admin", "superuser", "registrar", "registrar_staff"],
         },
         {
           icon: "/student.png",
           label: "Faculty Upload Monitoring",
           href: "/list/faculty-monitoring",
-          visible: ["admin", "superuser", "registrar", "faculty"],
+          visible: ["admin", "superuser", "registrar", "registrar_staff", "faculty"],
         },
         {
           icon: "/assignment.png",
@@ -109,13 +109,13 @@ export default async function Menu() {
           icon: "/announcement.png",
           label: "Announcements",
           href: "/list/announcements",
-          visible: ["admin", "student", "superuser", "faculty", "registrar"],
+          visible: ["admin", "student", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/assignment.png",
           label: "News",
           href: "/list/news",
-          visible: ["admin", "superuser", "faculty", "registrar"],
+          visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
       ],
     },
@@ -130,15 +130,15 @@ export default async function Menu() {
         },
         {
           icon: "/profile.png",
-          label: role === "faculty" ? "Faculty Profile" : role === "registrar" ? "Registrar Profile" : "Admin Profile",
+          label: role === "faculty" ? "Faculty Profile" : role === "registrar" ? "Registrar Profile" : role === "registrar_staff" ? "Registrar Staff Profile" : "Admin Profile",
           href: "/list/adminprofile",
-          visible: ["admin", "superuser", "faculty", "registrar"],
+          visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/profile.png",
           label: "Edit Profile",
           href: "/list/adminprofile/edit",
-          visible: ["faculty", "registrar"],
+          visible: ["faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/profile.png",

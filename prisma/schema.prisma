@@ -313,6 +313,7 @@ enum Role {
   superuser
   faculty
   registrar
+  registrar_staff
   csg
 }
 

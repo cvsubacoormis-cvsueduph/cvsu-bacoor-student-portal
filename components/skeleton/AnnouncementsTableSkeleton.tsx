@@ -25,7 +25,7 @@ export default function AnnouncementsTableSkeleton({
             <TableHead className="text-left">Title</TableHead>
             <TableHead className="text-center">Description</TableHead>
             <TableHead className="text-center">Date</TableHead>
-            {(role === "admin" || role === "superuser") && (
+            {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
               <TableHead className="text-center">Actions</TableHead>
             )}
           </TableRow>
@@ -42,7 +42,7 @@ export default function AnnouncementsTableSkeleton({
               <TableCell className="text-center">
                 <Skeleton className="h-4 w-24 mx-auto" />
               </TableCell>
-              {(role === "admin" || role === "superuser") && (
+              {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
                     <Skeleton className="h-8 w-8 rounded" />

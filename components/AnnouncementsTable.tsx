@@ -104,7 +104,7 @@ export default function AnnouncementsTable() {
                   </div>
                 </div>
 
-                {(role === "admin" || role === "superuser") && (
+                {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
                   <div className="w-full flex justify-end gap-2 mt-2">
                     <UpdateAnnouncements announcement={announcement} />
                     <DeleteAnnouncements id={announcement.id} />

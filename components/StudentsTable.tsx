@@ -96,10 +96,10 @@ export default function StudentsTable({
             <TableHead className="hidden md:table-cell text-center">
               Status
             </TableHead>
-            {role === "admin" || role === "registrar" && <TableHead className="hidden lg:table-cell text-center">
+            {role === "admin" || role === "registrar" || role === "registrar_staff" && <TableHead className="hidden lg:table-cell text-center">
               Phone
             </TableHead>}
-            {role === "admin" || role === "registrar" && <TableHead className="hidden lg:table-cell text-center">
+            {role === "admin" || role === "registrar" || role === "registrar_staff" && <TableHead className="hidden lg:table-cell text-center">
               Address
             </TableHead>}
             {(role === "admin" || role === "superuser") && <TableHead>Actions</TableHead>}
@@ -156,10 +156,10 @@ export default function StudentsTable({
                 <TableCell className="hidden md:table-cell text-center">
                   {student.status}
                 </TableCell>
-                {role === "admin" || role === "registrar" ? <TableCell className="hidden lg:table-cell text-center">
+                {role === "admin" || role === "registrar" || role === "registrar_staff" ? <TableCell className="hidden lg:table-cell text-center">
                   {student.phone}
                 </TableCell> : null}
-                {role === "admin" || role === "registrar" ? <TableCell className="hidden lg:table-cell text-center">
+                {role === "admin" || role === "registrar" || role === "registrar_staff" ? <TableCell className="hidden lg:table-cell text-center">
                   {student.address}
                 </TableCell> : null}
                 <TableCell className="text-right">

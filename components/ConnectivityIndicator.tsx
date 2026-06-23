@@ -39,7 +39,7 @@ export default function ConnectivityIndicator() {
                     <WifiOff className="h-16 w-16 text-gray-400 mb-4" />
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">No Internet Connection</h2>
                     <p className="text-gray-500 mb-6">
-                        It looks like you're offline. Please check your internet connection.
+                        It looks like you&apos;re offline. Please check your internet connection.
                     </p>
                     <button
                         onClick={() => window.location.reload()}

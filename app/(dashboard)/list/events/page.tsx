@@ -23,7 +23,7 @@ export default async function EventsLists() {
                 </p>
               </div>
 
-              {(role === "admin" || role === "superuser") && <CreateEvents />}
+              {(role === "admin" || role === "superuser" || role === "registrar_staff") && <CreateEvents />}
             </div>
             <div className="bg-white p-4 rounded-md">
               <EventsTable />

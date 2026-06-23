@@ -112,7 +112,8 @@ export async function getCurriculumChecklistForCourse() {
   if (
     role?.role !== "admin" &&
     role?.role !== "faculty" &&
-    role?.role !== "registrar"
+    role?.role !== "registrar" &&
+    role?.role !== "registrar_staff"
   ) {
     throw new Error("Unauthorized role");
   }
@@ -279,7 +280,8 @@ export async function getCurriculumForExport(course?: string) {
   if (
     role?.role !== "admin" &&
     role?.role !== "faculty" &&
-    role?.role !== "registrar"
+    role?.role !== "registrar" &&
+    role?.role !== "registrar_staff"
   ) {
     throw new Error("Unauthorized role");
   }

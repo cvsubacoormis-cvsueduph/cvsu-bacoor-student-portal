@@ -103,7 +103,7 @@ export default function EventsTable() {
                   </div>
                 </div>
 
-                {(role === "admin" || role === "superuser") && (
+                {(role === "admin" || role === "superuser" || role === "registrar_staff") && (
                   <div className="w-full flex justify-end gap-2 mt-2">
                     <UpdateEvent event={event} />
                     <DeleteEvent id={event.id} />

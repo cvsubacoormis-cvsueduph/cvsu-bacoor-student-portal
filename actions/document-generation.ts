@@ -98,9 +98,9 @@ export async function generateCOGAdminWithRateLimit(
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
 
-  if (role !== "admin" && role !== "faculty" && role !== "registrar") {
+  if (role !== "admin" && role !== "faculty" && role !== "registrar" && role !== "registrar_staff") {
     throw new Error(
-      "Forbidden: Only admins, faculty, and registrar can generate COG",
+      "Forbidden: Only admins, faculty, registrar, and registrar staff can generate COG",
     );
   }
 

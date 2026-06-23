@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,7 @@ export default function CourseScheduleManager() {
     const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
     const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
 
-    async function fetchSchedules() {
+    const fetchSchedules = useCallback(async () => {
         try {
             const params = new URLSearchParams({
                 page: currentPage.toString(),
@@ -79,11 +79,11 @@ export default function CourseScheduleManager() {
             toast.error("Failed to load schedules");
             setSchedules([]);
         }
-    }
+    }, [currentPage, debouncedSearch]);
 
     useEffect(() => {
         fetchSchedules();
-    }, [currentPage, debouncedSearch]);
+    }, [fetchSchedules]);
 
     async function handleSave() {
         if (!course || !dateRange?.from || !startTime || !endTime) {

@@ -182,7 +182,7 @@ export function PreviewGrades({
       }
       fetchAcademicTerms();
     }
-  }, [isDialogOpen, academicTerms.length]);
+  }, [isDialogOpen, academicTerms.length, studentNumber]);
 
 
 

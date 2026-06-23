@@ -70,7 +70,7 @@ export async function searchStudent(
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
@@ -149,7 +149,7 @@ export async function getStudentDetails(
 
   const user = await currentUser();
   const role = (user?.publicMetadata?.role as string) || "";
-  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!allowedRoles.includes(role)) {
     throw new Error("Forbidden");
   }
@@ -349,7 +349,7 @@ export async function checkExsistingGrade({
   if (!userId) throw new Error("Unauthorized");
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }

@@ -47,7 +47,7 @@ export async function storeCogVerification(input: CogVerificationInput) {
 
   if (
     !role ||
-    !["admin", "registrar", "superuser", "student"].includes(role)
+    !["admin", "registrar", "registrar_staff", "superuser", "student"].includes(role)
   ) {
     throw new Error(
       "Forbidden: You do not have permission to generate COG verifications",
@@ -127,7 +127,7 @@ export async function revokeCogVerification(hash: string) {
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role as string | undefined;
 
-  if (!role || !["admin", "registrar", "faculty", "superuser"].includes(role)) {
+  if (!role || !["admin", "registrar", "registrar_staff", "faculty", "superuser"].includes(role)) {
     throw new Error("Forbidden: You do not have permission to revoke verifications");
   }
 

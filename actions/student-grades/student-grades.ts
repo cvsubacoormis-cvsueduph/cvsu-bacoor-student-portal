@@ -48,7 +48,8 @@ export async function getGrades(
       role !== "student" &&
       role !== "admin" &&
       role !== "faculty" &&
-      role !== "registrar"
+      role !== "registrar" &&
+      role !== "registrar_staff"
     ) {
       return {
         data: null,
@@ -143,7 +144,8 @@ export async function getStudentGradesWithReExam(
     role !== "student" &&
     role !== "admin" &&
     role !== "faculty" &&
-    role !== "registrar"
+    role !== "registrar" &&
+    role !== "registrar_staff"
   ) {
     return { student: null, hidden: false, error: "Forbidden" };
   }

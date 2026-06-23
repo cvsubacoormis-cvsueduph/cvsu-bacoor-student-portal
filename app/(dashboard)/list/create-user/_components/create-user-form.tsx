@@ -194,6 +194,7 @@ export function CreateUserForm() {
                         <SelectContent>
                           <SelectItem value="faculty">Faculty</SelectItem>
                           <SelectItem value="registrar">Registrar</SelectItem>
+                          <SelectItem value="registrar_staff">Registrar Staff</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = user.publicMetadata?.role as string;
   const isApproved = user.publicMetadata?.isApproved as boolean;
 
-  if (["admin", "faculty", "registrar"].includes(role)) {
+  if (["admin", "faculty", "registrar", "registrar_staff"].includes(role)) {
     return (
       <div className="h-screen flex overflow-hidden">
         <div className="w-[14%] p-4">
@@ -70,7 +70,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     const endMinutes = endHour * 60 + endMinute + 5;
     const MANILA_OFFSET = 8 * 60; // 8 hours in minutes
     const currentTotalMinutesUTC = nowUTC.getUTCHours() * 60 + nowUTC.getUTCMinutes();
-    let currentMinutes = currentTotalMinutesUTC + MANILA_OFFSET;
+    const currentMinutes = currentTotalMinutesUTC + MANILA_OFFSET;
 
     const manilaDate = new Date(nowUTC.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
     const currentManilaMinutes = manilaDate.getHours() * 60 + manilaDate.getMinutes();

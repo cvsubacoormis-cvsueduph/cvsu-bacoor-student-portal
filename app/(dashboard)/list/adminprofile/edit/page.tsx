@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 export default async function EditProfilePage() {
   const profile = await getUserProfile();
 
-  // Only faculty and registrar should reach this page (middleware enforces it too)
-  if (profile.role !== "faculty" && profile.role !== "registrar") {
+  // Only faculty, registrar, and registrar_staff should reach this page (middleware enforces it too)
+  if (profile.role !== "faculty" && profile.role !== "registrar" && profile.role !== "registrar_staff") {
     redirect("/list/adminprofile");
   }
 
