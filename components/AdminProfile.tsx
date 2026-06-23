@@ -242,6 +242,9 @@ export default function AdminProfileComp() {
                   <SelectItem value="ADMIN">Admin</SelectItem>
                   <SelectItem value="SUPERUSER">Superuser</SelectItem>
                   <SelectItem value="REGISTRAR">Registrar</SelectItem>
+                  <SelectItem value="REGISTRAR_STAFF">
+                    Registrar Staff
+                  </SelectItem>
                   <SelectItem value="FACULTY">Faculty</SelectItem>
                 </SelectContent>
               </Select>

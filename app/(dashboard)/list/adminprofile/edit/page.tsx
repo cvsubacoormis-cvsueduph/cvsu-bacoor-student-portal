@@ -2,9 +2,21 @@ import { getUserProfile } from "@/actions/admin/admin";
 import { EditProfileForm } from "./_components/edit-profile-form";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 
 export default async function EditProfilePage() {
-  const profile = await getUserProfile();
+  const { userId } = await auth();
+  if (!userId) {
+    return <RedirectToSignIn />;
+  }
+
+  let profile;
+  try {
+    profile = await getUserProfile();
+  } catch (err) {
+    console.error("[EditProfilePage] getUserProfile failed:", err);
+    redirect("/list/adminprofile");
+  }
 
   // Only faculty, registrar, and registrar_staff should reach this page (middleware enforces it too)
   if (profile.role !== "faculty" && profile.role !== "registrar" && profile.role !== "registrar_staff") {
