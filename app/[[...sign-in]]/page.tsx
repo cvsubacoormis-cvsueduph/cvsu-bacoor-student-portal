@@ -35,7 +35,9 @@ const Homepage = () => {
     };
 
     if (user && hasAgreedToPrivacy) {
-      redirectByRole(user.publicMetadata.role as string);
+      const metadata = user.publicMetadata as Record<string, any> ?? {};
+      const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase() as string;
+      redirectByRole(role);
     }
   }, [isLoaded, user, hasAgreedToPrivacy, router]);
 

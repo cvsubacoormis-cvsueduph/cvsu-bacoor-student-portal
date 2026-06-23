@@ -27,8 +27,9 @@ export default function PendingApprovalPage() {
     await signOut({ redirectUrl: "/" });
   };
 
-  const isApproved = user?.publicMetadata?.isApproved as boolean;
-  const role = user?.publicMetadata?.role as string;
+  const metadata = (user?.publicMetadata ?? {}) as Record<string, any>;
+  const isApproved = metadata?.isApproved as boolean;
+  const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase() as string;
 
   useEffect(() => {
     if (isLoaded) {

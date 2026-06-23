@@ -22,7 +22,8 @@ export async function getSubjectOfferings({
         throw new Error("Unauthorized");
     }
 
-    const role = (sessionClaims?.metadata as { role?: string })?.role;
+    const metadata = (sessionClaims?.metadata ?? {}) as Record<string, string>;
+    const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase();
     const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
     if (!role || !allowedRoles.includes(role)) {
         throw new Error("Forbidden: insufficient permissions.");

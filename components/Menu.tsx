@@ -4,7 +4,8 @@ import Link from "next/link";
 
 export default async function Menu() {
   const user = await currentUser();
-  const role = user?.publicMetadata.role as string;
+  const metadata = (user?.publicMetadata ?? {}) as Record<string, any>;
+  const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase() as string;
   const menuItems = [
     {
       title: "MENU",

@@ -13,8 +13,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!userId || !user) redirect("/sign-in");
 
-  const role = user.publicMetadata?.role as string;
-  const isApproved = user.publicMetadata?.isApproved as boolean;
+  const metadata = user.publicMetadata as Record<string, any> ?? {};
+  const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase() as string;
+  const isApproved = metadata?.isApproved as boolean;
 
   if (["admin", "faculty", "registrar"].includes(role)) {
     return (

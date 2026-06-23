@@ -32,9 +32,9 @@ export default async function NavBar() {
             {user?.firstName} {user?.lastName}
           </span>
           <span className="text-[10px] text-gray-500 text-right">
-            {user?.publicMetadata.role
-              ? (user.publicMetadata.role as string).charAt(0).toUpperCase() +
-                (user.publicMetadata.role as string).slice(1)
+            {((user?.publicMetadata as any)?.role || (user?.publicMetadata as any)?.enrollmentRole)
+              ? (((user.publicMetadata as any).role || (user.publicMetadata as any).enrollmentRole) as string).charAt(0).toUpperCase() +
+                (((user.publicMetadata as any).role || (user.publicMetadata as any).enrollmentRole) as string).slice(1)
               : "No Role"}
           </span>
         </div>

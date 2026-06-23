@@ -4,14 +4,14 @@ import { routeAccessMap } from "./lib/settings";
 
 export default clerkMiddleware(async (auth, req) => {
   const { sessionClaims } = await auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  // Supports both "role" (portal-native) and "enrollmentRole" (enrollment system)
+  const metadata = (sessionClaims?.metadata as Record<string, string>) ?? {};
+  const rawRole = metadata?.role || metadata?.enrollmentRole;
+  const role = rawRole?.toLowerCase();
   const pathname = req.nextUrl.pathname;
 
   // Allow public routes
-  if (
-    pathname === "/sign-in" ||
-    pathname === "/sign-up"
-  ) {
+  if (pathname === "/sign-in" || pathname === "/sign-up") {
     return NextResponse.next();
   }
 

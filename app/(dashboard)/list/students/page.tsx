@@ -23,7 +23,10 @@ import { allCourses } from "@/lib/utils";
 
 export default function StudentLists() {
   const { user } = useUser();
-  const role = user?.publicMetadata?.role as string;
+  const role = (
+    (user?.publicMetadata as any)?.role ||
+    (user?.publicMetadata as any)?.enrollmentRole
+  )?.toLowerCase() as string;
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [courseFilter, setCourseFilter] = useState("ALL");

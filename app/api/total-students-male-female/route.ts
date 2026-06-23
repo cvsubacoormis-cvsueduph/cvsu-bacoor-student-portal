@@ -10,7 +10,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const metadata = (sessionClaims?.metadata ?? {}) as Record<string, string>;
+  const role = (metadata?.role || metadata?.enrollmentRole)?.toLowerCase();
   const allowedRoles = ["admin", "superuser", "registrar", "faculty"];
   if (!role || !allowedRoles.includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

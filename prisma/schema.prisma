@@ -66,6 +66,10 @@ model Student {
   grades        Grade[]
   isPasswordSet Boolean  @default(false)
   isApproved    Boolean  @default(false)
+
+  /// Maps this portal student to their corresponding User in the enrollment system.
+  /// Set by the bridge sync engine; null means not yet synced.
+  enrollmentUserId String? @unique
 }
 
 model CurriculumChecklist {

@@ -33,7 +33,7 @@ export default function LoginForm({
   const { user, isLoaded } = useUser();
   const router = useRouter();
 
-  const role = user?.publicMetadata.role;
+  const role = ((user?.publicMetadata as any)?.role || (user?.publicMetadata as any)?.enrollmentRole)?.toLowerCase();
 
   const redirectByRole = useCallback(
     (role: string) => {
@@ -66,7 +66,7 @@ export default function LoginForm({
     if (!isLoaded) return;
 
     if (user && hasAgreedToPrivacy) {
-      redirectByRole(user.publicMetadata.role as string);
+      redirectByRole(((user.publicMetadata as any)?.role || (user.publicMetadata as any)?.enrollmentRole)?.toLowerCase() as string);
     }
   }, [isLoaded, user, hasAgreedToPrivacy, redirectByRole]);
 
