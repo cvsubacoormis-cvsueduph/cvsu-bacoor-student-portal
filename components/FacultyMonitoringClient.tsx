@@ -727,9 +727,6 @@ export function FacultyMonitoringClient({
                         <TableHead>Faculty Name</TableHead>
                         <TableHead>Username</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">
-                          Records Uploaded
-                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -774,17 +771,12 @@ export function FacultyMonitoringClient({
                                   </Badge>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {faculty.gradesUploadedCount > 0
-                                  ? faculty.gradesUploadedCount
-                                  : "-"}
-                              </TableCell>
                             </TableRow>
 
                             {/* Expanded history row */}
                             {isExpanded && (
                               <TableRow className="bg-gray-50/70 hover:bg-gray-50/70">
-                                <TableCell colSpan={5} className="p-4">
+                                <TableCell colSpan={4} className="p-4">
                                   <div className="pl-6">
                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                                       Upload History &mdash; {faculty.name}
