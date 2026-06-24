@@ -66,9 +66,13 @@ export default async function FacultyMonitoringPage({
   const user = await currentUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const isAdminOrRegistrar =
-    role === "admin" || role === "superuser" || role === "registrar" || role === "registrar_staff";
+    role === "admin" ||
+    role === "superuser" ||
+    role === "registrar" ||
+    role === "registrar_staff";
   const isFaculty = role === "faculty";
-  const canRollback = role === "admin" || role === "superuser" || role === "registrar";
+  const canRollback =
+    role === "admin" || role === "superuser" || role === "registrar";
 
   if (!isAdminOrRegistrar && !isFaculty) {
     return (

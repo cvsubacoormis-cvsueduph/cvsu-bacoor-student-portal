@@ -344,22 +344,18 @@ async function getTermScopedHistory(
   semester: Semester,
 ): Promise<FacultyUploadHistory> {
   // Step 1: Find ALL Grade entries attributed to this faculty for this term.
-  // Uses the same dual-match logic as getFacultyUploadStatus (uploadedBy + instructor).
-  const rawNames = Array.from(perms.raw);
-  const instructorFilters = rawNames.map(
-    (n) => ({ instructor: { contains: n, mode: "insensitive" as const } }),
-  );
-  const uploadedByFilters = rawNames.map(
-    (n) => ({ uploadedBy: { contains: n, mode: "insensitive" as const } }),
-  );
-
+  // We use a broad Prisma filter (lastName + username) to avoid the fragility
+  // of substring "contains" matching with name permutations. The JS-refine
+  // below does the precise matching using the same logic as getFacultyUploadStatus.
   const candidateGrades = await prisma.grade.findMany({
     where: {
       academicYear,
       semester,
       OR: [
-        { OR: instructorFilters },
-        { OR: uploadedByFilters },
+        { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+        { instructor: { contains: faculty.username, mode: "insensitive" } },
+        { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+        { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
       ],
     },
     select: {
@@ -403,12 +399,26 @@ async function getTermScopedHistory(
     if (key) attributedInstructorKeys.add(key);
   }
 
-  // Step 3: Query GradeLog within the time window for this term
+  // Collect the exact raw instructor values for use in the GradeLog query.
+  const exactInstructors = Array.from(
+    new Set(attributed.map((g) => g.instructor).filter(Boolean)),
+  );
+
+  // Step 3: Query GradeLog within the time window for this term.
+  // Use both a broad time-window filter AND narrow instructor filter so that
+  // the HISTORY_LOG_LIMIT cap doesn't cut off relevant entries.
   const logs = await prisma.gradeLog.findMany({
     where: {
       academicYear,
       semester,
       performedAt: { gte: windowStart, lte: windowEnd },
+      OR: [
+        { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+        { instructor: { contains: faculty.username, mode: "insensitive" } },
+        ...(exactInstructors.length > 0
+          ? [{ instructor: { in: exactInstructors } }]
+          : []),
+      ],
     },
     orderBy: { performedAt: "asc" },
     take: HISTORY_LOG_LIMIT,
@@ -448,9 +458,14 @@ async function getAllTimeHistory(
   },
   perms: FacultyNamePermutations,
 ): Promise<FacultyUploadHistory> {
+  // Use broad filters (lastName + username) to avoid the fragility of
+  // substring matching with specific name permutations.
   const logs = await prisma.gradeLog.findMany({
     where: {
-      instructor: { contains: faculty.lastName, mode: "insensitive" },
+      OR: [
+        { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+        { instructor: { contains: faculty.username, mode: "insensitive" } },
+      ],
     },
     orderBy: { performedAt: "desc" },
     take: HISTORY_LOG_LIMIT,
@@ -647,10 +662,7 @@ export async function getFacultyUploadedGrades(
 
     const perms = buildFacultyNamePermutations(faculty);
 
-    // ── 2. Build raw name array for Prisma OR filter ───────────────────
-    const rawNames = Array.from(perms.raw);
-
-    // ── 3. Build where clause ──────────────────────────────────────────
+    // ── 2. Build where clause ──────────────────────────────────────────
     const sessionStart = new Date(sessionStartedAt);
     const sessionEnd = new Date(sessionEndedAt);
 
@@ -658,22 +670,20 @@ export async function getFacultyUploadedGrades(
     const windowStart = new Date(sessionStart.getTime() - 60_000);
     const windowEnd = new Date(sessionEnd.getTime() + 60_000);
 
-    const instructorFilters = rawNames.map(
-      (n) => ({ instructor: { contains: n, mode: "insensitive" as const } }),
-    );
-
-    const uploadedByFilters = rawNames.map(
-      (n) => ({ uploadedBy: { contains: n, mode: "insensitive" as const } }),
-    );
+    // Use broad filters (lastName + username) instead of fragile raw-name
+    // "contains" matching. JS-refine below handles precise attribution.
+    const nameFilters: Prisma.GradeWhereInput[] = [
+      { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+      { instructor: { contains: faculty.username, mode: "insensitive" } },
+      { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+      { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
+    ];
 
     const where: Prisma.GradeWhereInput = {
       academicYear,
       semester,
       createdAt: { gte: windowStart, lte: windowEnd },
-      OR: [
-        { OR: instructorFilters },
-        { OR: uploadedByFilters },
-      ],
+      OR: nameFilters,
     };
 
     if (courseCode) {
@@ -684,15 +694,12 @@ export async function getFacultyUploadedGrades(
       where.courseTitle = { contains: courseTitle, mode: "insensitive" };
     }
 
-    // ── 4. Get available filters (unfiltered by courseCode/courseTitle) ─
+    // ── 3. Get available filters (unfiltered by courseCode/courseTitle) ─
     const filterWhere: Prisma.GradeWhereInput = {
       academicYear,
       semester,
       createdAt: { gte: windowStart, lte: windowEnd },
-      OR: [
-        { OR: instructorFilters },
-        { OR: uploadedByFilters },
-      ],
+      OR: nameFilters,
     };
 
     const [distinctCodes, distinctTitles] = await Promise.all([
@@ -713,7 +720,7 @@ export async function getFacultyUploadedGrades(
       }),
     ]);
 
-    // ── 5. Query grades with pagination ────────────────────────────────
+    // ── 4. Query grades with pagination ────────────────────────────────
     const [grades, total] = await Promise.all([
       prisma.grade.findMany({
         where,
@@ -743,7 +750,7 @@ export async function getFacultyUploadedGrades(
       prisma.grade.count({ where }),
     ]);
 
-    // ── 6. Post-filter: only keep grades matching the faculty name ─────
+    // ── 5. Post-filter: only keep grades matching the faculty name ─────
     const matched = grades.filter(
       (g) =>
         nameMatchesFaculty(g.instructor, perms) ||
@@ -826,22 +833,18 @@ export async function rollbackFacultyGrades(
     const windowEnd = new Date(sessionEnd.getTime() + 60_000);
 
     // ── 2. Find all grades in the session window ───────────────────────
-    const rawNames = Array.from(perms.raw);
-    const instructorFilters = rawNames.map(
-      (n) => ({ instructor: { contains: n, mode: "insensitive" as const } }),
-    );
-    const uploadedByFilters = rawNames.map(
-      (n) => ({ uploadedBy: { contains: n, mode: "insensitive" as const } }),
-    );
-
+    // Use broad filters (lastName + username) instead of fragile raw-name
+    // "contains" matching. JS-refine below handles precise attribution.
     const candidateGrades = await prisma.grade.findMany({
       where: {
         academicYear,
         semester,
         createdAt: { gte: windowStart, lte: windowEnd },
         OR: [
-          { OR: instructorFilters },
-          { OR: uploadedByFilters },
+          { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+          { instructor: { contains: faculty.username, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
         ],
         ...(courseCode ? { courseCode: { equals: courseCode, mode: "insensitive" } } : {}),
         ...(courseTitle ? { courseTitle: { contains: courseTitle, mode: "insensitive" } } : {}),
