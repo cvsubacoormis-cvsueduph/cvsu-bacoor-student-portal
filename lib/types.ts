@@ -79,15 +79,15 @@ export interface CurriculumItem {
 export interface Subject extends CurriculumItem {
   grade: string;
   completion:
-  | "Completed"
-  | "Enrolled"
-  | "Failed"
-  | "Not Taken"
-  | "Dropped"
-  | "Con. Failure"
-  | "Unsatisfactory"
-  | "Satisfactory"
-  | "Lack of Req.";
+    | "Completed"
+    | "Enrolled"
+    | "Failed"
+    | "Not Taken"
+    | "Dropped"
+    | "Con. Failure"
+    | "Unsatisfactory"
+    | "Satisfactory"
+    | "Lack of Req.";
   remarks: string;
   retaken?: string;
   retakeCount: number;

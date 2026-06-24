@@ -62,7 +62,7 @@ export async function searchStudent(
   query: string,
   searchType: "studentNumber" | "name",
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<SearchResponse> {
   const { userId, sessionClaims } = await auth();
   if (!userId) {
@@ -70,7 +70,13 @@ export async function searchStudent(
   }
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
+  const allowedRoles = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+    "faculty",
+  ];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
@@ -83,27 +89,27 @@ export async function searchStudent(
   const whereClause =
     searchType === "studentNumber"
       ? {
-        studentNumber: {
-          contains: query,
-          mode: "insensitive" as const,
-        },
-      }
+          studentNumber: {
+            contains: query,
+            mode: "insensitive" as const,
+          },
+        }
       : {
-        OR: [
-          {
-            firstName: {
-              contains: query,
-              mode: "insensitive" as const,
+          OR: [
+            {
+              firstName: {
+                contains: query,
+                mode: "insensitive" as const,
+              },
             },
-          },
-          {
-            lastName: {
-              contains: query,
-              mode: "insensitive" as const,
+            {
+              lastName: {
+                contains: query,
+                mode: "insensitive" as const,
+              },
             },
-          },
-        ],
-      };
+          ],
+        };
 
   const [total, results] = await prisma.$transaction([
     prisma.student.count({ where: whereClause }),
@@ -118,7 +124,7 @@ export async function searchStudent(
       },
       skip,
       take: limit,
-      orderBy: { lastName: 'asc' },
+      orderBy: { lastName: "asc" },
     }),
   ]);
 
@@ -142,14 +148,20 @@ export async function searchStudent(
 }
 
 export async function getStudentDetails(
-  studentNumber: string
+  studentNumber: string,
 ): Promise<StudentDetails> {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
   const user = await currentUser();
   const role = (user?.publicMetadata?.role as string) || "";
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
+  const allowedRoles = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+    "faculty",
+  ];
   if (!allowedRoles.includes(role)) {
     throw new Error("Forbidden");
   }
@@ -214,7 +226,9 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
   const isUploadEnabled = settingValue?.value !== "false";
 
   if (!isUploadEnabled && !isAdmin) {
-    throw new Error("Uploading grades is currently disabled by administrators.");
+    throw new Error(
+      "Uploading grades is currently disabled by administrators.",
+    );
   }
 
   // Validate required fields
@@ -349,7 +363,13 @@ export async function checkExsistingGrade({
   if (!userId) throw new Error("Unauthorized");
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
+  const allowedRoles = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+    "faculty",
+  ];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
