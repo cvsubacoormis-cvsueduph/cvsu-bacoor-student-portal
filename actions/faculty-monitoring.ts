@@ -429,14 +429,19 @@ async function getTermScopedHistory(
     if (key) attributedInstructorKeys.add(key);
   }
 
-  // Step 3: Query ALL GradeLog entries for this term (no time window).
-  // Sort by performedAt desc so the most recent entries are prioritized
-  // if the HISTORY_LOG_LIMIT cap is reached. No Prisma-level instructor
-  // filter — we fetch all logs for the term and JS-refine below.
+  // Step 3: Query GradeLog entries for this term, scoped to this faculty.
+  // We use broad instructor filters (lastName + username) at the Prisma level
+  // so that the HISTORY_LOG_LIMIT cap doesn't cut off older entries belonging
+  // to this faculty when there are many logs from other faculties in the same
+  // term. JS-refine below does the precise attribution.
   const logs = await prisma.gradeLog.findMany({
     where: {
       academicYear,
       semester,
+      OR: [
+        { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+        { instructor: { contains: faculty.username, mode: "insensitive" } },
+      ],
     },
     orderBy: { performedAt: "desc" },
     take: HISTORY_LOG_LIMIT,
