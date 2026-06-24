@@ -33,7 +33,11 @@ export interface UploadSession {
   startedAt: string;
   /** ISO-8601 timestamp when this session ended (last entry in the bucket). */
   endedAt: string;
-  /** Number of successful GradeLog actions in this session. */
+  /** Number of new Grade records created in this session (CREATED, LEGACY_ENTRY, MANUAL_ENTRY). */
+  createdCount: number;
+  /** Number of existing Grade records updated in this session (UPDATED). */
+  updatedCount: number;
+  /** Number of successful actions (createdCount + updatedCount). */
   successCount: number;
   /** Number of FAILED GradeLog actions in this session. */
   failureCount: number;
@@ -44,12 +48,19 @@ export interface UploadSession {
 /** Full upload history for a single faculty member. */
 export interface FacultyUploadHistory {
   sessions: UploadSession[];
+  totalCreatedAllTime: number;
+  totalUpdatedAllTime: number;
+  /** Total successful actions (totalCreatedAllTime + totalUpdatedAllTime). */
   totalSuccessAllTime: number;
   totalFailuresAllTime: number;
   /** Success rate as a percentage (0-100). */
   successRate: number;
   lastUploadAt: string | null;
   firstUploadAt: string | null;
+  /** Number of Grade records currently in the database for this faculty/term.
+   *  This may differ from totalSuccessAllTime because GradeLog counts upload
+   *  actions (including FAILED and UPDATED), while this counts actual records. */
+  currentRecordsCount: number;
 }
 
 /** All the name variants used to match a faculty record against loose string fields. */
@@ -357,6 +368,7 @@ async function getTermScopedHistory(
   // We use a broad Prisma filter (lastName + username) to avoid the fragility
   // of substring "contains" matching with name permutations. The JS-refine
   // below does the precise matching using the same logic as getFacultyUploadStatus.
+  // We fetch all fields needed for the GradeLog fallback (Step 3b).
   const candidateGrades = await prisma.grade.findMany({
     where: {
       academicYear,
@@ -369,9 +381,15 @@ async function getTermScopedHistory(
       ],
     },
     select: {
+      id: true,
       createdAt: true,
       instructor: true,
       uploadedBy: true,
+      studentNumber: true,
+      courseCode: true,
+      courseTitle: true,
+      grade: true,
+      remarks: true,
     },
     orderBy: { createdAt: "asc" },
   });
@@ -383,14 +401,19 @@ async function getTermScopedHistory(
       nameMatchesFaculty(g.uploadedBy ?? "", perms),
   );
 
+  const currentRecordsCount = attributed.length;
+
   if (attributed.length === 0) {
     return {
       sessions: [],
+      totalCreatedAllTime: 0,
+      totalUpdatedAllTime: 0,
       totalSuccessAllTime: 0,
       totalFailuresAllTime: 0,
       successRate: 0,
       lastUploadAt: null,
       firstUploadAt: null,
+      currentRecordsCount: 0,
     };
   }
 
@@ -442,7 +465,26 @@ async function getTermScopedHistory(
     return attributedInstructorKeys.has(key);
   });
 
-  return buildHistoryResult(matched);
+  // Step 3b (FALLBACK): If no GradeLog entries were found but Grade records
+  // exist, build synthetic sessions from the Grade records themselves. This
+  // handles cases where grades were imported through migration/seed/direct
+  // import without creating GradeLog entries.
+  if (matched.length === 0 && attributed.length > 0) {
+    const syntheticLogs = attributed.map((g) => ({
+      id: g.id,
+      action: "CREATED",
+      performedAt: g.createdAt,
+      instructor: g.instructor,
+      studentNumber: g.studentNumber,
+      courseCode: g.courseCode,
+      courseTitle: g.courseTitle,
+      grade: g.grade,
+      remarks: g.remarks,
+    }));
+    return buildHistoryResult(syntheticLogs, currentRecordsCount);
+  }
+
+  return buildHistoryResult(matched, currentRecordsCount);
 }
 
 // ── All-time history: uses instructor name matching only ────────────────────
@@ -485,7 +527,8 @@ async function getAllTimeHistory(
     nameMatchesFaculty(log.instructor, perms),
   );
 
-  return buildHistoryResult(matched);
+  // currentRecordsCount is not available in all-time mode (no term filter)
+  return buildHistoryResult(matched, 0);
 }
 
 // ── Shared: build sessions + aggregate stats from matched logs ──────────────
@@ -502,15 +545,19 @@ function buildHistoryResult(
     grade: string;
     remarks: string | null;
   }[],
+  currentRecordsCount: number = 0,
 ): FacultyUploadHistory {
   if (matched.length === 0) {
     return {
       sessions: [],
+      totalCreatedAllTime: 0,
+      totalUpdatedAllTime: 0,
       totalSuccessAllTime: 0,
       totalFailuresAllTime: 0,
       successRate: 0,
       lastUploadAt: null,
       firstUploadAt: null,
+      currentRecordsCount,
     };
   }
 
@@ -545,18 +592,24 @@ function buildHistoryResult(
   // Most recent first
   sessions.reverse();
 
-  const totalSuccess = matched.filter((l) => l.action !== "FAILED").length;
+  const totalUpdated = matched.filter((l) => l.action === "UPDATED").length;
   const totalFailures = matched.filter((l) => l.action === "FAILED").length;
+  // Created = everything that's not UPDATED and not FAILED
+  const totalCreated = matched.length - totalUpdated - totalFailures;
+  const totalSuccess = totalCreated + totalUpdated;
   const total = totalSuccess + totalFailures;
 
   return {
     sessions,
+    totalCreatedAllTime: totalCreated,
+    totalUpdatedAllTime: totalUpdated,
     totalSuccessAllTime: totalSuccess,
     totalFailuresAllTime: totalFailures,
     successRate: total > 0 ? Math.round((totalSuccess / total) * 100) : 0,
     lastUploadAt: matched[0]?.performedAt.toISOString() ?? null,
     firstUploadAt:
       matched[matched.length - 1]?.performedAt.toISOString() ?? null,
+    currentRecordsCount,
   };
 }
 
@@ -569,8 +622,15 @@ function buildSession(
     performedAt: Date;
   }[],
 ): UploadSession {
-  const successCount = bucket.filter((l) => l.action !== "FAILED").length;
-  const failureCount = bucket.filter((l) => l.action === "FAILED").length;
+  const isUpdated = (a: string) => a === "UPDATED";
+  const isFailed = (a: string) => a === "FAILED";
+
+  const updatedCount = bucket.filter((l) => isUpdated(l.action)).length;
+  const failureCount = bucket.filter((l) => isFailed(l.action)).length;
+  // "Created" = everything that's not FAILED and not UPDATED
+  // (covers CREATED, LEGACY_ENTRY, MANUAL_ENTRY, ROLLBACK, etc.)
+  const createdCount = bucket.length - updatedCount - failureCount;
+  const successCount = createdCount + updatedCount;
 
   const lastEntry = bucket[bucket.length - 1];
 
@@ -578,6 +638,8 @@ function buildSession(
     id: `session-${bucket[0].performedAt.getTime()}`,
     startedAt: bucket[0].performedAt.toISOString(),
     endedAt: lastEntry.performedAt.toISOString(),
+    createdCount,
+    updatedCount,
     successCount,
     failureCount,
     totalCount: bucket.length,

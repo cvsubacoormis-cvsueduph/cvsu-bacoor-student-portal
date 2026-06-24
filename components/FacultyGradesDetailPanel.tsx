@@ -45,6 +45,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  RefreshCw,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -284,7 +285,11 @@ export function FacultyGradesDetailPanel({
           <span className="text-gray-300">|</span>
           <span className="inline-flex items-center gap-1 text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            {session.successCount} successful
+            {session.createdCount} created
+          </span>
+          <span className="inline-flex items-center gap-1 text-amber-600">
+            <RefreshCw className="h-3.5 w-3.5" />
+            {session.updatedCount} updated
           </span>
           <span className="inline-flex items-center gap-1 text-red-600">
             <AlertTriangle className="h-3.5 w-3.5" />

@@ -47,6 +47,7 @@ import {
   ChevronDown,
   Clock,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -239,8 +240,20 @@ function FacultyHistoryPanel({
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <span className="text-gray-600">
           {formatAcademicYear(academicYear)}, {formatSemester(semester)}:{" "}
+          {history.currentRecordsCount > 0 && (
+            <>
+              <strong className="text-blue-700">
+                {history.currentRecordsCount} records
+              </strong>{" "}
+              &bull;{" "}
+            </>
+          )}
           <strong className="text-green-700">
-            {history.totalSuccessAllTime} successful
+            {history.totalCreatedAllTime} created
+          </strong>{" "}
+          &bull;{" "}
+          <strong className="text-amber-600">
+            {history.totalUpdatedAllTime} updated
           </strong>{" "}
           &bull;{" "}
           <strong className="text-red-600">
@@ -267,19 +280,25 @@ function FacultyHistoryPanel({
             <TableRow>
               <TableHead className="w-8" />
               <TableHead className="w-40">Date</TableHead>
-              <TableHead className="w-20 text-center">
+              <TableHead className="w-16 text-center">
                 <span className="inline-flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3 text-green-600" />
-                  Success
+                  Created
                 </span>
               </TableHead>
-              <TableHead className="w-20 text-center">
+              <TableHead className="w-16 text-center">
+                <span className="inline-flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3 text-amber-500" />
+                  Updated
+                </span>
+              </TableHead>
+              <TableHead className="w-16 text-center">
                 <span className="inline-flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3 text-red-500" />
                   Failed
                 </span>
               </TableHead>
-              <TableHead className="w-16 text-center">Total</TableHead>
+              <TableHead className="w-14 text-center">Total</TableHead>
               <TableHead className="text-right">Rate</TableHead>
             </TableRow>
           </TableHeader>
@@ -327,7 +346,10 @@ function FacultyHistoryPanel({
                       </div>
                     </TableCell>
                     <TableCell className="text-center text-green-700 font-medium text-xs">
-                      {session.successCount}
+                      {session.createdCount}
+                    </TableCell>
+                    <TableCell className="text-center text-amber-600 font-medium text-xs">
+                      {session.updatedCount}
                     </TableCell>
                     <TableCell className="text-center text-red-600 font-medium text-xs">
                       {session.failureCount}
@@ -354,7 +376,7 @@ function FacultyHistoryPanel({
                   {/* Expanded grades detail row */}
                   {isExpanded && (
                     <TableRow className="bg-blue-50/30 hover:bg-blue-50/30">
-                      <TableCell colSpan={6} className="p-4">
+                      <TableCell colSpan={7} className="p-4">
                         <div className="pl-6">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                             Uploaded Grades &mdash; {facultyName} &mdash;{" "}
