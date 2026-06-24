@@ -306,7 +306,7 @@ export async function getFacultyUploadStatus(
 // ── History action: per-faculty upload tracking ─────────────────────────────
 
 /** Maximum GradeLog rows to fetch for history (pre-filtered by name). */
-const HISTORY_LOG_LIMIT = 500;
+const HISTORY_LOG_LIMIT = 5000;
 
 /** Time window (ms) used to cluster consecutive GradeLog entries into one session. */
 const SESSION_GAP_MS = 5 * 60 * 1000; // 5 minutes
@@ -417,32 +417,28 @@ async function getTermScopedHistory(
     };
   }
 
-  // Step 2: Derive time window from attributed grades
-  const minTime = attributed[0].createdAt;
-  const maxTime = attributed[attributed.length - 1].createdAt;
-  const windowStart = new Date(minTime.getTime() - SESSION_GAP_MS);
-  const windowEnd = new Date(maxTime.getTime() + SESSION_GAP_MS);
-
-  // Collect all instructor names seen in attributed grades so we can
-  // include GradeLog entries whose instructor matches those names (even
-  // when they don't directly match the faculty's own name permutations).
+  // Step 2: Collect instructor keys from attributed grades for JS-refine.
+  // We no longer derive a time window from Grade.createdAt because that
+  // field doesn't update on re-uploads (upsert only updates grade fields,
+  // not createdAt). This caused re-upload sessions on different dates to
+  // be missed. Instead, we query ALL GradeLog entries for this term and
+  // rely on JS-refine for precise faculty attribution.
   const attributedInstructorKeys = new Set<string>();
   for (const g of attributed) {
     const key = g.instructor.toLowerCase().replace(/\s+/g, " ").trim();
     if (key) attributedInstructorKeys.add(key);
   }
 
-  // Step 3: Query GradeLog within the time window for this term.
-  // No instructor filter here — we fetch all logs in the time window and
-  // rely on JS-refine below for precise attribution. A Prisma-level
-  // instructor filter would be too fragile (same problem we fixed in Step 1).
+  // Step 3: Query ALL GradeLog entries for this term (no time window).
+  // Sort by performedAt desc so the most recent entries are prioritized
+  // if the HISTORY_LOG_LIMIT cap is reached. No Prisma-level instructor
+  // filter — we fetch all logs for the term and JS-refine below.
   const logs = await prisma.gradeLog.findMany({
     where: {
       academicYear,
       semester,
-      performedAt: { gte: windowStart, lte: windowEnd },
     },
-    orderBy: { performedAt: "asc" },
+    orderBy: { performedAt: "desc" },
     take: HISTORY_LOG_LIMIT,
     select: {
       id: true,
