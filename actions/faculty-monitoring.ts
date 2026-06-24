@@ -461,13 +461,58 @@ async function getTermScopedHistory(
     return attributedInstructorKeys.has(key);
   });
 
-  // Step 3b (FALLBACK): If no GradeLog entries were found but Grade records
-  // exist, build synthetic sessions from the Grade records themselves. This
-  // handles cases where grades were imported through migration/seed/direct
-  // import without creating GradeLog entries.
-  if (matched.length === 0 && attributed.length > 0) {
-    const syntheticLogs = attributed.map((g) => ({
-      id: g.id,
+  // Step 5 (HYBRID): Find Grade records whose createdAt doesn't correspond
+  // to any GradeLog entry. These are grades that were imported through
+  // migration/seed/direct import without creating GradeLog entries. We build
+  // synthetic "CREATED" logs for them so they appear as separate sessions.
+  //
+  // We cluster grades by createdAt (using SESSION_GAP_MS), then check if any
+  // matched log falls within each cluster's time window. If not, those grades
+  // get synthetic logs that will form their own sessions in buildHistoryResult.
+  const matchedLogTimes = matched.map((l) => l.performedAt.getTime());
+
+  const uncoveredGrades: typeof attributed = [];
+  let clusterStart = attributed[0].createdAt.getTime();
+  let clusterEnd = clusterStart;
+  const clusterBuffer: typeof attributed = [];
+
+  for (const grade of attributed) {
+    const t = grade.createdAt.getTime();
+    if (clusterBuffer.length === 0) {
+      clusterBuffer.push(grade);
+      clusterStart = t;
+      clusterEnd = t;
+    } else if (t - clusterEnd <= SESSION_GAP_MS) {
+      clusterBuffer.push(grade);
+      clusterEnd = t;
+    } else {
+      // Cluster complete — check if it's covered by any log
+      const windowStart = clusterStart - SESSION_GAP_MS;
+      const windowEnd = clusterEnd + SESSION_GAP_MS;
+      const hasLog = matchedLogTimes.some(
+        (lt) => lt >= windowStart && lt <= windowEnd,
+      );
+      if (!hasLog) uncoveredGrades.push(...clusterBuffer);
+      clusterBuffer.length = 0;
+      clusterBuffer.push(grade);
+      clusterStart = t;
+      clusterEnd = t;
+    }
+  }
+  // Don't forget the last cluster
+  if (clusterBuffer.length > 0) {
+    const windowStart = clusterStart - SESSION_GAP_MS;
+    const windowEnd = clusterEnd + SESSION_GAP_MS;
+    const hasLog = matchedLogTimes.some(
+      (lt) => lt >= windowStart && lt <= windowEnd,
+    );
+    if (!hasLog) uncoveredGrades.push(...clusterBuffer);
+  }
+
+  // Build synthetic logs for uncovered grades and merge with real logs
+  if (uncoveredGrades.length > 0) {
+    const syntheticLogs = uncoveredGrades.map((g) => ({
+      id: `synthetic-${g.id}`,
       action: "CREATED",
       performedAt: g.createdAt,
       instructor: g.instructor,
@@ -477,7 +522,7 @@ async function getTermScopedHistory(
       grade: g.grade,
       remarks: g.remarks,
     }));
-    return buildHistoryResult(syntheticLogs, currentRecordsCount);
+    return buildHistoryResult([...matched, ...syntheticLogs], currentRecordsCount);
   }
 
   return buildHistoryResult(matched, currentRecordsCount);
