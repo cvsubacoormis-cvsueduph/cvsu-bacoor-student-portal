@@ -399,26 +399,15 @@ async function getTermScopedHistory(
     if (key) attributedInstructorKeys.add(key);
   }
 
-  // Collect the exact raw instructor values for use in the GradeLog query.
-  const exactInstructors = Array.from(
-    new Set(attributed.map((g) => g.instructor).filter(Boolean)),
-  );
-
   // Step 3: Query GradeLog within the time window for this term.
-  // Use both a broad time-window filter AND narrow instructor filter so that
-  // the HISTORY_LOG_LIMIT cap doesn't cut off relevant entries.
+  // No instructor filter here — we fetch all logs in the time window and
+  // rely on JS-refine below for precise attribution. A Prisma-level
+  // instructor filter would be too fragile (same problem we fixed in Step 1).
   const logs = await prisma.gradeLog.findMany({
     where: {
       academicYear,
       semester,
       performedAt: { gte: windowStart, lte: windowEnd },
-      OR: [
-        { instructor: { contains: faculty.lastName, mode: "insensitive" } },
-        { instructor: { contains: faculty.username, mode: "insensitive" } },
-        ...(exactInstructors.length > 0
-          ? [{ instructor: { in: exactInstructors } }]
-          : []),
-      ],
     },
     orderBy: { performedAt: "asc" },
     take: HISTORY_LOG_LIMIT,
