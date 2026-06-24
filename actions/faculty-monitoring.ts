@@ -68,7 +68,7 @@ interface FacultyNamePermutations {
  */
 function normalizeInstructorName(name: string): string {
   if (!name) return "";
-  const cleaned = String(name).replace(/['.,]/g, "").toUpperCase();
+  const cleaned = String(name).replace(/['.,\-]/g, "").toUpperCase();
   const tokens = cleaned.split(/\s+/);
 
   const ignoredWords = new Set([
@@ -108,7 +108,7 @@ function buildFacultyNamePermutations(faculty: {
   const raw = new Set<string>();
 
   for (const v of rawVariants) {
-    raw.add(v.toLowerCase().replace(/\s+/g, " ").trim());
+    raw.add(v.toLowerCase().replace(/[\s\-]+/g, " ").trim());
     const norm = normalizeInstructorName(v).toLowerCase();
     if (norm) normalized.add(norm);
   }
@@ -211,12 +211,21 @@ export async function getFacultyUploadStatus(
 
     for (const group of gradesGrouped) {
       if (group.uploadedBy) {
-        const cleanName = group.uploadedBy.toLowerCase().replace(/\s+/g, " ").trim();
-        uploadedByMap.set(cleanName, (uploadedByMap.get(cleanName) ?? 0) + group._count.id);
+        const cleanName = group.uploadedBy
+          .toLowerCase()
+          .replace(/[\s\-]+/g, " ")
+          .trim();
+        uploadedByMap.set(
+          cleanName,
+          (uploadedByMap.get(cleanName) ?? 0) + group._count.id,
+        );
       }
       if (group.instructor) {
         const cleanInst = normalizeInstructorName(group.instructor).toLowerCase();
-        instructorMap.set(cleanInst, (instructorMap.get(cleanInst) ?? 0) + group._count.id);
+        instructorMap.set(
+          cleanInst,
+          (instructorMap.get(cleanInst) ?? 0) + group._count.id,
+        );
       }
     }
 
@@ -231,7 +240,8 @@ export async function getFacultyUploadStatus(
 
       const perms = buildFacultyNamePermutations(faculty);
 
-      // Try uploadedBy first (raw matching), then instructor (normalized)
+      // Count only the faculty's OWN uploads (uploadedBy match).
+      // Falls through to instructor only if no uploadedBy match found.
       let count = 0;
       for (const rawName of perms.raw) {
         const found = uploadedByMap.get(rawName);
