@@ -163,6 +163,7 @@ export default function PreviewGrade({
     const { user } = useUser();
     const role = user?.publicMetadata?.role as string | undefined;
     const canEditGrades = role === "admin" || role === "superuser" || role === "registrar" || role === "registrar_staff";
+    const isRegistrarStaff = role === "registrar_staff";
 
     const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
     const [academicYear, setAcademicYear] = useState("");
@@ -333,8 +334,6 @@ export default function PreviewGrade({
             toast.error("Failed to delete grade");
         }
     };
-
-    const isRegistrarStaff = role === "registrar_staff";
 
     const toggleEditRow = async (index: number) => {
         if (editingRows[index]) {
