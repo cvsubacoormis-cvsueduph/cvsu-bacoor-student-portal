@@ -222,7 +222,7 @@ export async function addManualGrade(
   }
 
   const userRole = (user?.publicMetadata?.role as string) || "";
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
   if (!allowedRoles.includes(userRole)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
@@ -231,7 +231,8 @@ export async function addManualGrade(
   const isDirectModify =
     userRole === "admin" ||
     userRole === "superuser" ||
-    userRole === "registrar";
+    userRole === "registrar" ||
+    userRole === "faculty";
   const isRegistrarStaff = userRole === "registrar_staff";
 
   const settingValue = await prisma.systemSettings.findUnique({

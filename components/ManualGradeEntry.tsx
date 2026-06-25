@@ -644,7 +644,9 @@ export default function ManualGradeEntry() {
     }
   };
 
-  const isAdminOrRegistrar = ["admin", "registrar", "registrar_staff"].includes(role);
+  const isAdminOrRegistrar = ["admin", "registrar", "registrar_staff"].includes(
+    role,
+  );
   const startYear = isAdminOrRegistrar ? 2014 : 2025;
 
   const currentYear = new Date().getFullYear() - 1;
