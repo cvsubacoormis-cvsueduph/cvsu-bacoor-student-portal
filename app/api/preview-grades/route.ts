@@ -20,7 +20,7 @@ const getQuerySchema = z.object({
 
 const patchBodySchema = z.object({
   courseCode: z.string().min(1, "Course code is required"),
-  creditUnit: z.number().int().positive("Credit unit must be positive"),
+  creditUnit: z.number().int().min(0, "Credit unit must be non-negative"),
   courseTitle: z.string().min(1, "Course title is required"),
   grade: z.string().min(1, "Grade is required"),
   reExam: z.string().nullable().optional(),
@@ -237,6 +237,7 @@ const postBodySchema = patchBodySchema.extend({
   semester: z.nativeEnum(Semester, {
     errorMap: () => ({ message: "Invalid semester" }),
   }),
+  creditUnit: z.number().int().min(0, "Credit unit must be non-negative"),
 });
 
 export async function POST(request: Request) {
@@ -300,8 +301,33 @@ export async function POST(request: Request) {
     const user = await currentUser();
     const editorIdentifier = user?.fullName ?? "";
 
-    const newGrade = await prisma.grade.create({
-      data: {
+    // Ensure the academic term exists before creating the grade.
+    // The Grade model has a FK to AcademicTerm, so the term must exist.
+    await prisma.academicTerm.upsert({
+      where: {
+        academicYear_semester: {
+          academicYear,
+          semester,
+        },
+      },
+      create: {
+        academicYear,
+        semester,
+      },
+      update: {},
+    });
+
+    // Use upsert to handle potential duplicates gracefully
+    const newGrade = await prisma.grade.upsert({
+      where: {
+        studentNumber_courseCode_academicYear_semester: {
+          studentNumber,
+          courseCode,
+          academicYear,
+          semester,
+        },
+      },
+      create: {
         studentNumber,
         academicYear,
         semester,
@@ -313,6 +339,31 @@ export async function POST(request: Request) {
         remarks,
         instructor,
         uploadedBy: editorIdentifier,
+      },
+      update: {
+        creditUnit,
+        courseTitle,
+        grade,
+        reExam: reExam === "" ? null : reExam,
+        remarks,
+        instructor,
+        uploadedBy: editorIdentifier,
+      },
+    });
+
+    // Create a grade log entry for audit trail
+    await prisma.gradeLog.create({
+      data: {
+        studentNumber,
+        courseCode,
+        courseTitle,
+        creditUnit,
+        grade,
+        remarks,
+        instructor,
+        academicYear,
+        semester,
+        action: "MANUAL_ENTRY",
       },
     });
 
