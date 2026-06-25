@@ -233,6 +233,29 @@ export default function PreviewGrade({
         }
     }, [academicYear, semester, studentNumber]);
 
+    // Auto-refresh grades silently every 15s for registrar_staff
+    // (picks up newly approved/rejected pending changes without manual refresh)
+    useEffect(() => {
+        if (!isRegistrarStaff || !academicYear || !semester) return;
+
+        const interval = setInterval(() => {
+            fetch(
+                `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`
+            )
+                .then((r) => r.json())
+                .then((data) => {
+                    setGrades(data);
+                    setEditedGrades(data);
+                    if (data.length > 0) setError("");
+                })
+                .catch(() => {
+                    // Ignore poll errors silently
+                });
+        }, 15000);
+
+        return () => clearInterval(interval);
+    }, [isRegistrarStaff, academicYear, semester, studentNumber]);
+
     const handleGradeChange = (index: number, field: keyof Grade, value: string) => {
         const updated = [...editedGrades];
         const row = { ...updated[index], [field]: field === "creditUnit" ? Number(value) : value };
@@ -330,8 +353,18 @@ export default function PreviewGrade({
 
                 if (saved.pending) {
                     // Change is pending registrar approval
-                    toast.success(isNew ? "Grade submitted for approval" : "Update submitted for approval");
-                    // Revert the local edit to show original data
+                    if (isNew) {
+                        // New grade not yet applied — remove the row entirely
+                        setGrades((prev) => prev.filter((_, i) => i !== index));
+                        setEditedGrades((prev) => prev.filter((_, i) => i !== index));
+                        const r = { ...editingRows };
+                        delete r[index];
+                        setEditingRows(r);
+                        toast.success("Grade submitted for registrar approval");
+                        return; // skip the toggle below since we already cleaned up
+                    }
+                    // Update: revert local edit to show original data
+                    toast.success("Update submitted for approval");
                     setEditedGrades((prev) =>
                         prev.map((x, i) => (i === index ? grades[i] : x)),
                     );

@@ -67,14 +67,23 @@ export default function GradeApprovalsPage() {
   const [error, setError] = useState("");
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
+  // Initial fetch — shows loading spinner
   const fetchPending = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
       const res = await fetch("/api/pending-grade-changes?status=PENDING");
       if (!res.ok) {
-        if (res.status === 403) throw new Error("You don't have permission to view pending changes.");
-        throw new Error("Failed to fetch pending changes");
+        let errorMessage = "Failed to fetch pending changes";
+        try {
+          const body = await res.json();
+          if (body?.error) errorMessage = body.error;
+        } catch {
+          if (res.status === 403) errorMessage = "You don't have permission to view pending changes.";
+          else if (res.status === 500) errorMessage = "Server error while fetching pending changes.";
+          else errorMessage = `Request failed (status ${res.status})`;
+        }
+        throw new Error(errorMessage);
       }
       const data = await res.json();
       setPendingChanges(data);
@@ -85,9 +94,29 @@ export default function GradeApprovalsPage() {
     }
   }, []);
 
+  // Silent poll — updates in background without loading spinner
+  const silentPoll = useCallback(async () => {
+    try {
+      const res = await fetch("/api/pending-grade-changes?status=PENDING");
+      if (res.ok) {
+        const data = await res.json();
+        setPendingChanges(data);
+        setError("");
+      }
+    } catch {
+      // Ignore poll errors — next interval will retry
+    }
+  }, []);
+
   useEffect(() => {
     fetchPending();
   }, [fetchPending]);
+
+  // Auto-poll every 10 seconds for real-time updates (silent, no spinner)
+  useEffect(() => {
+    const interval = setInterval(silentPoll, 10000);
+    return () => clearInterval(interval);
+  }, [silentPoll]);
 
   const handleApprove = async (change: PendingChange) => {
     const result = await Swal.fire({

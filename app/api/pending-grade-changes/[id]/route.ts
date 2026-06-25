@@ -49,6 +49,7 @@ export async function PATCH(
       );
     }
 
+    // Rate limiting — log and continue on non-RATE_LIMIT_EXCEEDED errors
     try {
       await checkRateLimit({
         action: "pending-changes-patch",
@@ -59,7 +60,7 @@ export async function PATCH(
       if (error.code === "RATE_LIMIT_EXCEEDED") {
         return NextResponse.json({ error: error.message }, { status: 429 });
       }
-      throw error;
+      console.error("Rate limiter error (non-blocking):", error.message);
     }
 
     const { id } = await params;

@@ -1,6 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server";
 import Image from "next/image";
 import Link from "next/link";
+import { PendingApprovalBadge } from "@/components/PendingApprovalBadge";
 
 export default async function Menu() {
   const user = await currentUser();
@@ -197,6 +198,7 @@ export default async function Menu() {
                 >
                   <Image src={item.icon} alt="icons" width={20} height={20} />
                   <span className="hidden lg:block">{item.label}</span>
+                  {item.label === "Grade Approvals" && <PendingApprovalBadge />}
                 </Link>
               );
             }

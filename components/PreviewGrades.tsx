@@ -262,6 +262,30 @@ export function PreviewGrades({
     }
   }, [academicYear, semester, studentNumber, firstName, lastName]);
 
+  // Auto-refresh grades silently every 15s for registrar_staff
+  useEffect(() => {
+    if (role !== "registrar_staff" || !academicYear || !semester) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(
+          `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.length > 0) {
+            setGrades(data);
+            setEditedGrades(data);
+          }
+        }
+      } catch {
+        // Ignore poll errors silently
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [role, academicYear, semester, studentNumber]);
+
   // Auto-compute remarks based on grade value.
   const computeRemarks = (gradeValue: string): string => {
     const g = parseFloat(gradeValue);
@@ -410,11 +434,21 @@ export function PreviewGrades({
         const updatedGrade = await res.json();
 
         if (updatedGrade.pending) {
+          if (isNew) {
+            // New grade not yet applied — remove the row entirely
+            setGrades((prev) => prev.filter((_, i) => i !== index));
+            setEditedGrades((prev) => prev.filter((_, i) => i !== index));
+            const r = { ...editingRows };
+            delete r[index];
+            setEditingRows(r);
+            toast.success("Grade submitted for registrar approval");
+            return; // skip toggle below since we already cleaned up
+          }
           // Change is pending registrar approval — revert local edit
           setEditedGrades((prev) =>
             prev.map((g, i) => (i === index ? grades[i] : g)),
           );
-          toast.success(isNew ? "Grade submitted for approval" : "Update submitted for approval");
+          toast.success("Update submitted for approval");
         } else {
           // Update both grades and editedGrades states
           setGrades((prev) =>

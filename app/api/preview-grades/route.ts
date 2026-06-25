@@ -101,7 +101,7 @@ export async function GET(request: Request) {
           { status: 429 }
         );
       }
-      throw error;
+      console.error("Rate limiter error (non-blocking):", error.message);
     }
 
     // Parse and validate query parameters

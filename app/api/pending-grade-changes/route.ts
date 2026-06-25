@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
-import { z } from "zod";
 
 export const runtime = "nodejs";
 
@@ -27,6 +26,8 @@ export async function GET(request: Request) {
       );
     }
 
+    // Rate limiting — if it fails for any reason other than RATE_LIMIT_EXCEEDED,
+    // log and continue rather than blocking the request entirely.
     try {
       await checkRateLimit({
         action: "pending-changes-get",
@@ -37,7 +38,8 @@ export async function GET(request: Request) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
         return NextResponse.json({ error: error.message }, { status: 429 });
       }
-      throw error;
+      // Non-rate-limit error (e.g. DB connection) — log and allow through
+      console.error("Rate limiter error (non-blocking):", error.message);
     }
 
     // Optional query params
@@ -53,16 +55,29 @@ export async function GET(request: Request) {
       );
     }
 
-    const changes = await prisma.pendingGradeChange.findMany({
-      where: { status },
-      orderBy: { createdAt: "desc" },
-    });
+    // Fetch pending changes. If the table doesn't exist yet (fresh deploy
+    // before migration), return an empty array instead of crashing.
+    let changes;
+    try {
+      changes = await prisma.pendingGradeChange.findMany({
+        where: { status },
+        orderBy: { createdAt: "desc" },
+      });
+    } catch (dbError: any) {
+      console.error("Database error fetching pending changes:", dbError.message);
+      // If the table doesn't exist yet, return empty gracefully
+      if (dbError.message?.includes("does not exist") || dbError.code === "P2021") {
+        return NextResponse.json([]);
+      }
+      throw dbError; // re-throw for the outer catch
+    }
 
     return NextResponse.json(changes);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching pending changes:", error);
+    // Return the actual error message so the frontend can display it
     return NextResponse.json(
-      { error: "Failed to fetch pending changes" },
+      { error: error.message || "Failed to fetch pending changes" },
       { status: 500 }
     );
   }
