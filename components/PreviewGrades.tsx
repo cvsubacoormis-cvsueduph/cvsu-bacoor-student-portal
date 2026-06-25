@@ -164,6 +164,10 @@ export function PreviewGrades({
   const [availableSubjects, setAvailableSubjects] = useState<{ id: string; courseCode: string; courseTitle: string; creditUnit: number }[]>([]);
   const [openComboboxIndex, setOpenComboboxIndex] = useState<number | null>(null);
 
+  // Track pending submissions so we only auto-refresh when changes are outstanding
+  const pendingRef = useRef(false);
+  const gradesFingerprint = useRef("");
+
   // Fetch academic terms when dialog opens.
   useEffect(() => {
     if (isDialogOpen && academicTerms.length === 0) {
@@ -248,8 +252,8 @@ export function PreviewGrades({
             );
           }
           setGrades(filteredGrades);
-          // Create a separate state copy for editing.
           setEditedGrades(filteredGrades);
+          gradesFingerprint.current = JSON.stringify(filteredGrades);
         } catch (err) {
           console.error(err);
           toast.error("Failed to fetch grades");
@@ -262,26 +266,30 @@ export function PreviewGrades({
     }
   }, [academicYear, semester, studentNumber, firstName, lastName]);
 
-  // Auto-refresh grades silently every 15s for registrar_staff
+  // Conditional auto-refresh: only polls while pending changes exist.
   useEffect(() => {
     if (role !== "registrar_staff" || !academicYear || !semester) return;
 
     const interval = setInterval(async () => {
+      if (!pendingRef.current) return;
       try {
         const response = await fetch(
           `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`
         );
         if (response.ok) {
           const data = await response.json();
-          if (data.length > 0) {
+          const newFingerprint = JSON.stringify(data);
+          if (newFingerprint !== gradesFingerprint.current) {
+            gradesFingerprint.current = newFingerprint;
             setGrades(data);
             setEditedGrades(data);
+            pendingRef.current = false;
           }
         }
       } catch {
         // Ignore poll errors silently
       }
-    }, 15000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [role, academicYear, semester, studentNumber]);
@@ -386,6 +394,7 @@ export function PreviewGrades({
 
       const result = await res.json();
       if (result.pending) {
+        pendingRef.current = true;
         // Deletion is pending approval — do NOT remove from UI
         toast.success("Grade deletion submitted for approval");
       } else {
@@ -434,6 +443,7 @@ export function PreviewGrades({
         const updatedGrade = await res.json();
 
         if (updatedGrade.pending) {
+          pendingRef.current = true;
           if (isNew) {
             // New grade not yet applied — remove the row entirely
             setGrades((prev) => prev.filter((_, i) => i !== index));
@@ -527,6 +537,7 @@ export function PreviewGrades({
 
       // Check if any changes are pending approval
       const hasPending = results.some((r) => r?.pending);
+      if (hasPending) pendingRef.current = true;
 
       // Refresh data
       const response = await fetch(
@@ -536,6 +547,7 @@ export function PreviewGrades({
         const data = await response.json();
         setGrades(data);
         setEditedGrades(data);
+        gradesFingerprint.current = JSON.stringify(data);
       }
 
       setEditingRows({});

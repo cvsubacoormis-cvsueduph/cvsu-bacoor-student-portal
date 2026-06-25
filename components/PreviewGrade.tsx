@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,10 @@ export default function PreviewGrade({
   const [error, setError] = useState("");
   const [availableSubjects, setAvailableSubjects] = useState<SubjectOption[]>([]);
 
+  // Track pending submissions so we only auto-refresh when changes are outstanding
+  const pendingRef = useRef(false);
+  const gradesFingerprint = useRef("");
+
   // ─── Data fetching ────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -99,7 +103,7 @@ export default function PreviewGrade({
     }
   }, [academicYear, semester]);
 
-  const fetchGrades = () => {
+  const fetchGrades = useCallback(() => {
     if (!academicYear || !semester) return;
     setLoading(true);
     setError("");
@@ -110,6 +114,7 @@ export default function PreviewGrade({
       .then((data) => {
         setGrades(data);
         setEditedGrades(data);
+        gradesFingerprint.current = JSON.stringify(data);
         if (data.length === 0) setError("No grades found for this period.");
       })
       .catch(() => {
@@ -117,19 +122,42 @@ export default function PreviewGrade({
         setError("Failed to fetch grades.");
       })
       .finally(() => setLoading(false));
-  };
+  }, [academicYear, semester, studentNumber]);
 
   useEffect(() => {
     fetchGrades();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [academicYear, semester, studentNumber]);
 
-  // Auto-refresh for registrar_staff (picks up approved changes)
+  // Conditional auto-refresh: only polls while pending changes exist.
+  // Starts when a pending submission is made, stops when grades data changes.
   useEffect(() => {
     if (!isStaff || !academicYear || !semester) return;
-    const interval = setInterval(fetchGrades, 15000);
+
+    const interval = setInterval(async () => {
+      if (!pendingRef.current) return; // nothing pending — skip
+      try {
+        const res = await fetch(
+          `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const newFingerprint = JSON.stringify(data);
+        if (newFingerprint !== gradesFingerprint.current) {
+          // Data changed — changes were approved/rejected
+          gradesFingerprint.current = newFingerprint;
+          setGrades(data);
+          setEditedGrades(data);
+          if (data.length > 0) setError("");
+          pendingRef.current = false; // stop polling
+          toast.success("Changes have been reviewed by the registrar.", { duration: 3000 });
+        }
+      } catch {
+        // Silently ignore poll errors
+      }
+    }, 10000);
+
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStaff, academicYear, semester, studentNumber]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
@@ -203,6 +231,7 @@ export default function PreviewGrade({
       if (!res.ok) throw new Error("Failed to delete");
       const result = await res.json();
       if (result.pending) {
+        pendingRef.current = true;
         toast.success("Grade deletion submitted for approval");
       } else {
         setGrades((prev) => prev.filter((_, i) => i !== index));
@@ -233,6 +262,7 @@ export default function PreviewGrade({
         const saved = await res.json();
 
         if (saved.pending) {
+          pendingRef.current = true;
           if (isNew) {
             setGrades((prev) => prev.filter((_, i) => i !== index));
             setEditedGrades((prev) => prev.filter((_, i) => i !== index));
@@ -298,6 +328,7 @@ export default function PreviewGrade({
       );
 
       const hasPending = results.some((r) => r?.pending);
+      if (hasPending) pendingRef.current = true;
       fetchGrades();
       setEditingRows({});
       toast.success(
