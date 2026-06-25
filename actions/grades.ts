@@ -206,19 +206,33 @@ export async function getStudentDetails(
   };
 }
 
-export async function addManualGrade(gradeData: GradeData): Promise<void> {
+export type AddManualGradeResult = {
+  success: boolean;
+  pending?: boolean;
+  pendingId?: string;
+  message: string;
+};
+
+export async function addManualGrade(
+  gradeData: GradeData,
+): Promise<AddManualGradeResult> {
   const user = await currentUser();
   if (!user) {
     throw new Error("Unauthorized");
   }
 
   const userRole = (user?.publicMetadata?.role as string) || "";
-  const allowedRoles = ["admin", "superuser", "registrar"];
+  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff"];
   if (!allowedRoles.includes(userRole)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
 
   const isAdmin = userRole === "admin" || userRole === "superuser";
+  const isDirectModify =
+    userRole === "admin" ||
+    userRole === "superuser" ||
+    userRole === "registrar";
+  const isRegistrarStaff = userRole === "registrar_staff";
 
   const settingValue = await prisma.systemSettings.findUnique({
     where: { key: "UPLOAD_GRADES_ENABLED" },
@@ -245,7 +259,48 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
     throw new Error("Missing required fields");
   }
 
-  // Start a transaction
+  // ------------------------------------------------------------------
+  // registrar_staff → create pending change instead of applying directly
+  // ------------------------------------------------------------------
+  if (isRegistrarStaff) {
+    const pending = await prisma.pendingGradeChange.create({
+      data: {
+        action: "CREATE",
+        studentNumber: gradeData.studentNumber,
+        gradeData: {
+          courseCode: gradeData.courseCode,
+          creditUnit: Number(gradeData.creditUnit),
+          courseTitle: gradeData.courseTitle,
+          grade: gradeData.grade,
+          reExam: gradeData.reExam ?? null,
+          remarks: gradeData.remarks ?? "",
+          instructor: gradeData.instructor,
+          studentNumber: gradeData.studentNumber,
+          academicYear: gradeData.academicYear,
+          semester: gradeData.semester,
+          uploadedBy: user?.fullName || "",
+        },
+        courseCode: gradeData.courseCode,
+        academicYear: gradeData.academicYear,
+        semester: gradeData.semester,
+        requestedById: user.id,
+        requestedByName: user?.fullName || "",
+        requestedRole: userRole,
+        status: "PENDING",
+      },
+    });
+
+    return {
+      success: true,
+      pending: true,
+      pendingId: pending.id,
+      message: "Grade submission sent for registrar approval.",
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // admin / superuser / registrar → apply immediately
+  // ------------------------------------------------------------------
   await prisma.$transaction(async (prisma) => {
     // 1. Ensure the academic term exists
     await prisma.academicTerm.upsert({
@@ -344,6 +399,12 @@ export async function addManualGrade(gradeData: GradeData): Promise<void> {
       },
     });
   });
+
+  return {
+    success: true,
+    pending: false,
+    message: "Grade added successfully.",
+  };
 }
 
 type CheckExsistingGradeParams = {

@@ -176,7 +176,7 @@ export async function POST(req: Request) {
   }
 
   const userRole = (user.publicMetadata?.role as string) || "";
-  const isAdmin = userRole === "admin" || userRole === "superuser" || userRole === "registrar";
+  const isAdmin = userRole === "admin" || userRole === "superuser" || userRole === "registrar" || userRole === "registrar_staff";
 
   // Rate Limiting check for all roles
   const isAdminRole = userRole === "admin" || userRole === "superuser" || userRole === "registrar";
@@ -228,7 +228,7 @@ export async function POST(req: Request) {
 
   // --- Security: Check for Legacy Mode Authorization ---
   const requestLegacyMode = grades[0]?.allowLegacy === true;
-  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(userRole);
+  const canUseLegacyMode = ["admin", "superuser", "registrar", "registrar_staff"].includes(userRole);
 
   // Only enable legacy mode if requested AND authorized
   const isLegacyMode = requestLegacyMode && canUseLegacyMode;

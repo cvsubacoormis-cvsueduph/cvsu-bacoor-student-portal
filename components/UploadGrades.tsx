@@ -153,7 +153,7 @@ interface LogEntry {
 export function UploadGrades() {
   const { user } = useUser();
   const role = user?.publicMetadata?.role as string | undefined;
-  const canUseLegacyMode = ["admin", "superuser", "registrar"].includes(
+  const canUseLegacyMode = ["admin", "superuser", "registrar", "registrar_staff"].includes(
     role || "",
   );
 
@@ -579,7 +579,7 @@ export function UploadGrades() {
     // New curriculum starts in 2018 => Changed to 2025 for standard users per request
     // Admin/Registrar get 2014
 
-    const isAdminOrRegistrar = ["admin", "registrar"].includes(role || "");
+    const isAdminOrRegistrar = ["admin", "superuser", "registrar", "registrar_staff"].includes(role || "");
     const standardStart = 2025;
     const adminStart = 2014;
 

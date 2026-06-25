@@ -26,7 +26,7 @@ export const routeAccessMap: RouteAccessMap = {
   "/list/profile(.*)": ["student"],
   "/list/registration(.*)": ["student"],
   "/list/settings(.*)": ["student"],
-  "/list/uploading(.*)": ["admin", "superuser", "faculty"],
+  "/list/uploading(.*)": ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
   "/list/adminprofile(.*)": ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
   "/printChecklist(.*)": ["student"],
   "/printgrades-list(.*)": ["admin", "superuser", "registrar", "registrar_staff"],
@@ -40,4 +40,5 @@ export const routeAccessMap: RouteAccessMap = {
   "/access-closed(.*)": ["student"],
   "/list/schedule(.*)": ["admin"],
   "/list/seed(.*)": ["admin"],
+  "/list/grade-approvals(.*)": ["admin", "superuser", "registrar"],
 };

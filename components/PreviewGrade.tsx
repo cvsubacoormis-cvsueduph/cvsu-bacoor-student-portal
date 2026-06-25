@@ -162,7 +162,7 @@ export default function PreviewGrade({
     const router = useRouter();
     const { user } = useUser();
     const role = user?.publicMetadata?.role as string | undefined;
-    const canEditGrades = role === "admin" || role === "superuser" || role === "registrar";
+    const canEditGrades = role === "admin" || role === "superuser" || role === "registrar" || role === "registrar_staff";
 
     const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
     const [academicYear, setAcademicYear] = useState("");
@@ -294,16 +294,24 @@ export default function PreviewGrade({
         try {
             const res = await fetch(`/api/preview-grades?id=${g.id}`, { method: "DELETE" });
             if (!res.ok) throw new Error("Failed to delete");
-            setGrades(grades.filter((_, i) => i !== index));
-            setEditedGrades(editedGrades.filter((_, i) => i !== index));
-            const r = { ...editingRows };
-            delete r[index];
-            setEditingRows(r);
-            toast.success("Grade deleted");
+            const result = await res.json();
+            if (result.pending) {
+                // Deletion is pending registrar approval — do NOT remove from UI yet
+                toast.success("Grade deletion submitted for approval");
+            } else {
+                setGrades(grades.filter((_, i) => i !== index));
+                setEditedGrades(editedGrades.filter((_, i) => i !== index));
+                const r = { ...editingRows };
+                delete r[index];
+                setEditingRows(r);
+                toast.success("Grade deleted");
+            }
         } catch {
             toast.error("Failed to delete grade");
         }
     };
+
+    const isRegistrarStaff = role === "registrar_staff";
 
     const toggleEditRow = async (index: number) => {
         if (editingRows[index]) {
@@ -319,9 +327,19 @@ export default function PreviewGrade({
                 });
                 if (!res.ok) throw new Error("Failed to save");
                 const saved = await res.json();
-                setGrades((prev) => prev.map((x, i) => (i === index ? saved : x)));
-                setEditedGrades((prev) => prev.map((x, i) => (i === index ? saved : x)));
-                toast.success(isNew ? "Grade added" : "Grade updated");
+
+                if (saved.pending) {
+                    // Change is pending registrar approval
+                    toast.success(isNew ? "Grade submitted for approval" : "Update submitted for approval");
+                    // Revert the local edit to show original data
+                    setEditedGrades((prev) =>
+                        prev.map((x, i) => (i === index ? grades[i] : x)),
+                    );
+                } else {
+                    setGrades((prev) => prev.map((x, i) => (i === index ? saved : x)));
+                    setEditedGrades((prev) => prev.map((x, i) => (i === index ? saved : x)));
+                    toast.success(isNew ? "Grade added" : "Grade updated");
+                }
             } catch {
                 toast.error("Failed to save grade");
                 return;
@@ -354,7 +372,7 @@ export default function PreviewGrade({
                 toast("No changes to save");
                 return;
             }
-            await Promise.all(
+            const results = await Promise.all(
                 changed.map(async (g) => {
                     const isNew = g.id === "new";
                     const res = await fetch(
@@ -369,6 +387,8 @@ export default function PreviewGrade({
                     return res.json();
                 })
             );
+            // Check if any changes are pending approval
+            const hasPending = results.some((r) => r?.pending);
             const refreshed = await fetch(
                 `/api/preview-grades?studentNumber=${studentNumber}&academicYear=${academicYear}&semester=${semester}`
             );
@@ -378,7 +398,11 @@ export default function PreviewGrade({
                 setEditedGrades(data);
             }
             setEditingRows({});
-            toast.success("Grades saved successfully");
+            if (hasPending) {
+                toast.success("Changes submitted for registrar approval. Grades will update once approved.");
+            } else {
+                toast.success("Grades saved successfully");
+            }
         } catch {
             toast.error("Failed to save grades");
         }

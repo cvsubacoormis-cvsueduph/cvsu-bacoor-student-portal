@@ -589,20 +589,30 @@ export default function ManualGradeEntry() {
         instructor: values.instructor,
       };
 
-      await addManualGrade({
+      const result = await addManualGrade({
         ...gradeData,
         academicYear: gradeData.academicYear as AcademicYear,
         semester: gradeData.semester as Semester,
         isResolved: false,
       });
 
-      Swal.fire({
-        icon: "success",
-        title: "Grade Added",
-        text: `Successfully added grade for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
-        timer: 2000,
-        showConfirmButton: false,
-      });
+      if (result.pending) {
+        Swal.fire({
+          icon: "info",
+          title: "Submitted for Approval",
+          text: result.message,
+          timer: 2500,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "Grade Added",
+          text: `Successfully added grade for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
 
       // Reset form
       form.reset({

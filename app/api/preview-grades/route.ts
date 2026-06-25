@@ -7,7 +7,15 @@ import { z } from "zod";
 
 export const runtime = "nodejs";
 
+// Roles that can modify grades without approval
+const DIRECT_MODIFY_ROLES = ["admin", "superuser", "registrar"];
+
+// Roles that can modify grades (includes those needing approval)
+const ALL_MODIFY_ROLES = [...DIRECT_MODIFY_ROLES, "registrar_staff"];
+
+// ---------------------------------------------------------------------------
 // Validation schemas
+// ---------------------------------------------------------------------------
 const getQuerySchema = z.object({
   studentNumber: z.string().min(1, "Student number is required"),
   academicYear: z.nativeEnum(AcademicYear, {
@@ -28,6 +36,52 @@ const patchBodySchema = z.object({
   instructor: z.string().min(1, "Instructor is required"),
 });
 
+const postBodySchema = patchBodySchema.extend({
+  studentNumber: z.string().min(1, "Student number is required"),
+  academicYear: z.nativeEnum(AcademicYear, {
+    errorMap: () => ({ message: "Invalid academic year" }),
+  }),
+  semester: z.nativeEnum(Semester, {
+    errorMap: () => ({ message: "Invalid semester" }),
+  }),
+  creditUnit: z.number().int().min(0, "Credit unit must be non-negative"),
+});
+
+// ---------------------------------------------------------------------------
+// Helper: create a pending grade change for registrar_staff
+// ---------------------------------------------------------------------------
+async function createPendingChange(params: {
+  action: string;
+  studentNumber: string;
+  gradeData: Record<string, unknown>;
+  gradeId?: string;
+  courseCode?: string;
+  academicYear?: string;
+  semester?: string;
+  requestedById: string;
+  requestedByName: string;
+  requestedRole: string;
+}) {
+  return prisma.pendingGradeChange.create({
+    data: {
+      action: params.action,
+      studentNumber: params.studentNumber,
+      gradeData: params.gradeData as any,
+      gradeId: params.gradeId ?? null,
+      courseCode: params.courseCode ?? null,
+      academicYear: (params.academicYear as AcademicYear) ?? null,
+      semester: (params.semester as Semester) ?? null,
+      requestedById: params.requestedById,
+      requestedByName: params.requestedByName,
+      requestedRole: params.requestedRole,
+      status: "PENDING",
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GET — Fetch grades for a student + term
+// ---------------------------------------------------------------------------
 export async function GET(request: Request) {
   try {
     const { userId, sessionClaims } = await auth();
@@ -91,8 +145,6 @@ export async function GET(request: Request) {
         );
       }
     }
-    // Admin and other authorized roles can view any student's grades
-    // (no additional check needed for admin/faculty/registrar)
 
     // Query the database for matching grade records
     const grades = await prisma.grade.findMany({
@@ -131,26 +183,27 @@ export async function GET(request: Request) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// PATCH — Update an existing grade
+//   - registrar_staff → pending approval
+//   - admin/superuser/registrar → applied immediately
+// ---------------------------------------------------------------------------
 export async function PATCH(request: Request) {
   try {
-    // Authentication check
     const { userId, sessionClaims } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Authorization - Only admin, superuser, and registrar can edit grades
     const role = (sessionClaims?.metadata as { role?: string })?.role;
-    const allowedRoles = ["admin", "superuser", "registrar"];
-
-    if (!role || !allowedRoles.includes(role)) {
+    if (!role || !ALL_MODIFY_ROLES.includes(role)) {
       return NextResponse.json(
         { error: "Forbidden: insufficient permissions" },
         { status: 403 }
       );
     }
 
-    // Rate limiting - stricter for PATCH (5 requests per minute)
+    // Rate limiting
     try {
       await checkRateLimit({
         action: "preview-grades-patch",
@@ -159,10 +212,7 @@ export async function PATCH(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 429 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 429 });
       }
       throw error;
     }
@@ -177,7 +227,6 @@ export async function PATCH(request: Request) {
     // Parse and validate request body
     const body = await request.json();
     const validationResult = patchBodySchema.safeParse(body);
-
     if (!validationResult.success) {
       return NextResponse.json(
         {
@@ -188,21 +237,62 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const {
-      courseCode,
-      creditUnit,
-      courseTitle,
-      grade,
-      reExam,
-      remarks,
-      instructor,
-    } = validationResult.data;
+    const { courseCode, creditUnit, courseTitle, grade, reExam, remarks, instructor } =
+      validationResult.data;
 
-    // Get user email or username for audit trail
     const user = await currentUser();
     const editorIdentifier = user?.fullName ?? "";
+    const isRegistrarStaff = role === "registrar_staff";
 
-    // Update the grade record
+    // Fetch the existing grade to get its studentNumber / term
+    const existingGrade = await prisma.grade.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        studentNumber: true,
+        academicYear: true,
+        semester: true,
+        courseCode: true,
+      },
+    });
+    if (!existingGrade) {
+      return NextResponse.json({ error: "Grade not found" }, { status: 404 });
+    }
+
+    // ------------------------------------------------------------------
+    // registrar_staff → create pending change instead of applying directly
+    // ------------------------------------------------------------------
+    if (isRegistrarStaff) {
+      const pending = await createPendingChange({
+        action: "UPDATE",
+        studentNumber: existingGrade.studentNumber,
+        gradeData: {
+          courseCode,
+          creditUnit,
+          courseTitle,
+          grade,
+          reExam: reExam === "" ? null : reExam,
+          remarks,
+          instructor,
+        },
+        gradeId: id,
+        courseCode: existingGrade.courseCode,
+        academicYear: existingGrade.academicYear,
+        semester: existingGrade.semester,
+        requestedById: userId,
+        requestedByName: editorIdentifier,
+        requestedRole: role,
+      });
+
+      return NextResponse.json(
+        { pending: true, id: pending.id, message: "Grade update submitted for approval" },
+        { status: 202 }
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // admin / superuser / registrar → apply immediately
+    // ------------------------------------------------------------------
     const data = {
       courseCode,
       creditUnit,
@@ -214,9 +304,22 @@ export async function PATCH(request: Request) {
       uploadedBy: editorIdentifier,
     };
 
-    const updatedGrade = await prisma.grade.update({
-      where: { id },
-      data,
+    const updatedGrade = await prisma.grade.update({ where: { id }, data });
+
+    // Audit trail
+    await prisma.gradeLog.create({
+      data: {
+        studentNumber: existingGrade.studentNumber,
+        courseCode,
+        courseTitle,
+        creditUnit,
+        grade,
+        remarks,
+        instructor,
+        academicYear: existingGrade.academicYear,
+        semester: existingGrade.semester,
+        action: "UPDATED",
+      },
     });
 
     return NextResponse.json(updatedGrade);
@@ -229,17 +332,11 @@ export async function PATCH(request: Request) {
   }
 }
 
-const postBodySchema = patchBodySchema.extend({
-  studentNumber: z.string().min(1, "Student number is required"),
-  academicYear: z.nativeEnum(AcademicYear, {
-    errorMap: () => ({ message: "Invalid academic year" }),
-  }),
-  semester: z.nativeEnum(Semester, {
-    errorMap: () => ({ message: "Invalid semester" }),
-  }),
-  creditUnit: z.number().int().min(0, "Credit unit must be non-negative"),
-});
-
+// ---------------------------------------------------------------------------
+// POST — Create a new grade
+//   - registrar_staff → pending approval
+//   - admin/superuser/registrar → applied immediately
+// ---------------------------------------------------------------------------
 export async function POST(request: Request) {
   try {
     const { userId, sessionClaims } = await auth();
@@ -248,8 +345,7 @@ export async function POST(request: Request) {
     }
 
     const role = (sessionClaims?.metadata as { role?: string })?.role;
-    const allowedRoles = ["admin", "superuser", "registrar"];
-    if (!role || !allowedRoles.includes(role)) {
+    if (!role || !ALL_MODIFY_ROLES.includes(role)) {
       return NextResponse.json(
         { error: "Forbidden: insufficient permissions" },
         { status: 403 }
@@ -264,17 +360,13 @@ export async function POST(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 429 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 429 });
       }
       throw error;
     }
 
     const body = await request.json();
     const validationResult = postBodySchema.safeParse(body);
-
     if (!validationResult.success) {
       return NextResponse.json(
         {
@@ -300,24 +392,51 @@ export async function POST(request: Request) {
 
     const user = await currentUser();
     const editorIdentifier = user?.fullName ?? "";
+    const isRegistrarStaff = role === "registrar_staff";
 
-    // Ensure the academic term exists before creating the grade.
-    // The Grade model has a FK to AcademicTerm, so the term must exist.
-    await prisma.academicTerm.upsert({
-      where: {
-        academicYear_semester: {
+    // ------------------------------------------------------------------
+    // registrar_staff → create pending change
+    // ------------------------------------------------------------------
+    if (isRegistrarStaff) {
+      const pending = await createPendingChange({
+        action: "CREATE",
+        studentNumber,
+        gradeData: {
+          courseCode,
+          creditUnit,
+          courseTitle,
+          grade,
+          reExam: reExam === "" ? null : reExam,
+          remarks,
+          instructor,
+          studentNumber,
           academicYear,
           semester,
+          uploadedBy: editorIdentifier,
         },
-      },
-      create: {
+        courseCode,
         academicYear,
         semester,
-      },
+        requestedById: userId,
+        requestedByName: editorIdentifier,
+        requestedRole: role,
+      });
+
+      return NextResponse.json(
+        { pending: true, id: pending.id, message: "Grade creation submitted for approval" },
+        { status: 202 }
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // admin / superuser / registrar → apply immediately
+    // ------------------------------------------------------------------
+    await prisma.academicTerm.upsert({
+      where: { academicYear_semester: { academicYear, semester } },
+      create: { academicYear, semester },
       update: {},
     });
 
-    // Use upsert to handle potential duplicates gracefully
     const newGrade = await prisma.grade.upsert({
       where: {
         studentNumber_courseCode_academicYear_semester: {
@@ -351,7 +470,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create a grade log entry for audit trail
     await prisma.gradeLog.create({
       data: {
         studentNumber,
@@ -377,6 +495,11 @@ export async function POST(request: Request) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// DELETE — Delete a grade
+//   - registrar_staff → pending approval
+//   - admin/superuser/registrar → applied immediately
+// ---------------------------------------------------------------------------
 export async function DELETE(request: Request) {
   try {
     const { userId, sessionClaims } = await auth();
@@ -385,8 +508,7 @@ export async function DELETE(request: Request) {
     }
 
     const role = (sessionClaims?.metadata as { role?: string })?.role;
-    const allowedRoles = ["admin", "superuser", "registrar"];
-    if (!role || !allowedRoles.includes(role)) {
+    if (!role || !ALL_MODIFY_ROLES.includes(role)) {
       return NextResponse.json(
         { error: "Forbidden: insufficient permissions" },
         { status: 403 }
@@ -401,24 +523,91 @@ export async function DELETE(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 429 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 429 });
       }
       throw error;
     }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-
     if (!id) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    await prisma.grade.delete({
+    const user = await currentUser();
+    const editorIdentifier = user?.fullName ?? "";
+    const isRegistrarStaff = role === "registrar_staff";
+
+    // Fetch the existing grade for its data (needed for both paths)
+    const existingGrade = await prisma.grade.findUnique({
       where: { id },
+      select: {
+        id: true,
+        studentNumber: true,
+        academicYear: true,
+        semester: true,
+        courseCode: true,
+        creditUnit: true,
+        courseTitle: true,
+        grade: true,
+        remarks: true,
+        instructor: true,
+      },
     });
+    if (!existingGrade) {
+      return NextResponse.json({ error: "Grade not found" }, { status: 404 });
+    }
+
+    // ------------------------------------------------------------------
+    // registrar_staff → create pending change
+    // ------------------------------------------------------------------
+    if (isRegistrarStaff) {
+      const pending = await createPendingChange({
+        action: "DELETE",
+        studentNumber: existingGrade.studentNumber,
+        gradeData: {
+          courseCode: existingGrade.courseCode,
+          creditUnit: existingGrade.creditUnit,
+          courseTitle: existingGrade.courseTitle,
+          grade: existingGrade.grade,
+          remarks: existingGrade.remarks,
+          instructor: existingGrade.instructor,
+        },
+        gradeId: id,
+        courseCode: existingGrade.courseCode,
+        academicYear: existingGrade.academicYear,
+        semester: existingGrade.semester,
+        requestedById: userId,
+        requestedByName: editorIdentifier,
+        requestedRole: role,
+      });
+
+      return NextResponse.json(
+        { pending: true, id: pending.id, message: "Grade deletion submitted for approval" },
+        { status: 202 }
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // admin / superuser / registrar → delete immediately
+    // ------------------------------------------------------------------
+    // Create audit log BEFORE deletion so we have the data
+    await prisma.gradeLog.create({
+      data: {
+        studentNumber: existingGrade.studentNumber,
+        courseCode: existingGrade.courseCode,
+        courseTitle: existingGrade.courseTitle,
+        creditUnit: existingGrade.creditUnit,
+        grade: existingGrade.grade,
+        remarks: existingGrade.remarks,
+        instructor: existingGrade.instructor,
+        academicYear: existingGrade.academicYear,
+        semester: existingGrade.semester,
+        action: "DELETED",
+      },
+    });
+
+    await prisma.grade.delete({ where: { id } });
 
     return NextResponse.json({ message: "Grade deleted successfully" });
   } catch (error) {

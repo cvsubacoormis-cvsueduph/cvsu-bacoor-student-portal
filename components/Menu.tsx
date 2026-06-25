@@ -85,13 +85,19 @@ export default async function Menu() {
           icon: "/result.png",
           label: "Upload / Insert Grades",
           href: "/list/uploading",
-          visible: ["admin", "superuser", "faculty"],
+          visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
         {
           icon: "/calendar.png",
           label: "Grades Lists",
           href: "/list/grades-lists",
           visible: ["admin", "superuser", "registrar", "registrar_staff"],
+        },
+        {
+          icon: "/exam.png",
+          label: "Grade Approvals",
+          href: "/list/grade-approvals",
+          visible: ["admin", "superuser", "registrar"],
         },
         {
           icon: "/student.png",

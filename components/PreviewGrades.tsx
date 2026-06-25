@@ -149,7 +149,7 @@ export function PreviewGrades({
   lastName,
   role,
 }: PreviewGradesProps) {
-  const canEditGrades = role === "admin" || role === "superuser" || role === "registrar";
+  const canEditGrades = role === "admin" || role === "superuser" || role === "registrar" || role === "registrar_staff";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [academicTerms, setAcademicTerms] = useState<AcademicTerm[]>([]);
   const [academicYear, setAcademicYear] = useState<string>("");
@@ -360,16 +360,21 @@ export function PreviewGrades({
         throw new Error("Failed to delete grade");
       }
 
-      const newGrades = grades.filter((_, i) => i !== index);
-      const newEditedGrades = editedGrades.filter((_, i) => i !== index);
-      setGrades(newGrades);
-      setEditedGrades(newEditedGrades);
-      // Clean up editing rows
-      const newEditingRows = { ...editingRows };
-      delete newEditingRows[index];
-      setEditingRows(newEditingRows);
-
-      toast.success("Grade deleted successfully");
+      const result = await res.json();
+      if (result.pending) {
+        // Deletion is pending approval — do NOT remove from UI
+        toast.success("Grade deletion submitted for approval");
+      } else {
+        const newGrades = grades.filter((_, i) => i !== index);
+        const newEditedGrades = editedGrades.filter((_, i) => i !== index);
+        setGrades(newGrades);
+        setEditedGrades(newEditedGrades);
+        // Clean up editing rows
+        const newEditingRows = { ...editingRows };
+        delete newEditingRows[index];
+        setEditingRows(newEditingRows);
+        toast.success("Grade deleted successfully");
+      }
     } catch (error) {
       console.error("Error deleting grade", error);
       toast.error("Failed to delete grade");
@@ -404,15 +409,22 @@ export function PreviewGrades({
 
         const updatedGrade = await res.json();
 
-        // Update both grades and editedGrades states
-        setGrades((prev) =>
-          prev.map((g, i) => (i === index ? updatedGrade : g))
-        );
-        setEditedGrades((prev) =>
-          prev.map((g, i) => (i === index ? updatedGrade : g))
-        );
-
-        toast.success(isNew ? "Grade added successfully" : "Grade updated successfully");
+        if (updatedGrade.pending) {
+          // Change is pending registrar approval — revert local edit
+          setEditedGrades((prev) =>
+            prev.map((g, i) => (i === index ? grades[i] : g)),
+          );
+          toast.success(isNew ? "Grade submitted for approval" : "Update submitted for approval");
+        } else {
+          // Update both grades and editedGrades states
+          setGrades((prev) =>
+            prev.map((g, i) => (i === index ? updatedGrade : g))
+          );
+          setEditedGrades((prev) =>
+            prev.map((g, i) => (i === index ? updatedGrade : g))
+          );
+          toast.success(isNew ? "Grade added successfully" : "Grade updated successfully");
+        }
       } catch (error) {
         console.error("Error updating grade", error);
         toast.error("Failed to update grade");
@@ -459,25 +471,28 @@ export function PreviewGrades({
         return;
       }
 
-      const updatePromises = changedGrades.map(async (grade) => {
-        const isNew = grade.id === "new";
-        const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${grade.id}`;
-        const method = isNew ? "POST" : "PATCH";
+      const results = await Promise.all(
+        changedGrades.map(async (grade) => {
+          const isNew = grade.id === "new";
+          const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${grade.id}`;
+          const method = isNew ? "POST" : "PATCH";
 
-        const res = await fetch(url, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(grade),
-        });
-        if (!res.ok) {
-          throw new Error(`Failed to update grade for ${grade.courseCode}`);
-        }
-        return res.json();
-      });
+          const res = await fetch(url, {
+            method,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(grade),
+          });
+          if (!res.ok) {
+            throw new Error(`Failed to update grade for ${grade.courseCode}`);
+          }
+          return res.json();
+        })
+      );
 
-      await Promise.all(updatePromises);
+      // Check if any changes are pending approval
+      const hasPending = results.some((r) => r?.pending);
 
       // Refresh data
       const response = await fetch(
@@ -491,7 +506,11 @@ export function PreviewGrades({
 
       setEditingRows({});
 
-      toast.success("Grades updated successfully");
+      if (hasPending) {
+        toast.success("Changes submitted for registrar approval.");
+      } else {
+        toast.success("Grades updated successfully");
+      }
       setIsDialogOpen(false);
     } catch (error) {
       console.error("Error updating grades", error);
