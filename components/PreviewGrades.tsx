@@ -417,10 +417,31 @@ export function PreviewGrades({
   // Toggle edit mode for a given row.
   const toggleEditRow = async (index: number) => {
     if (editingRows[index]) {
-      // If we're exiting edit mode, save the changes
       try {
         const gradeToSave = editedGrades[index];
         const isNew = gradeToSave.id === "new";
+        const original = grades[index];
+
+        // If no changes were made (not a new row), skip save and close edit mode
+        if (!isNew) {
+          const hasChanges =
+            gradeToSave.courseCode !== original.courseCode ||
+            gradeToSave.creditUnit !== original.creditUnit ||
+            gradeToSave.courseTitle !== original.courseTitle ||
+            gradeToSave.grade !== original.grade ||
+            gradeToSave.reExam !== original.reExam ||
+            gradeToSave.remarks !== original.remarks ||
+            gradeToSave.instructor !== original.instructor;
+
+          if (!hasChanges) {
+            setEditingRows((prev) => {
+              const next = { ...prev };
+              delete next[index];
+              return next;
+            });
+            return;
+          }
+        }
 
         const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${gradeToSave.id}`;
         const method = isNew ? "POST" : "PATCH";

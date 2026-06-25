@@ -251,6 +251,29 @@ export default function PreviewGrade({
       try {
         const g = editedGrades[index];
         const isNew = g.id === "new";
+        const original = grades[index];
+
+        // If no changes were made (not a new row), skip save and just close edit mode
+        if (!isNew) {
+          const hasChanges =
+            g.courseCode !== original.courseCode ||
+            g.creditUnit !== original.creditUnit ||
+            g.courseTitle !== original.courseTitle ||
+            g.grade !== original.grade ||
+            g.reExam !== original.reExam ||
+            g.remarks !== original.remarks ||
+            g.instructor !== original.instructor;
+
+          if (!hasChanges) {
+            setEditingRows((prev) => {
+              const next = { ...prev };
+              delete next[index];
+              return next;
+            });
+            return;
+          }
+        }
+
         const url = isNew ? "/api/preview-grades" : `/api/preview-grades?id=${g.id}`;
         const method = isNew ? "POST" : "PATCH";
         const res = await fetch(url, {
