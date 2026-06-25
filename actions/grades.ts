@@ -222,7 +222,13 @@ export async function addManualGrade(
   }
 
   const userRole = (user?.publicMetadata?.role as string) || "";
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
+  const allowedRoles = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+    "faculty",
+  ];
   if (!allowedRoles.includes(userRole)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
