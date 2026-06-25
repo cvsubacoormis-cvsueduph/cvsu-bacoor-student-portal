@@ -109,8 +109,8 @@ export function BulkUploadUsers() {
           role: (row.role?.toString().toLowerCase() === "registrar"
             ? "registrar"
             : row.role?.toString().toLowerCase() === "registrar_staff"
-            ? "registrar_staff"
-            : "faculty") as "faculty" | "registrar" | "registrar_staff",
+              ? "registrar_staff"
+              : "faculty") as "faculty" | "registrar" | "registrar_staff",
         }));
 
         // Auto-generate usernames from firstName + lastName when username is empty

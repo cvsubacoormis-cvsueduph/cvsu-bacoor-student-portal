@@ -244,7 +244,7 @@ export async function PATCH(request: Request) {
     const editorIdentifier = user?.fullName ?? "";
     const isRegistrarStaff = role === "registrar_staff";
 
-    // Fetch the existing grade to get its studentNumber / term
+    // Fetch the existing grade to get its studentNumber / term AND full current values
     const existingGrade = await prisma.grade.findUnique({
       where: { id },
       select: {
@@ -253,6 +253,12 @@ export async function PATCH(request: Request) {
         academicYear: true,
         semester: true,
         courseCode: true,
+        creditUnit: true,
+        courseTitle: true,
+        grade: true,
+        reExam: true,
+        remarks: true,
+        instructor: true,
       },
     });
     if (!existingGrade) {
@@ -274,6 +280,16 @@ export async function PATCH(request: Request) {
           reExam: reExam === "" ? null : reExam,
           remarks,
           instructor,
+          // Store current values for diff display on approvals page
+          _previous: {
+            courseCode: existingGrade.courseCode,
+            creditUnit: existingGrade.creditUnit,
+            courseTitle: existingGrade.courseTitle,
+            grade: existingGrade.grade,
+            reExam: existingGrade.reExam,
+            remarks: existingGrade.remarks,
+            instructor: existingGrade.instructor,
+          },
         },
         gradeId: id,
         courseCode: existingGrade.courseCode,

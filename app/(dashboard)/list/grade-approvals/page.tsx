@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { ChangeDiff } from "@/components/grades/ChangeDiff";
 
 type PendingChange = {
   id: string;
@@ -79,8 +80,10 @@ export default function GradeApprovalsPage() {
           const body = await res.json();
           if (body?.error) errorMessage = body.error;
         } catch {
-          if (res.status === 403) errorMessage = "You don't have permission to view pending changes.";
-          else if (res.status === 500) errorMessage = "Server error while fetching pending changes.";
+          if (res.status === 403)
+            errorMessage = "You don't have permission to view pending changes.";
+          else if (res.status === 500)
+            errorMessage = "Server error while fetching pending changes.";
           else errorMessage = `Request failed (status ${res.status})`;
         }
         throw new Error(errorMessage);
@@ -118,17 +121,72 @@ export default function GradeApprovalsPage() {
     return () => clearInterval(interval);
   }, [silentPoll]);
 
+  function buildDiffHtml(change: PendingChange): string {
+    const gd = change.gradeData as Record<string, any>;
+    const prev = gd?._previous as Record<string, any> | undefined;
+
+    if (change.action === "DELETE") {
+      return `
+        <div class="text-left text-sm space-y-2">
+          <p><strong class="text-red-600">DELETE:</strong> The following grade will be removed:</p>
+          <div class="bg-red-50 border border-red-200 rounded p-2 text-xs space-y-1">
+            <p><span class="text-gray-500">Course:</span> ${gd?.courseCode || "—"}</p>
+            <p><span class="text-gray-500">Grade:</span> <strong>${gd?.grade || "—"}</strong></p>
+            <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
+          </div>
+          <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
+          <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
+        </div>`;
+    }
+
+    if (change.action === "CREATE") {
+      return `
+        <div class="text-left text-sm space-y-2">
+          <p><strong class="text-green-600">CREATE:</strong> New grade will be added:</p>
+          <div class="bg-green-50 border border-green-200 rounded p-2 text-xs space-y-1">
+            <p><span class="text-gray-500">Course:</span> ${gd?.courseCode || "—"}</p>
+            <p><span class="text-gray-500">Grade:</span> <strong>${gd?.grade || "—"}</strong></p>
+            <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
+            <p><span class="text-gray-500">Instructor:</span> ${gd?.instructor || "—"}</p>
+          </div>
+          <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
+          <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
+        </div>`;
+    }
+
+    // UPDATE — side-by-side
+    const fields = [
+      { label: "Course Code", prev: prev?.courseCode, next: gd?.courseCode },
+      { label: "Credits", prev: prev?.creditUnit, next: gd?.creditUnit },
+      { label: "Title", prev: prev?.courseTitle, next: gd?.courseTitle },
+      { label: "Grade", prev: prev?.grade, next: gd?.grade },
+      { label: "Remarks", prev: prev?.remarks, next: gd?.remarks },
+      { label: "Instructor", prev: prev?.instructor, next: gd?.instructor },
+    ];
+    const changedFields = fields
+      .filter((f) => String(f.prev ?? "") !== String(f.next ?? ""))
+      .map(
+        (f) =>
+          `<tr><td class="text-gray-500 pr-3">${f.label}</td><td class="line-through text-gray-400 pr-2">${f.prev ?? "—"}</td><td class="font-medium text-blue-700 bg-blue-50 px-1">${f.next ?? "—"}</td></tr>`,
+      )
+      .join("");
+
+    return `
+      <div class="text-left text-sm space-y-2">
+        <p><strong class="text-amber-600">UPDATE:</strong> The following fields will change:</p>
+        <table class="text-xs w-full">
+          <thead><tr class="text-gray-500"><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
+          <tbody>${changedFields}</tbody>
+        </table>
+        <p class="text-xs mt-3"><strong>Student:</strong> ${change.studentNumber}</p>
+        <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
+      </div>`;
+  }
+
   const handleApprove = async (change: PendingChange) => {
     const result = await Swal.fire({
       title: "Approve this change?",
-      html: `
-        <div class="text-left text-sm space-y-1">
-          <p><strong>Action:</strong> ${change.action}</p>
-          <p><strong>Student:</strong> ${change.studentNumber}</p>
-          <p><strong>Course:</strong> ${change.courseCode || "N/A"}</p>
-          <p><strong>Requested by:</strong> ${change.requestedByName} (${change.requestedRole})</p>
-        </div>
-      `,
+      html: buildDiffHtml(change),
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Yes, Approve",
@@ -314,7 +372,9 @@ export default function GradeApprovalsPage() {
                     <TableCell className="font-mono text-sm">
                       {change.studentNumber}
                     </TableCell>
-                    <TableCell>{change.courseCode || gd?.courseCode || "—"}</TableCell>
+                    <TableCell>
+                      {change.courseCode || gd?.courseCode || "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -329,18 +389,8 @@ export default function GradeApprovalsPage() {
                         {change.action}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <div className="text-sm space-y-0.5">
-                        <p>
-                          <span className="text-gray-500">Grade:</span>{" "}
-                          <span className="font-semibold text-blue-700">
-                            {gd?.grade || "—"}
-                          </span>
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Credits: {gd?.creditUnit ?? "—"} | Title: {gd?.courseTitle || "—"}
-                        </p>
-                      </div>
+                    <TableCell className="min-w-[280px]">
+                      <ChangeDiff action={change.action} proposed={gd} />
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
                       {formatAcademicYear(change.academicYear)}{" "}
@@ -349,7 +399,9 @@ export default function GradeApprovalsPage() {
                     <TableCell>
                       <div className="text-sm">
                         <p>{change.requestedByName}</p>
-                        <Badge className={formatRoleBadge(change.requestedRole)}>
+                        <Badge
+                          className={formatRoleBadge(change.requestedRole)}
+                        >
                           {change.requestedRole.replace("_", " ")}
                         </Badge>
                       </div>
