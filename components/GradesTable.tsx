@@ -83,8 +83,7 @@ export default function Grades({
       : availableYears.length > 0
         ? availableYears[0]
         : "";
-  const effectiveSemester =
-    semester && semester !== "all" ? semester : "FIRST";
+  const effectiveSemester = semester && semester !== "all" ? semester : "FIRST";
 
   const [selectedYear, setSelectedYear] = useState(effectiveYear);
   const [selectedSemester, setSelectedSemester] = useState(effectiveSemester);
@@ -95,10 +94,7 @@ export default function Grades({
   }, [effectiveYear, effectiveSemester]);
 
   const filteredGrades = grades.filter((g) => {
-    return (
-      g.academicYear === effectiveYear &&
-      g.semester === effectiveSemester
-    );
+    return g.academicYear === effectiveYear && g.semester === effectiveSemester;
   });
 
   const totalSubjectsEnrolled = filteredGrades.length;
@@ -179,21 +175,10 @@ export default function Grades({
             <TriangleAlert className="h-4 w-4" color="blue" />
             <AlertTitle className="text-blue-800">Notice</AlertTitle>
             <AlertDescription className="text-blue-700">
-              <p>
-                Due to some data inconsistencies encountered during the grade
-                upload process, some grades may not have been fully uploaded or
-                reflected correctly.
-              </p>
               <p className="mt-2">
-                Please rest assured that these can still be updated and corrected.
-                If you believe your grade is missing or incorrect, kindly contact
-                the MIS Coordinator or email us at{" "}
-                <a
-                  href="mailto:cvsubacoor.mis@cvsu.edu.ph"
-                  className="font-medium text-blue-700 underline break-all sm:break-normal"
-                >
-                  cvsubacoor.mis@cvsu.edu.ph
-                </a>{" "}
+                Please rest assured that these can still be updated and
+                corrected. If you believe your grade is missing or incorrect,
+                kindly contact your instructor or the registrar&apos;s office
                 for assistance.
               </p>
               <p className="mt-2">Thank you for your understanding.</p>
@@ -262,7 +247,10 @@ export default function Grades({
               </Select>
             </div>
 
-            <Button type="submit" className="w-full sm:w-auto mt-auto bg-blue-700 hover:bg-blue-600">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto mt-auto bg-blue-700 hover:bg-blue-600"
+            >
               Apply Filters
             </Button>
           </form>
@@ -316,21 +304,25 @@ export default function Grades({
                         <TableCell className="font-medium">
                           {grade.courseCode}
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate font-semibold" title={grade.courseTitle}>
+                        <TableCell
+                          className="max-w-[200px] truncate font-semibold"
+                          title={grade.courseTitle}
+                        >
                           {grade.courseTitle}
                         </TableCell>
                         <TableCell className="text-center font-semibold">
                           {grade.creditUnit}
                         </TableCell>
                         <TableCell
-                          className={`text-center font-bold ${isFailing ? "text-destructive" : "text-primary"
-                            }`}
+                          className={`text-center font-bold ${
+                            isFailing ? "text-destructive" : "text-primary"
+                          }`}
                         >
                           {displayGrade}
                         </TableCell>
                         <TableCell className="text-center font-bold">
                           {grade.reExam !== null &&
-                            !isNaN(parseFloat(grade.reExam))
+                          !isNaN(parseFloat(grade.reExam))
                             ? parseFloat(grade.reExam).toFixed(2)
                             : "-"}
                         </TableCell>
@@ -342,7 +334,9 @@ export default function Grades({
                                 : "destructive"
                             }
                             className={
-                              grade.remarks === "PASSED" ? "bg-green-600 hover:bg-green-700" : ""
+                              grade.remarks === "PASSED"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : ""
                             }
                           >
                             {grade.remarks}
@@ -376,19 +370,24 @@ export default function Grades({
               <p className="text-2xl font-bold">{totalSubjectsEnrolled}</p>
             </div>
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
-              <p className="text-sm text-muted-foreground">Total Credits Enrolled</p>
+              <p className="text-sm text-muted-foreground">
+                Total Credits Enrolled
+              </p>
               <p className="text-2xl font-bold">{totalUnitsEnrolled}</p>
             </div>
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
-              <p className="text-sm text-muted-foreground">Total Credits Earned</p>
-              <p className="text-2xl font-bold">{totalCreditsEarned.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground">
+                Total Credits Earned
+              </p>
+              <p className="text-2xl font-bold">
+                {totalCreditsEarned.toFixed(2)}
+              </p>
             </div>
             <div className="bg-muted/30 p-4 rounded-lg border text-center">
               <p className="text-sm text-muted-foreground">GPA</p>
               <p className="text-2xl font-bold text-primary">{gpa}</p>
             </div>
           </div>
-
         </CardContent>
       </Card>
     </div>
