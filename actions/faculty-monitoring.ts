@@ -306,7 +306,7 @@ export async function getFacultyUploadStatus(
 // ── History action: per-faculty upload tracking ─────────────────────────────
 
 /** Maximum GradeLog rows to fetch for history (pre-filtered by name). */
-const HISTORY_LOG_LIMIT = 5000;
+const HISTORY_LOG_LIMIT = 10000;
 
 /** Time window (ms) used to cluster consecutive GradeLog entries into one session. */
 const SESSION_GAP_MS = 5 * 60 * 1000; // 5 minutes
