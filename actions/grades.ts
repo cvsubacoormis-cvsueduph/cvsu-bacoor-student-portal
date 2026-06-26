@@ -270,10 +270,22 @@ export async function addManualGrade(
   // registrar_staff → create pending change instead of applying directly
   // ------------------------------------------------------------------
   if (isRegistrarStaff) {
+    const existingGrade = await prisma.grade.findFirst({
+      where: {
+        studentNumber: gradeData.studentNumber,
+        courseCode: gradeData.courseCode.toUpperCase(),
+        academicYear: gradeData.academicYear,
+        semester: gradeData.semester,
+      },
+    });
+
+    const isUpdate = !!existingGrade;
+
     const pending = await prisma.pendingGradeChange.create({
       data: {
-        action: "CREATE",
+        action: isUpdate ? "UPDATE" : "CREATE",
         studentNumber: gradeData.studentNumber,
+        gradeId: existingGrade?.id ?? null,
         gradeData: {
           courseCode: gradeData.courseCode,
           creditUnit: Number(gradeData.creditUnit),
@@ -301,7 +313,9 @@ export async function addManualGrade(
       success: true,
       pending: true,
       pendingId: pending.id,
-      message: "Grade submission sent for registrar approval.",
+      message: isUpdate
+        ? "Grade update sent for registrar approval."
+        : "Grade submission sent for registrar approval.",
     };
   }
 

@@ -537,7 +537,6 @@ export default function ManualGradeEntry() {
       return;
     }
 
-    // Check for existing grade
     const alreadyHasGrade = await checkExsistingGrade({
       studentNumber: selectedStudent.studentNumber,
       courseCode: values.courseCode,
@@ -545,29 +544,21 @@ export default function ManualGradeEntry() {
       semester: semester as Semester,
     });
 
-    if (alreadyHasGrade) {
-      Swal.fire({
-        icon: "warning",
-        title: "Grade Already Exists",
-        text: "This student already has a grade for this course in the selected term.",
-      });
-      return;
-    }
-
     const result = await Swal.fire({
-      title: "Confirm Grade Submission",
+      title: alreadyHasGrade ? "Update Existing Grade?" : "Confirm Grade Submission",
       html: `
             <div class="text-left text-sm">
                 <p><strong>Student:</strong> ${selectedStudent.firstName} ${selectedStudent.lastName}</p>
                 <p><strong>Course:</strong> ${values.courseCode}</p>
                 <p><strong>Grade:</strong> <span class="text-blue-600 font-bold text-lg">${values.grade}</span></p>
                 <p><strong>Remarks:</strong> ${values.remarks}</p>
+                ${alreadyHasGrade ? `<p class="text-amber-600 mt-2 text-xs">This student already has a grade for this course in the selected term. It will be updated.</p>` : ""}
             </div>
         `,
-      icon: "question",
+      icon: alreadyHasGrade ? "warning" : "question",
       showCancelButton: true,
-      confirmButtonText: "Yes, Submit Grade",
-      confirmButtonColor: "#1d4ed8",
+      confirmButtonText: alreadyHasGrade ? "Yes, Update Grade" : "Yes, Submit Grade",
+      confirmButtonColor: alreadyHasGrade ? "#d97706" : "#1d4ed8",
     });
 
     if (!result.isConfirmed) return;
