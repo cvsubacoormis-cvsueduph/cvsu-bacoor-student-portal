@@ -298,6 +298,18 @@ export async function addManualGrade(
           academicYear: gradeData.academicYear,
           semester: gradeData.semester,
           uploadedBy: user?.fullName || "",
+          ...(existingGrade
+            ? {
+                _previous: {
+                  courseCode: existingGrade.courseCode,
+                  creditUnit: existingGrade.creditUnit,
+                  courseTitle: existingGrade.courseTitle,
+                  grade: existingGrade.grade,
+                  remarks: existingGrade.remarks ?? "",
+                  instructor: existingGrade.instructor,
+                },
+              }
+            : {}),
         },
         courseCode: gradeData.courseCode,
         academicYear: gradeData.academicYear,
@@ -355,6 +367,14 @@ export async function addManualGrade(
             academicYear: gradeData.academicYear,
             semester: gradeData.semester,
             uploadedBy: user?.fullName || "",
+            _previous: {
+              courseCode: existingGrade.courseCode,
+              creditUnit: existingGrade.creditUnit,
+              courseTitle: existingGrade.courseTitle,
+              grade: existingGrade.grade,
+              remarks: existingGrade.remarks ?? "",
+              instructor: existingGrade.instructor,
+            },
           },
           courseCode: gradeData.courseCode,
           academicYear: gradeData.academicYear,
