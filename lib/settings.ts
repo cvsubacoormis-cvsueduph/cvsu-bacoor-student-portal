@@ -41,4 +41,5 @@ export const routeAccessMap: RouteAccessMap = {
   "/list/schedule(.*)": ["admin"],
   "/list/seed(.*)": ["admin"],
   "/list/grade-approvals(.*)": ["admin", "superuser", "registrar"],
+  "/list/my-grade-changes(.*)": ["admin", "superuser", "registrar", "registrar_staff", "faculty"],
 };

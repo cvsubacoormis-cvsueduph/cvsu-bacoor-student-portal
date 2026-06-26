@@ -202,6 +202,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Uploading grades is currently disabled by administrators." }, { status: 403 });
   }
 
+  const facultyApprovalSetting = await prisma.systemSettings.findUnique({
+    where: { key: "FACULTY_UPDATE_REQUIRES_APPROVAL" },
+  });
+  const isFacultyApprovalEnabled = facultyApprovalSetting?.value !== "false";
+
   // Expecting a batch of grades, not the entire file
   const body = await req.json();
   let grades: any[] = [];
@@ -401,6 +406,7 @@ export async function POST(req: Request) {
       semester,
     },
     select: {
+      id: true,
       studentNumber: true,
       courseCode: true,
       grade: true,
@@ -419,6 +425,7 @@ export async function POST(req: Request) {
   const logsToCreate = [];
   const failedLogsToCreate = []; // Separate array for failed logs
   const processedKeys = new Set<string>(); // Track student+course pairs within this batch
+  const pendingGradeChangesToCreate: any[] = []; // Faculty updates needing registrar approval
 
   // Process each entry in the batch
   for (const entry of grades) {
@@ -920,6 +927,50 @@ export async function POST(req: Request) {
           continue;
         }
 
+        // Faculty updating existing grades → needs registrar approval (when enabled)
+        if (isFacultyApprovalEnabled && isFaculty) {
+          pendingGradeChangesToCreate.push({
+            action: "UPDATE",
+            studentNumber: targetStudent.studentNumber,
+            gradeId: existingGrade.id,
+            gradeData: {
+              courseCode: sanitizedCourseCode,
+              creditUnit: resolvedCreditUnit,
+              courseTitle: resolvedCourseTitle,
+              grade: standardizedGrade,
+              reExam: standardizedReExam,
+              remarks: sanitizedRemarks,
+              instructor: finalInstructorName,
+              studentNumber: targetStudent.studentNumber,
+              academicYear,
+              semester,
+              uploadedBy: user?.fullName ?? "",
+            },
+            courseCode: sanitizedCourseCode,
+            academicYear,
+            semester,
+            requestedById: userId,
+            requestedByName: user?.fullName ?? "",
+            requestedRole: userRole,
+            status: "PENDING",
+          });
+
+          const pendingChanges: string[] = [];
+          if (existingGrade.grade !== standardizedGrade) pendingChanges.push("grade");
+          if (existingGrade.reExam !== standardizedReExam) pendingChanges.push("re-exam");
+          if (existingGrade.remarks !== sanitizedRemarks) pendingChanges.push("remarks");
+          if (existingGrade.instructor !== finalInstructorName) pendingChanges.push("instructor");
+
+          results.push({
+            studentNumber: targetStudent.studentNumber,
+            courseCode: sanitizedCourseCode,
+            status: `⏳ Pending approval — changes to ${pendingChanges.join(", ")} sent to registrar`,
+            studentName: `${targetStudent.firstName} ${targetStudent.lastName}`,
+            matchQuality: "pending",
+          });
+          continue;
+        }
+
         action = "UPDATED";
 
         // Build a descriptive status showing what changed
@@ -1105,6 +1156,17 @@ export async function POST(req: Request) {
       } catch (logError) {
         console.error("Failed to save error logs:", logError);
         // Don't fail the whole batch if logging fails
+      }
+    }
+
+    // Create pending grade changes for faculty updates needing registrar approval
+    if (pendingGradeChangesToCreate.length > 0) {
+      try {
+        for (const pending of pendingGradeChangesToCreate) {
+          await prisma.pendingGradeChange.create({ data: pending });
+        }
+      } catch (pendingError) {
+        console.error("Failed to create pending grade changes:", pendingError);
       }
     }
   }

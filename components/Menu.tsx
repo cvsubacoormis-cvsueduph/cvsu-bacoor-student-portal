@@ -101,6 +101,12 @@ export default async function Menu() {
           visible: ["admin", "superuser", "registrar"],
         },
         {
+          icon: "/exam.png",
+          label: "My Grade Change Requests",
+          href: "/list/my-grade-changes",
+          visible: ["admin", "superuser", "registrar", "registrar_staff", "faculty"],
+        },
+        {
           icon: "/student.png",
           label: "Faculty Upload Monitoring",
           href: "/list/faculty-monitoring",
