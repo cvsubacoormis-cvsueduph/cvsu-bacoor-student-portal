@@ -396,6 +396,8 @@ export function UploadGrades() {
 
     let completed = 0;
     let rateLimitExceeded = false;
+    let localHasUpdates = false;
+    let localUpdateCount = 0;
 
     // Validate first
     // We can do client-side validation for all rows quickly before starting
@@ -483,6 +485,14 @@ export function UploadGrades() {
           } else {
             const result = await res.json();
             if (result.results) {
+              // Detect UPDATE/pending rows in this batch before React state commits
+              const batchUpdates = result.results.filter(
+                (r: any) =>
+                  r.matchQuality === "updated" || r.matchQuality === "pending",
+              );
+              if (batchUpdates.length > 0) localHasUpdates = true;
+              localUpdateCount += batchUpdates.length;
+
               setUploadResults((prev) => [...prev, ...result.results]);
               // Check for warnings/errors in the success response
               const failures = result.results.filter((r: any) =>
@@ -527,13 +537,8 @@ export function UploadGrades() {
           setHasValidated(true);
           clearPersistedState(); // validation complete — clean up
 
-          // Detect if any rows would update existing grades
-          const updatedRows = uploadResults.filter(
-            (r: UploadResult) =>
-              r.matchQuality === "updated" ||
-              r.status.includes("⏳ Pending approval"),
-          ).length;
-          setHasUpdates(updatedRows > 0);
+          // Use locally accumulated counts (not stale uploadResults state)
+          setHasUpdates(localHasUpdates);
 
           const successes = uploadResults.filter((r: any) =>
             r.status.includes("✅"),
@@ -552,9 +557,9 @@ export function UploadGrades() {
             summaryParts.push(`${warnings} would be saved with corrections.`);
           if (failures > 0)
             summaryParts.push(`${failures} could not be processed.`);
-          if (updatedRows > 0)
+          if (localUpdateCount > 0)
             summaryParts.push(
-              `${updatedRows} would update existing grades and require a reason.`,
+              `${localUpdateCount} would update existing grades and require a reason.`,
             );
           summaryParts.push("No changes have been made to the database.");
 
