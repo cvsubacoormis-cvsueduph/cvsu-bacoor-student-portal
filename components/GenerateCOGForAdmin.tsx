@@ -21,9 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import {
-  getStudentGradesWithReExam,
-} from "@/actions/student-grades/student-grades";
+import { getStudentGradesWithReExam } from "@/actions/student-grades/student-grades";
 import { generateCOGAdminWithRateLimit } from "@/actions/document-generation";
 import {
   courseClerkshipMap,
@@ -34,13 +32,11 @@ import {
 import toast from "react-hot-toast";
 import { PrinterIcon, AlertCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { semesterMap } from "@/lib/utils";
 
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
-const purposes = [
-  "Enrollment/Evaluation Purposes Only",
-  "Personal Copy",
-];
+const purposes = ["Enrollment/Evaluation Purposes Only", "Personal Copy"];
 
 type AcademicOption = {
   academicYear: string;
@@ -78,6 +74,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [studentData, setStudentData] = useState<StudentData | null>(null);
   const [purpose, setPurpose] = useState("");
+  const [includeStamp, setIncludeStamp] = useState(false);
 
   useEffect(() => {
     if (isDialogOpen && !studentData) {
@@ -100,10 +97,13 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
           setStudentData(formattedData);
 
           const optionsMap = new Map<string, AcademicOption>();
-          formattedData.grades.forEach(g => {
+          formattedData.grades.forEach((g) => {
             const key = `${g.academicYear}-${g.semester}`;
             if (!optionsMap.has(key)) {
-              optionsMap.set(key, { academicYear: g.academicYear, semester: g.semester });
+              optionsMap.set(key, {
+                academicYear: g.academicYear,
+                semester: g.semester,
+              });
             }
           });
           setAcademicOptions(Array.from(optionsMap.values()));
@@ -158,7 +158,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       const { student } = await generateCOGAdminWithRateLimit(
         studentId,
         academicYear,
-        semester
+        semester,
       );
 
       const data = {
@@ -171,7 +171,11 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         grades: student.grades,
       };
 
-      await generatePDF(data as StudentData, student.grades as Grade[]);
+      await generatePDF(
+        data as StudentData,
+        student.grades as Grade[],
+        includeStamp,
+      );
       setIsDialogOpen(false);
     } catch (error) {
       console.error("PDF Generate Error:", error);
@@ -181,11 +185,12 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         err?.code === "RATE_LIMIT_EXCEEDED"
       ) {
         toast.error(
-          "You have reached the limit for generating this document. Please wait a minute and try again."
+          "You have reached the limit for generating this document. Please wait a minute and try again.",
         );
       } else {
         toast.error(
-          err?.message || "Something went wrong while generating your COG. Please try again."
+          err?.message ||
+            "Something went wrong while generating your COG. Please try again.",
         );
       }
     } finally {
@@ -209,12 +214,22 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       })),
     );
     const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data));
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(data),
+    );
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    return hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
   };
 
-  const generatePDF = async (student: StudentData, grades: Grade[]) => {
+  const generatePDF = async (
+    student: StudentData,
+    grades: Grade[],
+    includeStamp: boolean,
+  ) => {
     // Generate a unique owner password per document
     const ownerPassword = crypto.randomUUID();
 
@@ -257,11 +272,13 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
-    const fullName = `${student.firstName}, ${student.middleInit || ""} ${student.lastName
-      }`;
+    const fullName = `${student.firstName}, ${student.middleInit || ""} ${
+      student.lastName
+    }`;
     const studentNo = student.studentNumber;
     const course = student.course;
-    const major = student.major !== "NONE" && student.major ? student.major : "NONE";
+    const major =
+      student.major !== "NONE" && student.major ? student.major : "NONE";
 
     doc.setFontSize(7);
     doc.setTextColor(139, 0, 0);
@@ -291,7 +308,11 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text("Academic Year:", 120, 65);
     doc.setTextColor(0, 0, 139);
     doc.setFont("helvetica", "italic");
-    doc.text(`${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`, 140, 65);
+    doc.text(
+      `${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`,
+      140,
+      65,
+    );
 
     doc.setTextColor(139, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -318,7 +339,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         year: "numeric",
       }),
       130,
-      70
+      70,
     );
 
     autoTable(doc, {
@@ -359,7 +380,9 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       ],
       body: grades.map((g) => [
         g.courseCode,
-        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade) ? "0" : g.creditUnit.toString(),
+        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
+          ? "0"
+          : g.creditUnit.toString(),
         g.courseTitle,
         ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
           ? { content: g.grade || "-", styles: { textColor: [255, 0, 0] } }
@@ -399,14 +422,16 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     // BUT treats DRP, INC, 4.00, 5.00, US as 0 units
     const totalUnitsEnrolled = grades.reduce((acc, g) => {
       const gradeStr = String(g.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
       return acc + g.creditUnit;
     }, 0);
 
     // Separate calculation for GPA Denominator (only items that contribute to GPA)
     const totalGPAUnits = grades.reduce((acc, cur) => {
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
 
       // Include CVSU 101 "S" in the GPA denominator
       if (cur.courseCode === "CVSU 101" && cur.grade === "S") {
@@ -422,7 +447,8 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     const totalCreditsEarned = grades.reduce((acc, cur) => {
       // Earned points for GPA Numerator
       const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr)) return acc;
+      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
+        return acc;
       if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
 
       const finalGrade = getFinalGradeToUse(cur);
@@ -441,47 +467,47 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text(
       `Total Subjects Enrolled: ${totalSubjectsEnrolled}`,
       20,
-      (doc as any).lastAutoTable.finalY + 10
+      (doc as any).lastAutoTable.finalY + 10,
     );
     doc.text(
       `Total Credits Enrolled: ${totalUnitsEnrolled}`,
       150,
-      (doc as any).lastAutoTable.finalY + 10
+      (doc as any).lastAutoTable.finalY + 10,
     );
     doc.text(
       `Total Credits Earned: ${totalCreditsEarned.toFixed(2)}`,
       20,
-      (doc as any).lastAutoTable.finalY + 16
+      (doc as any).lastAutoTable.finalY + 16,
     );
     doc.text(
       `Grade Point Average: ${gpa}`,
       150,
-      (doc as any).lastAutoTable.finalY + 16
+      (doc as any).lastAutoTable.finalY + 16,
     );
 
     doc.setFont("helvetica", "bold");
     doc.text(
       `PURPOSE: ${purpose.toUpperCase()}`,
       20,
-      (doc as any).lastAutoTable.finalY + 38
+      (doc as any).lastAutoTable.finalY + 38,
     );
 
     doc.text(
       courseClerkshipMap(course),
       153,
-      (doc as any).lastAutoTable.finalY + 38
+      (doc as any).lastAutoTable.finalY + 38,
     );
     const registrarWidth = doc.getTextWidth(courseClerkshipMap(course));
     doc.line(
       153,
       (doc as any).lastAutoTable.finalY + 39,
       153 + registrarWidth,
-      (doc as any).lastAutoTable.finalY + 39
+      (doc as any).lastAutoTable.finalY + 39,
     );
     doc.text(
       coursePositionMap(course),
       158,
-      (doc as any).lastAutoTable.finalY + 42
+      (doc as any).lastAutoTable.finalY + 42,
     );
 
     autoTable(doc, {
@@ -537,7 +563,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.text(
       "Note: Not Valid without school dry seal.",
       20,
-      (doc as any).lastAutoTable.finalY + 8
+      (doc as any).lastAutoTable.finalY + 8,
     );
 
     // === QR CODE VERIFICATION ===
@@ -595,6 +621,22 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     doc.setFontSize(10);
     doc.text("ELECTRONIC COPY", 20, (doc as any).lastAutoTable.finalY + 15);
 
+    // === OFFICIAL STAMP (registrar/admin only) ===
+    if (includeStamp) {
+      const stampWidth = 40;
+      const stampHeight = 20;
+      const stampX = 20; // centered-ish on the page
+      const stampY = (doc as any).lastAutoTable.finalY + 20;
+      doc.addImage(
+        "/stamp.png",
+        "PNG",
+        stampX,
+        stampY,
+        stampWidth,
+        stampHeight,
+      );
+    }
+
     addWatermark(doc, "ELECTRONIC COPY", {
       backgroundImage: "/ec.png", // Place your watermark image in the public folder
       imageOpacity: 0.15, // Adjust opacity (0.0-1.0)
@@ -614,7 +656,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
       imageWidth?: number;
       imageHeight?: number;
       centered?: boolean;
-    }
+    },
   ) => {
     const totalPages = (doc as any).internal.getNumberOfPages();
     const pageWidth = (doc as any).internal.pageSize.width;
@@ -642,7 +684,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
             xPos,
             yPos,
             imgWidth,
-            imgHeight
+            imgHeight,
           );
         } else {
           // Tiled background (optional - can be removed if not needed)
@@ -654,7 +696,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
             xPos,
             yPos,
             imgWidth,
-            imgHeight
+            imgHeight,
           );
         }
 
@@ -669,14 +711,18 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={(open) => {
-      setIsDialogOpen(open);
-      if (!open) {
-        setStudentData(null);
-        setAcademicYear(undefined);
-        setSemester(undefined);
-      }
-    }}>
+    <Dialog
+      open={isDialogOpen}
+      onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setStudentData(null);
+          setAcademicYear(undefined);
+          setSemester(undefined);
+          setIncludeStamp(false);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" className="border-none rounded-full">
           <PrinterIcon />
@@ -699,7 +745,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
                     <SelectItem key={year} value={year}>
                       {year}
                     </SelectItem>
-                  )
+                  ),
                 )}
               </SelectContent>
             </Select>
@@ -711,21 +757,25 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
                 <SelectValue placeholder="Select Semester" />
               </SelectTrigger>
               <SelectContent>
-                {[...new Set(academicOptions
-                  .filter(o => !academicYear || o.academicYear === academicYear)
-                  .map((o) => o.semester))].map(
-                    (sem) => (
-                      <SelectItem key={sem} value={sem}>
-                        {sem === "FIRST"
-                          ? "First Semester"
-                          : sem === "SECOND"
-                            ? "Second Semester"
-                            : sem === "MIDYEAR"
-                              ? "Midyear"
-                              : sem}
-                      </SelectItem>
-                    )
-                  )}
+                {[
+                  ...new Set(
+                    academicOptions
+                      .filter(
+                        (o) => !academicYear || o.academicYear === academicYear,
+                      )
+                      .map((o) => o.semester),
+                  ),
+                ].map((sem) => (
+                  <SelectItem key={sem} value={sem}>
+                    {sem === "FIRST"
+                      ? "First Semester"
+                      : sem === "SECOND"
+                        ? "Second Semester"
+                        : sem === "MIDYEAR"
+                          ? "Midyear"
+                          : sem}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -749,7 +799,9 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
                 <AlertTitle>Note on Year Level</AlertTitle>
                 <AlertDescription>
                   <p>
-                    Year level is for year standing only. Your grades and academic progress are based on the academic year and semester.
+                    Year level is for year standing only. Your grades and
+                    academic progress are based on the academic year and
+                    semester.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -762,6 +814,19 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Type your purpose here (e.g., Board Exam, Scholarship)"
             />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="include-stamp"
+              checked={includeStamp}
+              onCheckedChange={(checked) => setIncludeStamp(checked === true)}
+            />
+            <label
+              htmlFor="include-stamp"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              Include official stamp on PDF
+            </label>
           </div>
           <Alert className="border-blue-500 text-blue-700 bg-blue-50">
             <AlertCircleIcon className="h-4 w-4 !text-blue-700" />
