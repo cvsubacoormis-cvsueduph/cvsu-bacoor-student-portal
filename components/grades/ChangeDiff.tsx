@@ -13,9 +13,11 @@ interface ChangeDiffProps {
     instructor?: string;
   } | null;
   proposed: Record<string, unknown>;
+  /** Reason provided by the faculty for this grade change */
+  changeReason?: string | null;
 }
 
-export function ChangeDiff({ action, current, proposed }: ChangeDiffProps) {
+export function ChangeDiff({ action, current, proposed, changeReason }: ChangeDiffProps) {
   const fields: { key: string; label: string; format?: (v: any) => string }[] = [
     { key: "courseCode", label: "Course Code" },
     { key: "courseTitle", label: "Title" },
@@ -43,6 +45,11 @@ export function ChangeDiff({ action, current, proposed }: ChangeDiffProps) {
             ) : null;
           })}
         </div>
+        {changeReason && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-800">
+            <span className="font-medium">Reason:</span> {changeReason}
+          </div>
+        )}
       </div>
     );
   }
@@ -63,6 +70,11 @@ export function ChangeDiff({ action, current, proposed }: ChangeDiffProps) {
             ) : null;
           })}
         </div>
+        {changeReason && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-800">
+            <span className="font-medium">Reason:</span> {changeReason}
+          </div>
+        )}
       </div>
     );
   }
@@ -96,6 +108,11 @@ export function ChangeDiff({ action, current, proposed }: ChangeDiffProps) {
           );
         })}
       </div>
+      {changeReason && (
+        <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-800">
+          <span className="font-medium">Reason:</span> {changeReason}
+        </div>
+      )}
     </div>
   );
 }

@@ -179,6 +179,7 @@ export function GradeApprovalCard({
                         <ChangeDiff
                           action={change.action}
                           proposed={gd}
+                          changeReason={change.changeReason}
                         />
                       </TableCell>
                       <TableCell className="text-xs text-gray-500">

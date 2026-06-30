@@ -385,6 +385,7 @@ export async function addManualGrade(
           requestedByName: user?.fullName || "",
           requestedRole: userRole,
           status: "PENDING",
+          changeReason: gradeData.changeReason ?? null,
         },
       });
 

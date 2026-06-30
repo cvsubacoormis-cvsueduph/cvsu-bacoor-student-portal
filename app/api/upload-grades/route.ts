@@ -966,6 +966,7 @@ export async function POST(req: Request) {
             requestedByName: user?.fullName ?? "",
             requestedRole: userRole,
             status: "PENDING",
+            changeReason: batchChangeReason ?? null,
           });
 
           const pendingChanges: string[] = [];

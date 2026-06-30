@@ -18,6 +18,7 @@ export type PendingChange = {
   reviewedByName: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  changeReason: string | null;
   createdAt: string;
 };
 
@@ -34,6 +35,7 @@ function buildDiffHtml(change: PendingChange): string {
           <p><span class="text-gray-500">Grade:</span> <strong>${gd?.grade || "—"}</strong></p>
           <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
         </div>
+        ${change.changeReason ? `<div class="bg-blue-50 border border-blue-200 rounded p-2 text-xs mt-2 text-left"><span class="font-medium text-blue-800">Reason:</span> <span class="text-blue-700">${change.changeReason}</span></div>` : ""}
         <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
         <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
       </div>`;
@@ -49,6 +51,7 @@ function buildDiffHtml(change: PendingChange): string {
           <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
           <p><span class="text-gray-500">Instructor:</span> ${gd?.instructor || "—"}</p>
         </div>
+        ${change.changeReason ? `<div class="bg-blue-50 border border-blue-200 rounded p-2 text-xs mt-2 text-left"><span class="font-medium text-blue-800">Reason:</span> <span class="text-blue-700">${change.changeReason}</span></div>` : ""}
         <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
         <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
       </div>`;
@@ -77,6 +80,7 @@ function buildDiffHtml(change: PendingChange): string {
         <thead><tr class="text-gray-500"><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
         <tbody>${changedFields}</tbody>
       </table>
+      ${change.changeReason ? `<div class="bg-blue-50 border border-blue-200 rounded p-2 text-xs mt-2 text-left"><span class="font-medium text-blue-800">Reason:</span> <span class="text-blue-700">${change.changeReason}</span></div>` : ""}
       <p class="text-xs mt-3"><strong>Student:</strong> ${change.studentNumber}</p>
       <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
     </div>`;
