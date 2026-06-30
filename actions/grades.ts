@@ -268,6 +268,13 @@ export async function addManualGrade(
   }
 
   // ------------------------------------------------------------------
+  // Faculty: force instructor to their own name — prevent impersonation
+  // ------------------------------------------------------------------
+  if (userRole === "faculty") {
+    gradeData.instructor = user?.fullName || gradeData.instructor;
+  }
+
+  // ------------------------------------------------------------------
   // registrar_staff → create pending change instead of applying directly
   // ------------------------------------------------------------------
   if (isRegistrarStaff) {

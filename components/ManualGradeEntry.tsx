@@ -235,6 +235,20 @@ export default function ManualGradeEntry() {
   const grade = watch("grade");
   const reExam = watch("reExam");
 
+  // Faculty instructor must always match their own name — set once and sync
+  const facultyName = user?.fullName || "";
+  const instructorValue = watch("instructor");
+
+  // Auto-populate & lock instructor for faculty
+  useEffect(() => {
+    if (role === "faculty" && facultyName && instructorValue !== facultyName) {
+      setValue("instructor", facultyName);
+    }
+  }, [role, facultyName, instructorValue, setValue]);
+
+  // Auto-populate instructor on student select for faculty
+  const isFaculty = role === "faculty";
+
   useEffect(() => {
     if (grade) {
       const remarks = calculateRemarks(grade, reExam || "none");
@@ -482,7 +496,7 @@ export default function ManualGradeEntry() {
         grade: "",
         reExam: "",
         remarks: "",
-        instructor: "",
+        instructor: role === "faculty" ? user?.fullName || "" : "",
         selectedCourseId: "",
       });
 
@@ -501,7 +515,7 @@ export default function ManualGradeEntry() {
       );
       setCourseOptions(options);
     },
-    [updateUrl, form],
+    [updateUrl, form, role, user?.fullName],
   );
 
   // Keyboard navigation handler for search results
@@ -624,7 +638,9 @@ export default function ManualGradeEntry() {
         reExam: values.reExam,
         remarks: values.remarks,
         instructor: values.instructor,
-        changeReason: alreadyHasGrade ? (changeReason.trim() || undefined) : undefined,
+        changeReason: alreadyHasGrade
+          ? changeReason.trim() || undefined
+          : undefined,
       };
 
       const result = await addManualGrade({
@@ -660,7 +676,7 @@ export default function ManualGradeEntry() {
         grade: "",
         reExam: "",
         remarks: "",
-        instructor: "",
+        instructor: role === "faculty" ? user?.fullName || "" : "",
         selectedCourseId: "",
       });
 
@@ -1275,8 +1291,23 @@ export default function ManualGradeEntry() {
                           Instructor <span className="text-red-500">*</span>
                         </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Instructor Name" />
+                          <Input
+                            {...field}
+                            placeholder="Instructor Name"
+                            readOnly={isFaculty}
+                            className={
+                              isFaculty
+                                ? "bg-gray-100 cursor-not-allowed select-none"
+                                : ""
+                            }
+                          />
                         </FormControl>
+                        {isFaculty && (
+                          <FormDescription className="text-xs text-amber-600">
+                            Instructor name is automatically set to your account
+                            name. Contact a registrar to change it.
+                          </FormDescription>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
