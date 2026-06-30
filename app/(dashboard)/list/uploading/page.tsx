@@ -9,6 +9,7 @@ import { getSetting, getGradeVisibility } from "@/actions/settings";
 import { currentUser } from "@clerk/nextjs/server";
 import AdminUploadToggle from "@/components/AdminUploadToggle";
 import GradeVisibilityToggle from "@/components/GradeVisibilityToggle";
+import FacultyApprovalToggle from "@/components/FacultyApprovalToggle";
 import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 
 export default async function GradeUploader() {
@@ -21,6 +22,9 @@ export default async function GradeUploader() {
   const isUploadEnabled = settingValue !== "false";
 
   const isGradesVisible = await getGradeVisibility();
+
+  const facultyApprovalSetting = await getSetting("FACULTY_UPDATE_REQUIRES_APPROVAL");
+  const isFacultyApprovalEnabled = facultyApprovalSetting !== "false";
 
   return (
     <div className="">
@@ -41,6 +45,9 @@ export default async function GradeUploader() {
               )}
               {isAdmin && (
                 <AdminUploadToggle initialEnabled={isUploadEnabled} />
+              )}
+              {isAdmin && (
+                <FacultyApprovalToggle initialEnabled={isFacultyApprovalEnabled} />
               )}
             </div>
           </div>

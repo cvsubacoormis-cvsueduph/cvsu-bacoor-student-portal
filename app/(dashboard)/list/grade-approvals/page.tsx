@@ -1,298 +1,40 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import Swal from "sweetalert2";
+import {
+  useGradeApprovals,
+  type PendingChange,
+} from "@/components/grades/hooks/useGradeApprovals";
+import { GradeApprovalCard } from "@/components/grades/GradeApprovalCard";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
-import { ChangeDiff } from "@/components/grades/ChangeDiff";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Loader2, CheckCircle, RefreshCw, Search } from "lucide-react";
 
-type PendingChange = {
-  id: string;
-  action: string;
-  studentNumber: string;
-  gradeData: Record<string, unknown>;
-  gradeId: string | null;
-  courseCode: string | null;
-  academicYear: string;
-  semester: string;
-  requestedById: string;
-  requestedByName: string;
-  requestedRole: string;
-  status: string;
-  reviewedById: string | null;
-  reviewedByName: string | null;
-  reviewedAt: string | null;
-  rejectionReason: string | null;
-  createdAt: string;
-};
-
-function formatAcademicYear(ay: string) {
-  return ay?.replace("AY_", "AY ").replace("_", "-") ?? "";
-}
-
-function formatRoleBadge(role: string) {
-  const colors: Record<string, string> = {
-    registrar_staff: "bg-purple-100 text-purple-800",
-    registrar: "bg-indigo-100 text-indigo-800",
-    admin: "bg-blue-100 text-blue-800",
-    superuser: "bg-cyan-100 text-cyan-800",
-  };
-  return colors[role] || "bg-gray-100 text-gray-800";
-}
+const ALLOWED_ROLES = ["admin", "superuser", "registrar"];
 
 export default function GradeApprovalsPage() {
   const { user } = useUser();
-  const router = useRouter();
   const role = user?.publicMetadata?.role as string | undefined;
 
-  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const {
+    pendingChanges,
+    loading,
+    error,
+    processingIds,
+    searchQuery,
+    setSearchQuery,
+    expandedStudents,
+    groupedChanges,
+    filteredStudentNumbers,
+    fetchPending,
+    handleApprove,
+    handleBulkApprove,
+    handleReject,
+    toggleStudent,
+  } = useGradeApprovals();
 
-  // Initial fetch — shows loading spinner
-  const fetchPending = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const res = await fetch("/api/pending-grade-changes?status=PENDING");
-      if (!res.ok) {
-        let errorMessage = "Failed to fetch pending changes";
-        try {
-          const body = await res.json();
-          if (body?.error) errorMessage = body.error;
-        } catch {
-          if (res.status === 403)
-            errorMessage = "You don't have permission to view pending changes.";
-          else if (res.status === 500)
-            errorMessage = "Server error while fetching pending changes.";
-          else errorMessage = `Request failed (status ${res.status})`;
-        }
-        throw new Error(errorMessage);
-      }
-      const data = await res.json();
-      setPendingChanges(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load pending changes");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Silent poll — updates in background without loading spinner
-  const silentPoll = useCallback(async () => {
-    try {
-      const res = await fetch("/api/pending-grade-changes?status=PENDING");
-      if (res.ok) {
-        const data = await res.json();
-        setPendingChanges(data);
-        setError("");
-      }
-    } catch {
-      // Ignore poll errors — next interval will retry
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPending();
-  }, [fetchPending]);
-
-  // Auto-poll every 10 seconds for real-time updates (silent, no spinner)
-  useEffect(() => {
-    const interval = setInterval(silentPoll, 10000);
-    return () => clearInterval(interval);
-  }, [silentPoll]);
-
-  function buildDiffHtml(change: PendingChange): string {
-    const gd = change.gradeData as Record<string, any>;
-    const prev = gd?._previous as Record<string, any> | undefined;
-
-    if (change.action === "DELETE") {
-      return `
-        <div class="text-left text-sm space-y-2">
-          <p><strong class="text-red-600">DELETE:</strong> The following grade will be removed:</p>
-          <div class="bg-red-50 border border-red-200 rounded p-2 text-xs space-y-1">
-            <p><span class="text-gray-500">Course:</span> ${gd?.courseCode || "—"}</p>
-            <p><span class="text-gray-500">Grade:</span> <strong>${gd?.grade || "—"}</strong></p>
-            <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
-          </div>
-          <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
-          <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
-        </div>`;
-    }
-
-    if (change.action === "CREATE") {
-      return `
-        <div class="text-left text-sm space-y-2">
-          <p><strong class="text-green-600">CREATE:</strong> New grade will be added:</p>
-          <div class="bg-green-50 border border-green-200 rounded p-2 text-xs space-y-1">
-            <p><span class="text-gray-500">Course:</span> ${gd?.courseCode || "—"}</p>
-            <p><span class="text-gray-500">Grade:</span> <strong>${gd?.grade || "—"}</strong></p>
-            <p><span class="text-gray-500">Credits:</span> ${gd?.creditUnit ?? "—"}</p>
-            <p><span class="text-gray-500">Instructor:</span> ${gd?.instructor || "—"}</p>
-          </div>
-          <p class="text-xs"><strong>Student:</strong> ${change.studentNumber}</p>
-          <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
-        </div>`;
-    }
-
-    // UPDATE — side-by-side
-    const fields = [
-      { label: "Course Code", prev: prev?.courseCode, next: gd?.courseCode },
-      { label: "Credits", prev: prev?.creditUnit, next: gd?.creditUnit },
-      { label: "Title", prev: prev?.courseTitle, next: gd?.courseTitle },
-      { label: "Grade", prev: prev?.grade, next: gd?.grade },
-      { label: "Remarks", prev: prev?.remarks, next: gd?.remarks },
-      { label: "Instructor", prev: prev?.instructor, next: gd?.instructor },
-    ];
-    const changedFields = fields
-      .filter((f) => String(f.prev ?? "") !== String(f.next ?? ""))
-      .map(
-        (f) =>
-          `<tr><td class="text-gray-500 pr-3">${f.label}</td><td class="line-through text-gray-400 pr-2">${f.prev ?? "—"}</td><td class="font-medium text-blue-700 bg-blue-50 px-1">${f.next ?? "—"}</td></tr>`,
-      )
-      .join("");
-
-    return `
-      <div class="text-left text-sm space-y-2">
-        <p><strong class="text-amber-600">UPDATE:</strong> The following fields will change:</p>
-        <table class="text-xs w-full">
-          <thead><tr class="text-gray-500"><th>Field</th><th>Current</th><th>Proposed</th></tr></thead>
-          <tbody>${changedFields}</tbody>
-        </table>
-        <p class="text-xs mt-3"><strong>Student:</strong> ${change.studentNumber}</p>
-        <p class="text-xs"><strong>Requested by:</strong> ${change.requestedByName}</p>
-      </div>`;
-  }
-
-  const handleApprove = async (change: PendingChange) => {
-    const result = await Swal.fire({
-      title: "Approve this change?",
-      html: buildDiffHtml(change),
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Yes, Approve",
-      confirmButtonColor: "#16a34a",
-    });
-
-    if (!result.isConfirmed) return;
-
-    setProcessingIds((prev) => new Set(prev).add(change.id));
-    try {
-      const res = await fetch(`/api/pending-grade-changes/${change.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "APPROVE" }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to approve");
-      }
-
-      Swal.fire({
-        icon: "success",
-        title: "Approved",
-        text: "The grade change has been applied.",
-        timer: 2000,
-        showConfirmButton: false,
-      });
-
-      // Remove from list
-      setPendingChanges((prev) => prev.filter((c) => c.id !== change.id));
-    } catch (err: any) {
-      Swal.fire({
-        icon: "error",
-        title: "Approval Failed",
-        text: err.message,
-      });
-    } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(change.id);
-        return next;
-      });
-    }
-  };
-
-  const handleReject = async (change: PendingChange) => {
-    const { value: reason } = await Swal.fire({
-      title: "Reject this change?",
-      input: "textarea",
-      inputLabel: "Rejection reason (required)",
-      inputPlaceholder: "Explain why this change is being rejected...",
-      inputAttributes: { "aria-label": "Rejection reason" },
-      showCancelButton: true,
-      confirmButtonText: "Reject",
-      confirmButtonColor: "#dc2626",
-      inputValidator: (value) => {
-        if (!value || !value.trim()) {
-          return "You need to provide a rejection reason!";
-        }
-        return null;
-      },
-    });
-
-    if (!reason) return;
-
-    setProcessingIds((prev) => new Set(prev).add(change.id));
-    try {
-      const res = await fetch(`/api/pending-grade-changes/${change.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REJECT", rejectionReason: reason }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to reject");
-      }
-
-      Swal.fire({
-        icon: "info",
-        title: "Rejected",
-        text: "The grade change has been rejected.",
-        timer: 2000,
-        showConfirmButton: false,
-      });
-
-      setPendingChanges((prev) => prev.filter((c) => c.id !== change.id));
-    } catch (err: any) {
-      Swal.fire({
-        icon: "error",
-        title: "Rejection Failed",
-        text: err.message,
-      });
-    } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(change.id);
-        return next;
-      });
-    }
-  };
-
-  // Authorization check
-  const allowedRoles = ["admin", "superuser", "registrar"];
-  if (role && !allowedRoles.includes(role)) {
+  if (role && !ALLOWED_ROLES.includes(role)) {
     return (
       <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
         <div className="text-center p-8">
@@ -311,7 +53,8 @@ export default function GradeApprovalsPage() {
         <div>
           <h1 className="text-lg font-semibold">Grade Change Approvals</h1>
           <span className="text-xs text-gray-500 font-semibold">
-            Review and approve/reject grade changes submitted by registrar staff
+            Review and approve/reject grade changes submitted by faculty and
+            registrar staff
           </span>
         </div>
         <Button
@@ -325,6 +68,19 @@ export default function GradeApprovalsPage() {
           Refresh
         </Button>
       </div>
+
+      {!loading && pendingChanges.length > 0 && (
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search by student number or course code..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -343,105 +99,34 @@ export default function GradeApprovalsPage() {
           <CardContent className="py-12 text-center text-gray-500">
             <CheckCircle className="w-12 h-12 mx-auto text-green-300 mb-3" />
             <p className="text-lg font-medium">No pending changes</p>
-            <p className="text-sm">All grade submissions have been reviewed.</p>
+            <p className="text-sm">
+              All grade submissions have been reviewed.
+            </p>
           </CardContent>
         </Card>
       )}
 
       {!loading && pendingChanges.length > 0 && (
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader className="bg-gray-50">
-              <TableRow>
-                <TableHead>Student #</TableHead>
-                <TableHead>Course Code</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Proposed Grade</TableHead>
-                <TableHead>Term</TableHead>
-                <TableHead>Requested By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pendingChanges.map((change) => {
-                const gd = change.gradeData as Record<string, any>;
-                const isProcessing = processingIds.has(change.id);
+        <div className="space-y-4">
+          {filteredStudentNumbers.length === 0 && searchQuery && (
+            <p className="text-center text-gray-500 py-8">
+              No students match &ldquo;{searchQuery}&rdquo;
+            </p>
+          )}
 
-                return (
-                  <TableRow key={change.id}>
-                    <TableCell className="font-mono text-sm">
-                      {change.studentNumber}
-                    </TableCell>
-                    <TableCell>
-                      {change.courseCode || gd?.courseCode || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          change.action === "CREATE"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : change.action === "UPDATE"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-red-50 text-red-700 border-red-200"
-                        }
-                      >
-                        {change.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="min-w-[280px]">
-                      <ChangeDiff action={change.action} proposed={gd} />
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500">
-                      {formatAcademicYear(change.academicYear)}{" "}
-                      {change.semester}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <p>{change.requestedByName}</p>
-                        <Badge
-                          className={formatRoleBadge(change.requestedRole)}
-                        >
-                          {change.requestedRole.replace("_", " ")}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => handleApprove(change)}
-                          disabled={isProcessing}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          {isProcessing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <CheckCircle className="w-3 h-3" />
-                          )}
-                          <span className="ml-1">Approve</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleReject(change)}
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <XCircle className="w-3 h-3" />
-                          )}
-                          <span className="ml-1">Reject</span>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          {filteredStudentNumbers.map((studentNumber) => (
+            <GradeApprovalCard
+              key={studentNumber}
+              studentNumber={studentNumber}
+              changes={groupedChanges[studentNumber]}
+              isExpanded={expandedStudents.has(studentNumber)}
+              processingIds={processingIds}
+              onToggle={toggleStudent}
+              onBulkApprove={handleBulkApprove}
+              onApprove={handleApprove}
+              onReject={handleReject}
+            />
+          ))}
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   getFacultyUploadedGrades,
   rollbackFacultyGrades,
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/table";
 import type { AcademicYear, Semester } from "@prisma/client";
 import { toast } from "sonner";
+import { useDebouncedCallback } from "use-debounce";
 import {
   AlertTriangle,
   BookOpen,
@@ -46,6 +47,7 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  Search,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -105,7 +107,9 @@ export function FacultyGradesDetailPanel({
   // ── Filter state ──────────────────────────────────────────────────────
   const [courseCodeFilter, setCourseCodeFilter] = useState("all");
   const [courseTitleFilter, setCourseTitleFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const prevSearch = useRef(search);
 
   // ── Pagination state ──────────────────────────────────────────────────
   const [page, setPage] = useState(1);
@@ -140,6 +144,10 @@ export function FacultyGradesDetailPanel({
           params.courseTitle = courseTitleFilter;
         }
 
+        if (search) {
+          params.search = search;
+        }
+
         const result = await getFacultyUploadedGrades(params);
         setGrades(result.data);
         setTotal(result.total);
@@ -164,6 +172,7 @@ export function FacultyGradesDetailPanel({
       pageSize,
       courseCodeFilter,
       courseTitleFilter,
+      search,
     ],
   );
 
@@ -190,6 +199,34 @@ export function FacultyGradesDetailPanel({
     setCourseTitleFilter(value);
     setPage(1);
   }, []);
+
+  const debouncedSearch = useDebouncedCallback(
+    function (value: string) {
+      setSearch(value);
+      setPage(1);
+    },
+    400,
+  );
+
+  const handleSearchChange = useCallback(
+    function (e: React.ChangeEvent<HTMLInputElement>) {
+      const value = e.target.value;
+      setSearchInput(value);
+      debouncedSearch(value);
+    },
+    [debouncedSearch],
+  );
+
+  // Sync searchInput from external changes (e.g. when session changes)
+  useEffect(
+    function () {
+      if (search !== prevSearch.current) {
+        setSearchInput(search);
+        prevSearch.current = search;
+      }
+    },
+    [search],
+  );
 
   // ── Rollback handler ──────────────────────────────────────────────────
   const isFilteredRollback = courseCodeFilter !== "all" || courseTitleFilter !== "all";
@@ -435,6 +472,17 @@ export function FacultyGradesDetailPanel({
 
       {/* ── Filters bar ───────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* Student search */}
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search student name or number..."
+            value={searchInput}
+            onChange={handleSearchChange}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+
         {/* Course Code filter */}
         <div className="space-y-1 w-full sm:w-[200px]">
           <Label className="text-[11px] text-gray-500 uppercase tracking-wider">
@@ -495,7 +543,9 @@ export function FacultyGradesDetailPanel({
         <div className="text-center py-8 text-sm text-gray-400 border border-dashed rounded-lg">
           <BookOpen className="h-5 w-5 mx-auto mb-2 text-gray-300" />
           No grade records found for this session.
-          {courseCodeFilter !== "all" || courseTitleFilter !== "all"
+          {courseCodeFilter !== "all" ||
+          courseTitleFilter !== "all" ||
+          search
             ? " Try adjusting your filters."
             : ""}
         </div>
@@ -514,7 +564,8 @@ export function FacultyGradesDetailPanel({
                   </TableHead>
                   <TableHead className="w-[72px] text-center">Grade</TableHead>
                   <TableHead className="w-[120px]">Remarks</TableHead>
-                  <TableHead className="w-[140px]">Uploaded At</TableHead>
+                  <TableHead className="w-[90px] text-center">Action</TableHead>
+                  <TableHead className="w-[140px]">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -554,6 +605,21 @@ export function FacultyGradesDetailPanel({
                       </TableCell>
                       <TableCell className="text-xs text-gray-500 max-w-[120px] truncate">
                         {g.remarks ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {g.action === "FAILED" ? (
+                          <Badge className="bg-red-100 text-red-800 border-red-200 text-xs font-semibold px-1.5 py-0 flex items-center gap-1 w-fit mx-auto">
+                            <AlertTriangle className="h-3 w-3" /> Failed
+                          </Badge>
+                        ) : g.action === "UPDATED" ? (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs font-semibold px-1.5 py-0 flex items-center gap-1 w-fit mx-auto">
+                            <RefreshCw className="h-3 w-3" /> Updated
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-green-100 text-green-800 border-green-200 text-xs font-semibold px-1.5 py-0 flex items-center gap-1 w-fit mx-auto">
+                            <CheckCircle2 className="h-3 w-3" /> Created
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-[11px] text-gray-400">
                         {formatDateTime(g.createdAt)}

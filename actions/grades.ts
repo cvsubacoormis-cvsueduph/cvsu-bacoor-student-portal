@@ -271,10 +271,22 @@ export async function addManualGrade(
   // registrar_staff → create pending change instead of applying directly
   // ------------------------------------------------------------------
   if (isRegistrarStaff) {
+    const existingGrade = await prisma.grade.findFirst({
+      where: {
+        studentNumber: gradeData.studentNumber,
+        courseCode: gradeData.courseCode.toUpperCase(),
+        academicYear: gradeData.academicYear,
+        semester: gradeData.semester,
+      },
+    });
+
+    const isUpdate = !!existingGrade;
+
     const pending = await prisma.pendingGradeChange.create({
       data: {
-        action: "CREATE",
+        action: isUpdate ? "UPDATE" : "CREATE",
         studentNumber: gradeData.studentNumber,
+        gradeId: existingGrade?.id ?? null,
         gradeData: {
           courseCode: gradeData.courseCode,
           creditUnit: Number(gradeData.creditUnit),
@@ -287,6 +299,18 @@ export async function addManualGrade(
           academicYear: gradeData.academicYear,
           semester: gradeData.semester,
           uploadedBy: user?.fullName || "",
+          ...(existingGrade
+            ? {
+                _previous: {
+                  courseCode: existingGrade.courseCode,
+                  creditUnit: existingGrade.creditUnit,
+                  courseTitle: existingGrade.courseTitle,
+                  grade: existingGrade.grade,
+                  remarks: existingGrade.remarks ?? "",
+                  instructor: existingGrade.instructor,
+                },
+              }
+            : {}),
         },
         courseCode: gradeData.courseCode,
         academicYear: gradeData.academicYear,
@@ -303,12 +327,78 @@ export async function addManualGrade(
       success: true,
       pending: true,
       pendingId: pending.id,
-      message: "Grade submission sent for registrar approval.",
+      message: isUpdate
+        ? "Grade update sent for registrar approval."
+        : "Grade submission sent for registrar approval.",
     };
   }
 
   // ------------------------------------------------------------------
-  // admin / superuser / registrar → apply immediately
+  // faculty updating an existing grade → pending approval (when enabled)
+  // ------------------------------------------------------------------
+  const facultyApprovalSetting = await prisma.systemSettings.findUnique({
+    where: { key: "FACULTY_UPDATE_REQUIRES_APPROVAL" },
+  });
+  const isFacultyApprovalEnabled = facultyApprovalSetting?.value !== "false";
+
+  if (isFacultyApprovalEnabled && userRole === "faculty") {
+    const existingGrade = await prisma.grade.findFirst({
+      where: {
+        studentNumber: gradeData.studentNumber,
+        courseCode: gradeData.courseCode.toUpperCase(),
+        academicYear: gradeData.academicYear,
+        semester: gradeData.semester,
+      },
+    });
+
+    if (existingGrade) {
+      const pending = await prisma.pendingGradeChange.create({
+        data: {
+          action: "UPDATE",
+          studentNumber: gradeData.studentNumber,
+          gradeId: existingGrade.id,
+          gradeData: {
+            courseCode: gradeData.courseCode,
+            creditUnit: Number(gradeData.creditUnit),
+            courseTitle: gradeData.courseTitle,
+            grade: gradeData.grade,
+            reExam: gradeData.reExam ?? null,
+            remarks: gradeData.remarks ?? "",
+            instructor: gradeData.instructor,
+            studentNumber: gradeData.studentNumber,
+            academicYear: gradeData.academicYear,
+            semester: gradeData.semester,
+            uploadedBy: user?.fullName || "",
+            _previous: {
+              courseCode: existingGrade.courseCode,
+              creditUnit: existingGrade.creditUnit,
+              courseTitle: existingGrade.courseTitle,
+              grade: existingGrade.grade,
+              remarks: existingGrade.remarks ?? "",
+              instructor: existingGrade.instructor,
+            },
+          },
+          courseCode: gradeData.courseCode,
+          academicYear: gradeData.academicYear,
+          semester: gradeData.semester,
+          requestedById: user.id,
+          requestedByName: user?.fullName || "",
+          requestedRole: userRole,
+          status: "PENDING",
+        },
+      });
+
+      return {
+        success: true,
+        pending: true,
+        pendingId: pending.id,
+        message: "Grade update sent for registrar approval.",
+      };
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // admin / superuser / registrar / faculty (new) → apply immediately
   // ------------------------------------------------------------------
   await prisma.$transaction(async (prisma) => {
     // 1. Ensure the academic term exists
