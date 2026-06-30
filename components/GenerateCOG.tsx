@@ -284,6 +284,101 @@ export default function GenerateCOG() {
       },
     });
 
+    // === BLUISH WAVY BACKGROUND ===
+    // Multi-layered business-style blue waves — top half wavy, bottom half plain
+    (() => {
+      const scale = 4;
+      const canvas = document.createElement("canvas");
+      const w = 210 * scale;
+      const h = 297 * scale;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      /**
+       * Draws a filled wavy shape from the top down to a curved bottom edge.
+       * Uses cubic bezier control points for smooth, professional-looking waves.
+       */
+      const drawWaveLayer = (
+        colorStops: [number, string][],
+        maxY: number,
+        cpOffsets: number[],
+      ) => {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(w, 0);
+        ctx.lineTo(w, maxY);
+        // Smooth wave using alternating bezier curves
+        const segments = 6;
+        const segW = w / segments;
+        for (let i = segments - 1; i >= 0; i--) {
+          const x1 = (i + 1) * segW;
+          const x2 = i * segW;
+          const cp1x = x1 - segW * 0.5;
+          const cp1y = maxY + cpOffsets[i % cpOffsets.length] * scale;
+          const cp2x = x2 + segW * 0.5;
+          const cp2y = maxY + cpOffsets[(i + 1) % cpOffsets.length] * scale;
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, maxY + cpOffsets[(i + 2) % cpOffsets.length] * scale * 0.3);
+        }
+        ctx.closePath();
+
+        const grad = ctx.createLinearGradient(0, 0, 0, maxY + 40 * scale);
+        for (const [stop, color] of colorStops) {
+          grad.addColorStop(stop, color);
+        }
+        ctx.fillStyle = grad;
+        ctx.fill();
+      };
+
+      // Layer 1 — deepest blue, smallest reach
+      drawWaveLayer(
+        [
+          [0, "rgba(100, 160, 220, 0.12)"],
+          [0.6, "rgba(130, 185, 235, 0.06)"],
+          [1, "rgba(180, 210, 245, 0.01)"],
+        ],
+        h * 0.25,
+        [50, -20, 35, -10, 45, 0],
+      );
+
+      // Layer 2 — mid blue, extends further
+      drawWaveLayer(
+        [
+          [0, "rgba(140, 195, 240, 0.10)"],
+          [0.5, "rgba(160, 210, 242, 0.05)"],
+          [1, "rgba(200, 225, 250, 0.01)"],
+        ],
+        h * 0.38,
+        [-15, 45, -30, 25, -5, 40],
+      );
+
+      // Layer 3 — lighter blue, main visible wave
+      drawWaveLayer(
+        [
+          [0, "rgba(170, 215, 245, 0.09)"],
+          [0.4, "rgba(185, 222, 248, 0.05)"],
+          [1, "rgba(215, 235, 252, 0.01)"],
+        ],
+        h * 0.52,
+        [30, -40, 20, -25, 50, -10],
+      );
+
+      // Layer 4 — very light, subtle, deep reach for smooth fade
+      drawWaveLayer(
+        [
+          [0, "rgba(195, 228, 250, 0.05)"],
+          [0.3, "rgba(210, 235, 252, 0.03)"],
+          [1, "rgba(235, 245, 255, 0.005)"],
+        ],
+        h * 0.62,
+        [-25, 20, -35, 15, -10, 30],
+      );
+
+      const dataUrl = canvas.toDataURL("image/png");
+      doc.addImage(dataUrl, "PNG", 0, 0, 210, 297);
+    })();
+
     const logoWidth = 18;
     const logoHeight = 15;
     const logoX = 40;
@@ -323,7 +418,7 @@ export default function GenerateCOG() {
     doc.setTextColor(139, 0, 0);
     doc.text("Fullname:", 20, 60);
     doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica", "bold");
     doc.text(fullName, 35, 60);
     const textWidth = doc.getTextWidth(fullName);
     doc.line(35, 61, 35 + textWidth, 61);
@@ -331,7 +426,7 @@ export default function GenerateCOG() {
     doc.setFont("helvetica", "bold");
     doc.text("Student No.:", 120, 60);
     doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica", "bold");
     doc.text(studentNo, 140, 60);
     const studentNoWidth = doc.getTextWidth(studentNo);
     doc.line(140, 61, 140 + studentNoWidth, 61);
@@ -553,7 +648,8 @@ export default function GenerateCOG() {
       startY: (doc as any).lastAutoTable.finalY + 55,
       styles: {
         font: "helvetica",
-        fontSize: 7,
+        fontSize: 6,
+        cellPadding: 0.5,
         halign: "center",
         lineWidth: 0.1,
         lineColor: 0,
