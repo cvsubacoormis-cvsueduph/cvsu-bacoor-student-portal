@@ -194,9 +194,11 @@ export default function ManualGradeEntry() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
 
-  // Grade change reason — required for faculty before submitting
+  // Grade change reason — required for faculty when updating an existing grade
   const [changeReason, setChangeReason] = useState("");
   const [reasonRequired, setReasonRequired] = useState(false);
+  // Tracks whether the selected student+course already has a grade (UPDATE vs CREATE)
+  const [hasExistingGrade, setHasExistingGrade] = useState(false);
 
   // Keyboard navigation for search results
   const [focusedResultIndex, setFocusedResultIndex] = useState<number>(-1);
@@ -403,12 +405,27 @@ export default function ManualGradeEntry() {
     };
   }, []);
 
-  const handleCourseSelect = (id: string) => {
+  const handleCourseSelect = async (id: string) => {
     const selectedCourse = courseOptions.find((course) => course.id === id);
     if (selectedCourse) {
       setValue("selectedCourseId", id);
       setValue("courseCode", selectedCourse.code);
       setValue("courseTitle", selectedCourse.title);
+    }
+
+    // Check if an existing grade exists for this student+course+term
+    if (selectedCourse && selectedStudent && academicYear && semester) {
+      try {
+        const exists = await checkExsistingGrade({
+          studentNumber: selectedStudent.studentNumber,
+          courseCode: selectedCourse.code,
+          academicYear: academicYear as AcademicYear,
+          semester: semester as Semester,
+        });
+        setHasExistingGrade(!!exists);
+      } catch {
+        setHasExistingGrade(false);
+      }
     }
   };
 
@@ -468,6 +485,11 @@ export default function ManualGradeEntry() {
         instructor: "",
         selectedCourseId: "",
       });
+
+      // Reset grade-change tracking state
+      setChangeReason("");
+      setHasExistingGrade(false);
+      setReasonRequired(false);
 
       // Update course options based on student's program
       const options = getCourseOptions(student.course, student.major).map(
@@ -549,6 +571,20 @@ export default function ManualGradeEntry() {
       semester: semester as Semester,
     });
 
+    // Faculty must provide a reason when updating an existing grade — check before confirmation
+    if (role === "faculty" && alreadyHasGrade) {
+      if (!changeReason.trim()) {
+        setReasonRequired(true);
+        Swal.fire({
+          icon: "warning",
+          title: "Reason Required",
+          text: "You are updating an existing grade. Please provide a reason for the change in the field below.",
+        });
+        return;
+      }
+      setReasonRequired(false);
+    }
+
     const result = await Swal.fire({
       title: alreadyHasGrade
         ? "Update Existing Grade?"
@@ -560,6 +596,7 @@ export default function ManualGradeEntry() {
                 <p><strong>Grade:</strong> <span class="text-blue-600 font-bold text-lg">${values.grade}</span></p>
                 <p><strong>Remarks:</strong> ${values.remarks}</p>
                 ${alreadyHasGrade ? `<p class="text-amber-600 mt-2 text-xs">This student already has a grade for this course in the selected term. It will be updated.</p>` : ""}
+                ${alreadyHasGrade && changeReason.trim() ? `<p class="text-blue-600 mt-2 text-xs"><strong>Reason:</strong> ${changeReason.trim()}</p>` : ""}
             </div>
         `,
       icon: alreadyHasGrade ? "warning" : "question",
@@ -587,7 +624,7 @@ export default function ManualGradeEntry() {
         reExam: values.reExam,
         remarks: values.remarks,
         instructor: values.instructor,
-        changeReason: changeReason.trim() || undefined,
+        changeReason: alreadyHasGrade ? (changeReason.trim() || undefined) : undefined,
       };
 
       const result = await addManualGrade({
@@ -1246,8 +1283,8 @@ export default function ManualGradeEntry() {
                   />
                 </div>
 
-                {/* Change Reason — required for faculty */}
-                {role === "faculty" && (
+                {/* Change Reason — only shown when faculty is updating an existing grade */}
+                {role === "faculty" && hasExistingGrade && (
                   <div className="space-y-2 col-span-1 md:col-span-2">
                     <Label htmlFor="manual-change-reason">
                       Reason for Grade Change{" "}
@@ -1255,7 +1292,7 @@ export default function ManualGradeEntry() {
                     </Label>
                     <Textarea
                       id="manual-change-reason"
-                      placeholder="Explain why the grade is being changed or entered (e.g., correction of encoding error, late submission, re-evaluation result, etc.)"
+                      placeholder="Explain why the grade needs to be changed (e.g., correction of encoding error, late submission, re-evaluation result, etc.)"
                       value={changeReason}
                       onChange={(e) => {
                         setChangeReason(e.target.value);
@@ -1271,7 +1308,7 @@ export default function ManualGradeEntry() {
                     />
                     {reasonRequired && !changeReason.trim() && (
                       <p className="text-xs text-red-500">
-                        A reason is required before submitting the grade change.
+                        A reason is required when changing an existing grade.
                       </p>
                     )}
                   </div>
