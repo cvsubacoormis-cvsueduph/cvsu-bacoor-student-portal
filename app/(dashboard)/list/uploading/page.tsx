@@ -23,7 +23,9 @@ export default async function GradeUploader() {
 
   const isGradesVisible = await getGradeVisibility();
 
-  const facultyApprovalSetting = await getSetting("FACULTY_UPDATE_REQUIRES_APPROVAL");
+  const facultyApprovalSetting = await getSetting(
+    "FACULTY_UPDATE_REQUIRES_APPROVAL",
+  );
   const isFacultyApprovalEnabled = facultyApprovalSetting !== "false";
 
   return (
@@ -47,7 +49,9 @@ export default async function GradeUploader() {
                 <AdminUploadToggle initialEnabled={isUploadEnabled} />
               )}
               {isAdmin && (
-                <FacultyApprovalToggle initialEnabled={isFacultyApprovalEnabled} />
+                <FacultyApprovalToggle
+                  initialEnabled={isFacultyApprovalEnabled}
+                />
               )}
             </div>
           </div>

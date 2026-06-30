@@ -155,9 +155,12 @@ interface LogEntry {
 export function UploadGrades() {
   const { user } = useUser();
   const role = user?.publicMetadata?.role as string | undefined;
-  const canUseLegacyMode = ["admin", "superuser", "registrar", "registrar_staff"].includes(
-    role || "",
-  );
+  const canUseLegacyMode = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+  ].includes(role || "");
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -432,7 +435,9 @@ export function UploadGrades() {
           academicYear,
           semester,
           allowLegacy: canUseLegacyMode ? allowLegacy : false, // Security: only send true if authorized
-          changeReason: hasUpdates ? (changeReason.trim() || undefined) : undefined,
+          changeReason: hasUpdates
+            ? changeReason.trim() || undefined
+            : undefined,
         }));
 
         try {
@@ -491,12 +496,10 @@ export function UploadGrades() {
               );
 
               const parts = [];
-              if (successes.length > 0)
-                parts.push(`${successes.length} saved`);
+              if (successes.length > 0) parts.push(`${successes.length} saved`);
               if (warnings.length > 0)
                 parts.push(`${warnings.length} with warnings`);
-              if (failures.length > 0)
-                parts.push(`${failures.length} failed`);
+              if (failures.length > 0) parts.push(`${failures.length} failed`);
 
               const message = `Batch ${i + 1}: ${parts.join(" · ")}`;
 
@@ -508,7 +511,10 @@ export function UploadGrades() {
         } catch (err: any) {
           if (err.name === "AbortError") throw err;
           console.error(err);
-          addLog("error", `Batch ${i + 1}: Connection issue — please check your network and try again`);
+          addLog(
+            "error",
+            `Batch ${i + 1}: Connection issue — please check your network and try again`,
+          );
         }
 
         completed += chunk.length;
@@ -525,7 +531,7 @@ export function UploadGrades() {
           const updatedRows = uploadResults.filter(
             (r: UploadResult) =>
               r.matchQuality === "updated" ||
-              r.status.includes("⏳ Pending approval")
+              r.status.includes("⏳ Pending approval"),
           ).length;
           setHasUpdates(updatedRows > 0);
 
@@ -547,7 +553,9 @@ export function UploadGrades() {
           if (failures > 0)
             summaryParts.push(`${failures} could not be processed.`);
           if (updatedRows > 0)
-            summaryParts.push(`${updatedRows} would update existing grades and require a reason.`);
+            summaryParts.push(
+              `${updatedRows} would update existing grades and require a reason.`,
+            );
           summaryParts.push("No changes have been made to the database.");
 
           await Swal.fire({
@@ -573,7 +581,8 @@ export function UploadGrades() {
             summaryParts.push(`${successes} saved successfully.`);
           if (warnings > 0)
             summaryParts.push(`${warnings} saved with corrections.`);
-          if (failures > 0) summaryParts.push(`${failures} could not be saved.`);
+          if (failures > 0)
+            summaryParts.push(`${failures} could not be saved.`);
           summaryParts.push(
             "Check the Results tab below for a detailed breakdown.",
           );
@@ -615,7 +624,12 @@ export function UploadGrades() {
     // New curriculum starts in 2018 => Changed to 2025 for standard users per request
     // Admin/Registrar get 2014
 
-    const isAdminOrRegistrar = ["admin", "superuser", "registrar", "registrar_staff"].includes(role || "");
+    const isAdminOrRegistrar = [
+      "admin",
+      "superuser",
+      "registrar",
+      "registrar_staff",
+    ].includes(role || "");
     const standardStart = 2025;
     const adminStart = 2014;
 
@@ -968,7 +982,10 @@ export function UploadGrades() {
                 {/* Change Reason — only shown when faculty is updating existing grades */}
                 {role === "faculty" && hasUpdates && (
                   <div className="space-y-2">
-                    <Label htmlFor="change-reason" className="text-sm font-medium">
+                    <Label
+                      htmlFor="change-reason"
+                      className="text-sm font-medium"
+                    >
                       Reason for Grade Change{" "}
                       <span className="text-red-500">*</span>
                     </Label>
