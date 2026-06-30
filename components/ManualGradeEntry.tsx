@@ -83,6 +83,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useUser } from "@clerk/nextjs";
+import GradeChangePolicyNotice from "./Notices/GradeChangePolicyNotice";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Student {
   studentNumber: string;
@@ -191,6 +193,10 @@ export default function ManualGradeEntry() {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
+
+  // Grade change reason — required for faculty before submitting
+  const [changeReason, setChangeReason] = useState("");
+  const [reasonRequired, setReasonRequired] = useState(false);
 
   // Keyboard navigation for search results
   const [focusedResultIndex, setFocusedResultIndex] = useState<number>(-1);
@@ -537,6 +543,14 @@ export default function ManualGradeEntry() {
       return;
     }
 
+    // Validate change reason for faculty before submitting
+    if (role === "faculty" && !changeReason.trim()) {
+      setReasonRequired(true);
+      toast.error("Please provide a reason for the grade change.");
+      return;
+    }
+    setReasonRequired(false);
+
     // Check for existing grade
     const alreadyHasGrade = await checkExsistingGrade({
       studentNumber: selectedStudent.studentNumber,
@@ -587,6 +601,7 @@ export default function ManualGradeEntry() {
         reExam: values.reExam,
         remarks: values.remarks,
         instructor: values.instructor,
+        changeReason: changeReason.trim() || undefined,
       };
 
       const result = await addManualGrade({
@@ -723,6 +738,9 @@ export default function ManualGradeEntry() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Grade Change Policy Notice — for faculty before manual entry */}
+      {role === "faculty" && <GradeChangePolicyNotice variant="manual" />}
 
       {/* Validation Error */}
       {validationError && (
@@ -1241,6 +1259,37 @@ export default function ManualGradeEntry() {
                     )}
                   />
                 </div>
+
+                {/* Change Reason — required for faculty */}
+                {role === "faculty" && (
+                  <div className="space-y-2 col-span-1 md:col-span-2">
+                    <Label htmlFor="manual-change-reason">
+                      Reason for Grade Change{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Textarea
+                      id="manual-change-reason"
+                      placeholder="Explain why the grade is being changed or entered (e.g., correction of encoding error, late submission, re-evaluation result, etc.)"
+                      value={changeReason}
+                      onChange={(e) => {
+                        setChangeReason(e.target.value);
+                        if (e.target.value.trim()) setReasonRequired(false);
+                      }}
+                      rows={3}
+                      disabled={isSubmitting}
+                      className={
+                        reasonRequired && !changeReason.trim()
+                          ? "border-red-400 focus-visible:ring-red-400"
+                          : ""
+                      }
+                    />
+                    {reasonRequired && !changeReason.trim() && (
+                      <p className="text-xs text-red-500">
+                        A reason is required before submitting the grade change.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex justify-end pt-6 border-t">
                   <Button

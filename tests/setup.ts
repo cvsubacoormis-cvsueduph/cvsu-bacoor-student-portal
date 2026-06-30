@@ -111,6 +111,15 @@ vi.mock("@/lib/prisma", () => ({
       createMany: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
     },
+    pendingGradeChange: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      count: vi.fn().mockResolvedValue(0),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+    },
     systemSettings: {
       findUnique: vi.fn().mockResolvedValue({ value: "true" }),
       upsert: vi.fn().mockResolvedValue({}),

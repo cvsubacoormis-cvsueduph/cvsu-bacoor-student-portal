@@ -420,6 +420,9 @@ export async function POST(req: Request) {
   const failedLogsToCreate = []; // Separate array for failed logs
   const processedKeys = new Set<string>(); // Track student+course pairs within this batch
 
+  // Extract batch-level change reason (faculty must provide this)
+  const batchChangeReason: string | undefined = grades[0]?.changeReason?.trim() || undefined;
+
   // Process each entry in the batch
   for (const entry of grades) {
     try {
@@ -964,6 +967,7 @@ export async function POST(req: Request) {
         academicYear,
         semester,
         action: action,
+        changeReason: batchChangeReason ?? null,
         importedName: `${firstName || ""} ${lastName || ""}`.trim(),
       });
 

@@ -142,36 +142,40 @@ model GradeLog {
   academicYear  AcademicYear
   semester      Semester
   action        String
+  changeReason  String?
   performedAt   DateTime     @default(now())
   isResolved    Boolean      @default(false)
   importedName  String?
 }
 
 model PendingGradeChange {
-  id          String        @id @default(cuid())
-  action      String        // "CREATE", "UPDATE", "DELETE"
+  id     String @id @default(cuid())
+  action String // "CREATE", "UPDATE", "DELETE"
 
   // The student this change is for
   studentNumber String
 
   // The proposed grade data (JSON) — full grade record for CREATE/UPDATE
-  gradeData   Json
+  gradeData Json
 
   // For UPDATE/DELETE: the existing grade ID
-  gradeId     String?
+  gradeId String?
 
   // For filtering/display
-  courseCode  String?
+  courseCode   String?
   academicYear AcademicYear?
-  semester    Semester?
+  semester     Semester?
 
   // Who requested the change
   requestedById   String
   requestedByName String
   requestedRole   String
 
+  // Reason for the grade change (provided by requester)
+  changeReason String?
+
   // Approval status
-  status      String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  status String @default("PENDING") // PENDING, APPROVED, REJECTED
 
   // Who reviewed the change
   reviewedById    String?
@@ -179,8 +183,8 @@ model PendingGradeChange {
   reviewedAt      DateTime?
   rejectionReason String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum AcademicYear {
@@ -252,25 +256,25 @@ enum Major {
 }
 
 model CogVerification {
-  id             String   @id @default(cuid())
-  hash           String   @unique // SHA-256 hash used as verification token
-  studentNumber  String
-  studentName    String   // "LastName, FirstName MiddleInit"
-  course         String
-  major          String
-  academicYear   String   // e.g. "2024_2025"
-  semester       String   // e.g. "FIRST"
-  yearLevel      String   // e.g. "FIRST YEAR"
-  gpa            String   // e.g. "1.45"
-  totalSubjects  Int
-  totalCredits   Int
+  id                 String    @id @default(cuid())
+  hash               String    @unique // SHA-256 hash used as verification token
+  studentNumber      String
+  studentName        String // "LastName, FirstName MiddleInit"
+  course             String
+  major              String
+  academicYear       String // e.g. "2024_2025"
+  semester           String // e.g. "FIRST"
+  yearLevel          String // e.g. "FIRST YEAR"
+  gpa                String // e.g. "1.45"
+  totalSubjects      Int
+  totalCredits       Int
   totalCreditsEarned Float?
-  grades         String   // JSON string of grade array
-  purpose        String
-  generatedBy    String?  // Clerk userId
-  generatedAt    DateTime @default(now())
-  expiresAt      DateTime? // Nullable for backward compat — code treats null as "check generatedAt + 1yr"
-  isRevoked      Boolean  @default(false)
+  grades             String // JSON string of grade array
+  purpose            String
+  generatedBy        String? // Clerk userId
+  generatedAt        DateTime  @default(now())
+  expiresAt          DateTime? // Nullable for backward compat — code treats null as "check generatedAt + 1yr"
+  isRevoked          Boolean   @default(false)
 
   @@map("cog_verifications")
 }

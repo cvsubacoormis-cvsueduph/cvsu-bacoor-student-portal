@@ -44,10 +44,12 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Swal from "sweetalert2";
 import UploadGradeNotice from "./Notices/upload-grade-notice";
+import GradeChangePolicyNotice from "./Notices/GradeChangePolicyNotice";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@clerk/nextjs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useUploadStatePersistence,
@@ -166,6 +168,10 @@ export function UploadGrades() {
   // Legacy Mode State
   const [allowLegacy, setAllowLegacy] = useState(false);
 
+  // Grade Change Reason — required for faculty before uploading
+  const [changeReason, setChangeReason] = useState("");
+  const [reasonRequired, setReasonRequired] = useState(false);
+
   // Progress State
   const [progress, setProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
@@ -226,6 +232,8 @@ export function UploadGrades() {
     setIsValidating(false);
     setHasValidated(false);
     setAllowLegacy(false);
+    setChangeReason("");
+    setReasonRequired(false);
     clearPersistedState();
   };
 
@@ -345,6 +353,20 @@ export function UploadGrades() {
     if (!academicYear || !semester || !previewData || previewData.length === 0)
       return;
 
+    // Validate change reason for faculty (required before uploading grade changes)
+    if (role === "faculty" && !isDryRun) {
+      if (!changeReason.trim()) {
+        setReasonRequired(true);
+        Swal.fire({
+          icon: "warning",
+          title: "Reason Required",
+          text: "As a faculty member, you must provide a reason for the grade change before uploading. Please fill in the reason field below.",
+        });
+        return;
+      }
+      setReasonRequired(false);
+    }
+
     if (isDryRun) {
       setIsValidating(true);
       setHasValidated(false); // Reset until done
@@ -407,6 +429,7 @@ export function UploadGrades() {
           academicYear,
           semester,
           allowLegacy: canUseLegacyMode ? allowLegacy : false, // Security: only send true if authorized
+          changeReason: changeReason.trim() || undefined,
         }));
 
         try {
@@ -790,6 +813,9 @@ export function UploadGrades() {
 
       <UploadGradeNotice />
 
+      {/* Grade Change Policy Notice — for faculty before uploading */}
+      {role === "faculty" && <GradeChangePolicyNotice variant="upload" />}
+
       {/* Recovery Banner — shown when previous upload state is detected */}
       {showRecoveryBanner && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
@@ -925,6 +951,37 @@ export function UploadGrades() {
                     </p>
                   </div>
                 </div>
+
+                {/* Change Reason — required for faculty before upload */}
+                {role === "faculty" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="change-reason" className="text-sm font-medium">
+                      Reason for Grade Change{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
+                    <Textarea
+                      id="change-reason"
+                      placeholder="Explain why the grades need to be changed or uploaded (e.g., correction of encoding error, late submission, re-evaluation result, etc.)"
+                      value={changeReason}
+                      onChange={(e) => {
+                        setChangeReason(e.target.value);
+                        if (e.target.value.trim()) setReasonRequired(false);
+                      }}
+                      rows={3}
+                      disabled={isUploading || isValidating}
+                      className={
+                        reasonRequired && !changeReason.trim()
+                          ? "border-red-400 focus-visible:ring-red-400"
+                          : ""
+                      }
+                    />
+                    {reasonRequired && !changeReason.trim() && (
+                      <p className="text-xs text-red-500">
+                        A reason is required before uploading grade changes.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {isUploading || isValidating ? (
                   <div className="space-y-3">

@@ -56,6 +56,7 @@ export type GradeData = {
   remarks?: string;
   instructor: string;
   isResolved: boolean;
+  changeReason?: string;
 };
 
 export async function searchStudent(
@@ -294,6 +295,7 @@ export async function addManualGrade(
         requestedByName: user?.fullName || "",
         requestedRole: userRole,
         status: "PENDING",
+        changeReason: gradeData.changeReason ?? null,
       },
     });
 
@@ -403,6 +405,7 @@ export async function addManualGrade(
         academicYear: gradeData.academicYear,
         semester: gradeData.semester,
         action: "MANUAL_ENTRY",
+        changeReason: gradeData.changeReason ?? null,
       },
     });
   });
