@@ -35,7 +35,7 @@ export async function getStudentCurriculum() {
           : grade.remarks?.toUpperCase().includes("DROPPED")
             ? "Dropped"
             : "Completed"
-        : creditedSubjectCodes.has(item.courseCode)
+        : creditedSubjectCodes[item.courseCode]
           ? "Credited"
           : "Not Taken";
 

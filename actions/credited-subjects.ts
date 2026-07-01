@@ -94,23 +94,23 @@ export async function getCreditedSubjects(studentNumber: string) {
 }
 
 /**
- * Get the set of credited course codes for a student.
- * Returns a Set-like structure for efficient checklist merging.
+ * Get the map of credited course codes for a student — keyed by courseCode.
+ * Returns a plain Record (JSON-safe) so it can be serialized across server-action boundaries.
  */
 export async function getCreditedSubjectCodes(
   studentNumber: string,
-): Promise<Map<string, { courseTitle: string; creditUnits: number }>> {
+): Promise<Record<string, { courseTitle: string; creditUnits: number }>> {
   const credited = await prisma.creditedSubject.findMany({
     where: { studentNumber },
     select: { courseCode: true, courseTitle: true, creditUnits: true },
   });
 
-  const map = new Map<string, { courseTitle: string; creditUnits: number }>();
+  const map: Record<string, { courseTitle: string; creditUnits: number }> = {};
   for (const c of credited) {
-    map.set(c.courseCode, {
+    map[c.courseCode] = {
       courseTitle: c.courseTitle,
       creditUnits: c.creditUnits,
-    });
+    };
   }
   return map;
 }

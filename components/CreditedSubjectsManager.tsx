@@ -126,8 +126,10 @@ export default function CreditedSubjectsManager({
       const data = await getCreditedSubjects(studentNumber);
       setCreditedSubjects(data);
     } catch (err) {
-      console.error("Failed to fetch credited subjects:", err);
-      toast.error("Failed to load credited subjects.");
+      const message =
+        err instanceof Error ? err.message : "Unknown error";
+      console.error("Failed to fetch credited subjects:", message);
+      toast.error(message || "Failed to load credited subjects.");
     } finally {
       setLoading(false);
     }
@@ -160,9 +162,14 @@ export default function CreditedSubjectsManager({
   }, [studentCourse, studentMajor]);
 
   useEffect(() => {
+    // Only fetch data if the user has permission
+    if (!isAuthorized) {
+      setLoading(false);
+      return;
+    }
     fetchCreditedSubjects();
     fetchCurriculum();
-  }, [fetchCreditedSubjects, fetchCurriculum]);
+  }, [fetchCreditedSubjects, fetchCurriculum, isAuthorized]);
 
   // ─── Credited course codes for filtering ────────────────────────────
 

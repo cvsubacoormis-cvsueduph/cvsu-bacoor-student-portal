@@ -131,7 +131,7 @@ export function useCurriculumData() {
                     : latestGrade.remarks?.toUpperCase().includes("DROPPED")
                       ? "Dropped"
                       : "Completed"
-            : creditedSubjectCodes.has(item.courseCode)
+            : creditedSubjectCodes[item.courseCode]
               ? "Credited"
               : "Not Taken";
 
