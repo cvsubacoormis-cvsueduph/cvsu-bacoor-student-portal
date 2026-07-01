@@ -3,6 +3,7 @@
 
 import { getStudentData } from "./getStudentData";
 import { getCurriculumChecklist } from "./curriculum-actions";
+import { getCreditedSubjectCodes } from "./credited-subjects";
 import { auth } from "@clerk/nextjs/server";
 
 export async function getStudentCurriculum() {
@@ -17,16 +18,31 @@ export async function getStudentCurriculum() {
       student.major
     );
 
-    // Merge curriculum with grades
+    // Fetch credited subjects to determine which subjects are creditable
+    const creditedSubjectCodes = await getCreditedSubjectCodes(
+      student.studentNumber,
+    );
+
+    // Merge curriculum with grades (and credited subjects)
     const curriculumWithGrades = curriculum.map((item) => {
       const grade = student.grades.find(
         (g) => g.courseCode === item.courseCode
       );
 
+      const completion = grade
+        ? grade.remarks?.toUpperCase().includes("FAILED")
+          ? "Failed"
+          : grade.remarks?.toUpperCase().includes("DROPPED")
+            ? "Dropped"
+            : "Completed"
+        : creditedSubjectCodes.has(item.courseCode)
+          ? "Credited"
+          : "Not Taken";
+
       return {
         ...item,
         grade: grade?.grade || "",
-        completion: grade ? "Completed" : "Not Taken",
+        completion,
         remarks: grade?.remarks || "",
         academicYear: grade?.academicYear || "",
         semesterTaken: grade?.semester || "",

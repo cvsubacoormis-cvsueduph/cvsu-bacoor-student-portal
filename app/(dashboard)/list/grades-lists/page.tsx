@@ -64,6 +64,7 @@ async function getData({ page, pageSize, search }: GetDataParams): Promise<{
       phone: true,
       address: true,
       course: true,
+      major: true,
       status: true,
     },
     skip,
@@ -76,6 +77,7 @@ async function getData({ page, pageSize, search }: GetDataParams): Promise<{
   const data = students.map((student) => ({
     ...student,
     studentNumber: String(student.studentNumber),
+    major: student.major ?? "",
     status: student.status as Status,
     email: student.email ?? "",
     phone: student.phone ?? "",

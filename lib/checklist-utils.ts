@@ -27,6 +27,8 @@ export const getStatusColor = (status: string) => {
     case "Passed":
     case "Satisfactory":
       return "bg-green-100 text-green-800 border-green-200 hover:bg-green-100";
+    case "Credited":
+      return "bg-teal-100 text-teal-800 border-teal-200 hover:bg-teal-100";
     case "Enrolled":
       return "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100";
     case "Failed":

@@ -63,8 +63,9 @@ model Student {
   status        Status
   role          Role     @default(student)
   createdAt     DateTime @default(now())
-  grades        Grade[]
-  isPasswordSet Boolean  @default(false)
+  grades           Grade[]
+  creditedSubjects CreditedSubject[]
+  isPasswordSet    Boolean  @default(false)
   isApproved    Boolean  @default(false)
 }
 
@@ -253,6 +254,22 @@ enum Major {
   ENGLISH
   MATHEMATICS
   NONE
+}
+
+model CreditedSubject {
+  id            String   @id @default(cuid())
+  studentNumber String
+  student       Student  @relation(fields: [studentNumber], references: [studentNumber], onDelete: Cascade)
+  courseCode    String
+  courseTitle   String
+  creditUnits   Int      @default(0)
+  schoolName    String?  // Name of the school/institution where the credit was earned
+  notes         String?  // Additional notes (e.g., equivalent course, evaluation details)
+  creditedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([studentNumber, courseCode], map: "unique_credited_subject")
 }
 
 model CogVerification {

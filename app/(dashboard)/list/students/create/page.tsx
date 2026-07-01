@@ -318,6 +318,9 @@ export default function CreateStudent() {
                       <SelectContent>
                         <SelectItem value="REGULAR">REGULAR</SelectItem>
                         <SelectItem value="IRREGULAR">IRREGULAR</SelectItem>
+                        <SelectItem value="TRANSFEREE">TRANSFEREE</SelectItem>
+                        <SelectItem value="RETURNEE">RETURNEE</SelectItem>
+                        <SelectItem value="NOT_ANNOUNCED">NOT ANNOUNCED</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormDescription>Status of the student</FormDescription>

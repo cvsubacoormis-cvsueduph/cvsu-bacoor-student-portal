@@ -290,6 +290,9 @@ export default function UpdateStudent({
                       <SelectContent>
                         <SelectItem value="REGULAR">Regular</SelectItem>
                         <SelectItem value="IRREGULAR">Irregular</SelectItem>
+                        <SelectItem value="TRANSFEREE">Transferee</SelectItem>
+                        <SelectItem value="RETURNEE">Returnee</SelectItem>
+                        <SelectItem value="NOT_ANNOUNCED">Not Announced</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

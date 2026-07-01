@@ -80,6 +80,7 @@ export interface Subject extends CurriculumItem {
   grade: string;
   completion:
     | "Completed"
+    | "Credited"
     | "Enrolled"
     | "Failed"
     | "Not Taken"

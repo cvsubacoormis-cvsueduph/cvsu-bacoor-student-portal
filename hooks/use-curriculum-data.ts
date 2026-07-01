@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { getCurriculumChecklist } from "@/actions/curriculum-actions";
 import { getStudentGradesWithReExam } from "@/actions/student-grades/student-grades";
+import { getCreditedSubjectCodes } from "@/actions/credited-subjects";
 import { Subject, AcademicProgress } from "@/lib/types";
 import { getBetterGrade } from "@/lib/checklist-utils";
 
@@ -47,6 +48,11 @@ export function useCurriculumData() {
         const curriculum = await getCurriculumChecklist(
           student.course,
           student.major,
+        );
+
+        // Fetch credited subjects to merge with curriculum
+        const creditedSubjectCodes = await getCreditedSubjectCodes(
+          student.studentNumber,
         );
 
         const gradesByCourse: Record<string, typeof grades> = {};
@@ -125,7 +131,9 @@ export function useCurriculumData() {
                     : latestGrade.remarks?.toUpperCase().includes("DROPPED")
                       ? "Dropped"
                       : "Completed"
-            : "Not Taken";
+            : creditedSubjectCodes.has(item.courseCode)
+              ? "Credited"
+              : "Not Taken";
 
           return {
             ...item,
@@ -198,9 +206,13 @@ export function useCurriculumData() {
         // Append extra subjects to curriculumWithGrades
         curriculumWithGrades.push(...extraSubjects);
 
-        // Calculate progress metrics
+        // Calculate progress metrics — credited subjects count as completed
         const creditsCompleted = curriculumWithGrades
-          .filter((subject) => subject.completion === "Completed")
+          .filter(
+            (subject) =>
+              subject.completion === "Completed" ||
+              subject.completion === "Credited",
+          )
           .reduce(
             (sum, subject) =>
               sum + subject.creditUnit.lec + subject.creditUnit.lab,
@@ -240,10 +252,12 @@ export function useCurriculumData() {
             ),
             currentGPA: parseFloat(gpa.toFixed(2)),
             subjectsCompleted: curriculumWithGrades.filter(
-              (s) => s.completion === "Completed"
+              (s) =>
+                s.completion === "Completed" || s.completion === "Credited",
             ).length,
             subjectsRemaining: curriculumWithGrades.filter(
-              (s) => s.completion !== "Completed"
+              (s) =>
+                s.completion !== "Completed" && s.completion !== "Credited",
             ).length,
           },
           studentInfo: {

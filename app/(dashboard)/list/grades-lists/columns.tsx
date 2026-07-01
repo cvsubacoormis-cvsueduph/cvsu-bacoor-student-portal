@@ -16,6 +16,7 @@ export type Grades = {
   phone: string;
   address: string;
   course: "BSIT" | "BSCS" | "BSBA" | "BSHM" | "BSP" | "BSCRIM" | "BSED";
+  major: string | null;
   status: "REGULAR" | "IRREGULAR" | "TRANSFEREE" | "NOT_ANNOUNCED" | "RETURNEE";
 };
 
@@ -23,6 +24,8 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
   const params = new URLSearchParams({
     firstName: student.firstName,
     lastName: student.lastName,
+    course: student.course,
+    major: student.major ?? "",
   });
   return (
     <div className="flex items-center space-x-2">

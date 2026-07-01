@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle, Clock, XCircle, BookOpen, Calendar } from "lucide-react";
+import { CheckCircle, Clock, XCircle, BookOpen, Calendar, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -379,6 +379,8 @@ function StatusIcon({ status }: { status: string }) {
     case "Passed":
     case "Satisfactory":
       return <CheckCircle className="h-4 w-4 text-green-600" />;
+    case "Credited":
+      return <BadgeCheck className="h-4 w-4 text-teal-600" />;
     case "Enrolled":
       return <Clock className="h-4 w-4 text-blue-600" />;
     case "Failed":
@@ -419,6 +421,13 @@ function Legend() {
 
           <LegendItem
             icon={
+              <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 print:mt-0 print:h-3 print:w-3" />
+            }
+            label="Credited (from other institution)"
+          />
+
+          <LegendItem
+            icon={
               <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 print:mt-0 print:h-3 print:w-3" />
             }
             label="Failed/Unsatisfactory"
@@ -428,7 +437,7 @@ function Legend() {
             icon={
               <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600 print:mt-0 print:h-3 print:w-3" />
             }
-            label="Conditional Failure/Dropped/Lack of Requirements"
+            label="Conditional Failure/Dropped/Lack"
           />
 
           <LegendItem
