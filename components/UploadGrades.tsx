@@ -650,10 +650,11 @@ export function UploadGrades() {
       years.push(`AY_${y}_${y + 1}`);
     }
 
-    // Faculty Restriction: Only Current Academic Year
+    // Faculty: Allow current and previous academic year
     if (role === "faculty") {
-      const currentAyString = `AY_${currentAyStartYear}_${currentAyStartYear + 1}`;
-      return [currentAyString];
+      const previousAy = `AY_${currentAyStartYear - 1}_${currentAyStartYear}`;
+      const currentAy = `AY_${currentAyStartYear}_${currentAyStartYear + 1}`;
+      return [currentAy, previousAy];
     }
 
     return years.reverse(); // Show newest first

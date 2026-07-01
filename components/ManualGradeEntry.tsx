@@ -703,10 +703,14 @@ export default function ManualGradeEntry() {
   );
   const startYear = isAdminOrRegistrar ? 2014 : 2025;
 
-  const currentYear = new Date().getFullYear() - 1;
-  // Ensure we go at least up to next year or a bit more
-  const endYear = currentYear + 1;
-  const numberOfYears = endYear - startYear + 2; // +2 buffer
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth(); // 0-11
+  const currentYear = currentDate.getFullYear();
+  // If Month is Jan-June (0-5), we are in the 2nd semester of previous year start
+  const currentAyStartYear = currentMonth >= 6 ? currentYear : currentYear - 1;
+
+  const endYear = currentAyStartYear;
+  const numberOfYears = endYear - startYear + 2;
 
   const academicYears = Array.from({ length: numberOfYears }, (_, i) => {
     const ayStart = startYear + i;
@@ -745,7 +749,8 @@ export default function ManualGradeEntry() {
                     .filter(
                       (year) =>
                         role !== "faculty" ||
-                        year === `AY_${currentYear}_${currentYear + 1}`,
+                        year === `AY_${currentAyStartYear}_${currentAyStartYear + 1}` ||
+                        year === `AY_${currentAyStartYear - 1}_${currentAyStartYear}`,
                     )
                     .map((year: string) => (
                       <SelectItem key={year} value={year}>
