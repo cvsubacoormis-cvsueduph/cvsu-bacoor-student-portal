@@ -990,9 +990,95 @@ export async function rollbackFacultyGrades(
     const windowStart = new Date(sessionStart.getTime() - 60_000);
     const windowEnd = new Date(sessionEnd.getTime() + 60_000);
 
-    // ── 2. Find all grades in the session window ───────────────────────
-    // Use broad filters (lastName + username) instead of fragile raw-name
-    // "contains" matching. JS-refine below handles precise attribution.
+    // ── 2. Find all grades to rollback ──────────────────────────────────
+
+    // When entries are provided, use the unique composite key
+    // (studentNumber, courseCode, academicYear, semester) to locate
+    // Grade records directly — no need for the createdAt window or
+    // name filters at the Prisma level.  JS-refine still applies below.
+    if (entries && entries.length > 0) {
+      const candidateGrades = await prisma.grade.findMany({
+        where: {
+          academicYear,
+          semester,
+          OR: entries.map((e) => ({
+            studentNumber: e.studentNumber,
+            courseCode: e.courseCode,
+          })),
+          ...(courseCode
+            ? { courseCode: { equals: courseCode, mode: "insensitive" } }
+            : {}),
+          ...(courseTitle
+            ? { courseTitle: { contains: courseTitle, mode: "insensitive" } }
+            : {}),
+        },
+        select: {
+          id: true,
+          studentNumber: true,
+          courseCode: true,
+          courseTitle: true,
+          creditUnit: true,
+          grade: true,
+          remarks: true,
+          instructor: true,
+          uploadedBy: true,
+          createdAt: true,
+        },
+      });
+
+      // JS-refine: only grades actually matching this faculty
+      const matched = candidateGrades.filter(
+        (g) =>
+          nameMatchesFaculty(g.instructor, perms) ||
+          nameMatchesFaculty(g.uploadedBy, perms),
+      );
+
+      if (matched.length === 0) {
+        return { deletedCount: 0, rollbackLogIds: [] };
+      }
+
+      const gradeIds = matched.map((g) => g.id);
+
+      // Build rollback GradeLog entries
+      const fullUserName = [
+        `${faculty.firstName} ${faculty.lastName}`,
+        faculty.middleInit ? ` ${faculty.middleInit}.` : "",
+      ]
+        .join("")
+        .trim();
+
+      const rollbackLogData = matched.map((g) => ({
+        studentNumber: g.studentNumber,
+        courseCode: g.courseCode,
+        courseTitle: g.courseTitle,
+        creditUnit: g.creditUnit,
+        grade: g.grade,
+        remarks: `ROLLBACK: ${g.remarks ?? ""}`.trim(),
+        instructor: g.instructor,
+        academicYear,
+        semester,
+        action: "ROLLBACK",
+        isResolved: true,
+        importedName: fullUserName,
+      }));
+
+      const [, logResult] = await prisma.$transaction([
+        prisma.grade.deleteMany({
+          where: { id: { in: gradeIds } },
+        }),
+        prisma.gradeLog.createMany({
+          data: rollbackLogData,
+        }),
+      ]);
+
+      return {
+        deletedCount: gradeIds.length,
+        rollbackLogIds: [],
+      };
+    }
+
+    // ── 2a. Session-window path (no entries) — find all grades in the
+    //        session time window that match the faculty name. ──────────
     const candidateGrades = await prisma.grade.findMany({
       where: {
         academicYear,
@@ -1006,14 +1092,6 @@ export async function rollbackFacultyGrades(
         ],
         ...(courseCode ? { courseCode: { equals: courseCode, mode: "insensitive" } } : {}),
         ...(courseTitle ? { courseTitle: { contains: courseTitle, mode: "insensitive" } } : {}),
-        ...(entries && entries.length > 0
-          ? {
-              OR: entries.map((e) => ({
-                studentNumber: e.studentNumber,
-                courseCode: e.courseCode,
-              })),
-            }
-          : {}),
       },
       select: {
         id: true,
