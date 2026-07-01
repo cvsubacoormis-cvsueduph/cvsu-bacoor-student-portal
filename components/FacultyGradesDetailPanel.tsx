@@ -51,6 +51,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -119,6 +120,10 @@ export function FacultyGradesDetailPanel({
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false);
   const [rollbackInput, setRollbackInput] = useState("");
+  const [isSelectiveRollback, setIsSelectiveRollback] = useState(false);
+
+  // ── Checkbox selection state ──────────────────────────────────────────
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
 
   // ── Fetch grades ──────────────────────────────────────────────────────
   const fetchGrades = useCallback(
@@ -184,6 +189,14 @@ export function FacultyGradesDetailPanel({
     [fetchGrades],
   );
 
+  // Clear checkbox selections when grades data changes (pagination, filters, etc.)
+  useEffect(
+    function () {
+      setSelectedEntries(new Set());
+    },
+    [grades],
+  );
+
   // Reset page when filters change
   const handleCourseCodeChange = useCallback(function (value: string) {
     setCourseCodeFilter(value);
@@ -228,6 +241,51 @@ export function FacultyGradesDetailPanel({
     [search],
   );
 
+  // ── Checkbox selection handlers ───────────────────────────────────────
+  const entryKey = useCallback(
+    function (g: UploadedGradeRecord) {
+      return `${g.studentNumber}::${g.courseCode}`;
+    },
+    [],
+  );
+
+  const allCurrentSelected =
+    grades.length > 0 &&
+    grades.every(function (g) {
+      return selectedEntries.has(entryKey(g));
+    });
+
+  const handleSelectAll = useCallback(
+    function () {
+      if (allCurrentSelected) {
+        setSelectedEntries(new Set());
+      } else {
+        const next = new Set<string>();
+        for (const g of grades) {
+          next.add(entryKey(g));
+        }
+        setSelectedEntries(next);
+      }
+    },
+    [allCurrentSelected, grades, entryKey],
+  );
+
+  const handleSelectRow = useCallback(
+    function (g: UploadedGradeRecord) {
+      const key = entryKey(g);
+      setSelectedEntries(function (prev) {
+        const next = new Set(prev);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+        return next;
+      });
+    },
+    [entryKey],
+  );
+
   // ── Rollback handler ──────────────────────────────────────────────────
   const isFilteredRollback = courseCodeFilter !== "all" || courseTitleFilter !== "all";
 
@@ -245,21 +303,33 @@ export function FacultyGradesDetailPanel({
           sessionEndedAt: session.endedAt,
         };
 
-        if (courseCodeFilter !== "all") {
+        if (isSelectiveRollback) {
+          // Convert Set of "studentNumber::courseCode" keys to entries array
+          rollbackParams.entries = Array.from(selectedEntries).map(function (key) {
+            const [studentNumber, courseCode] = key.split("::");
+            return { studentNumber, courseCode };
+          });
+        } else if (courseCodeFilter !== "all") {
           rollbackParams.courseCode = courseCodeFilter;
         }
-        if (courseTitleFilter !== "all") {
+        if (!isSelectiveRollback && courseTitleFilter !== "all") {
           rollbackParams.courseTitle = courseTitleFilter;
         }
 
         const result = await rollbackFacultyGrades(rollbackParams);
 
-        const scope = isFilteredRollback ? "filtered" : "";
+        const scope = isSelectiveRollback
+          ? "selected"
+          : isFilteredRollback
+            ? "filtered"
+            : "";
         toast.success(
           `Rollback complete: ${result.deletedCount} ${scope} grade(s) deleted successfully.`,
         );
         setRollbackConfirmOpen(false);
         setRollbackInput("");
+        setSelectedEntries(new Set());
+        setIsSelectiveRollback(false);
         // Refresh the list
         setPage(1);
         fetchGrades();
@@ -274,7 +344,9 @@ export function FacultyGradesDetailPanel({
     },
     [
       rollbackInput,
+      isSelectiveRollback,
       isFilteredRollback,
+      selectedEntries,
       facultyId,
       academicYear,
       semester,
@@ -338,31 +410,62 @@ export function FacultyGradesDetailPanel({
         {canRollback && (
           <AlertDialog
             open={rollbackConfirmOpen}
-            onOpenChange={setRollbackConfirmOpen}
+            onOpenChange={function (open) {
+              if (!open) {
+                setRollbackInput("");
+                setIsSelectiveRollback(false);
+              }
+              setRollbackConfirmOpen(open);
+            }}
           >
             <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={total === 0 || isRollingBack}
-                className="flex items-center gap-1.5"
-                title={
-                  isFilteredRollback
-                    ? "Rollback only the currently filtered grades"
-                    : "Rollback all grades in this session"
-                }
-              >
-                {isRollingBack ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
-                )}
-                {isRollingBack
-                  ? "Rolling back..."
-                  : isFilteredRollback
-                    ? "Rollback Filtered"
-                    : "Rollback Upload"}
-              </Button>
+              {selectedEntries.size > 0 ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={isRollingBack}
+                  className="flex items-center gap-1.5"
+                  title="Rollback only the selected student grades"
+                  onClick={function () {
+                    setIsSelectiveRollback(true);
+                  }}
+                >
+                  {isRollingBack ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  {isRollingBack
+                    ? "Rolling back..."
+                    : `Rollback Selected (${selectedEntries.size})`}
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={total === 0 || isRollingBack}
+                  className="flex items-center gap-1.5"
+                  title={
+                    isFilteredRollback
+                      ? "Rollback only the currently filtered grades"
+                      : "Rollback all grades in this session"
+                  }
+                  onClick={function () {
+                    setIsSelectiveRollback(false);
+                  }}
+                >
+                  {isRollingBack ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  {isRollingBack
+                    ? "Rolling back..."
+                    : isFilteredRollback
+                      ? "Rollback Filtered"
+                      : "Rollback Upload"}
+                </Button>
+              )}
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -373,7 +476,12 @@ export function FacultyGradesDetailPanel({
                 <AlertDialogDescription className="space-y-3">
                   <p>
                     You are about to <strong>permanently delete</strong>{" "}
-                    {isFilteredRollback ? (
+                    {isSelectiveRollback ? (
+                      <>
+                        the <strong className="text-gray-800">selected</strong>{" "}
+                        grade records ({selectedEntries.size})
+                      </>
+                    ) : isFilteredRollback ? (
                       <>
                         the <strong className="text-gray-800">filtered</strong>{" "}
                         grade records
@@ -393,14 +501,15 @@ export function FacultyGradesDetailPanel({
                       {formatDateTime(session.startedAt)}
                     </p>
                     <p>
-                      <strong>Records to delete:</strong> {total}
+                      <strong>Records to delete:</strong>{" "}
+                      {isSelectiveRollback ? selectedEntries.size : total}
                     </p>
                     <p>
                       <strong>Term:</strong>{" "}
                       {academicYear.replace("AY_", "AY ").replace("_", "-")} /{" "}
                       {semester}
                     </p>
-                    {isFilteredRollback && (
+                    {isFilteredRollback && !isSelectiveRollback && (
                       <p>
                         <strong>Active filters:</strong>{" "}
                         {[
@@ -413,6 +522,13 @@ export function FacultyGradesDetailPanel({
                         ]
                           .filter(Boolean)
                           .join(", ")}
+                      </p>
+                    )}
+                    {isSelectiveRollback && (
+                      <p>
+                        <strong>Selected students/courses:</strong>{" "}
+                        {selectedEntries.size} record
+                        {selectedEntries.size !== 1 ? "s" : ""}
                       </p>
                     )}
                   </div>
@@ -444,6 +560,7 @@ export function FacultyGradesDetailPanel({
                 <AlertDialogCancel
                   onClick={function () {
                     setRollbackInput("");
+                    setIsSelectiveRollback(false);
                   }}
                 >
                   Cancel
@@ -458,6 +575,8 @@ export function FacultyGradesDetailPanel({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Deleting...
                     </>
+                  ) : isSelectiveRollback ? (
+                    `Yes, Delete ${selectedEntries.size} Selected Record${selectedEntries.size !== 1 ? "s" : ""}`
                   ) : isFilteredRollback ? (
                     "Yes, Delete Filtered Records"
                   ) : (
@@ -555,6 +674,13 @@ export function FacultyGradesDetailPanel({
             <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={allCurrentSelected}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead className="w-[100px]">Student #</TableHead>
                   <TableHead>Student Name</TableHead>
                   <TableHead className="w-[100px]">Course Code</TableHead>
@@ -570,8 +696,18 @@ export function FacultyGradesDetailPanel({
               </TableHeader>
               <TableBody>
                 {grades.map(function (g) {
+                  const isSelected = selectedEntries.has(entryKey(g));
                   return (
                     <TableRow key={g.id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={function () {
+                            handleSelectRow(g);
+                          }}
+                          aria-label={`Select ${g.studentNumber} - ${g.studentName}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {g.studentNumber}
                       </TableCell>
