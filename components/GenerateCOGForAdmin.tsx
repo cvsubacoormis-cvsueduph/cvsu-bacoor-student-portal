@@ -65,8 +65,28 @@ type StudentData = {
   grades: Grade[];
 };
 
-export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+interface GenerateCOGAdminProps {
+  studentId: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export default function GenerateCOGAdmin({
+  studentId,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+}: GenerateCOGAdminProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isDialogOpen = isControlled ? controlledOpen : internalOpen;
+
+  const handleOpenChange = (open: boolean) => {
+    if (isControlled && controlledOnOpenChange) {
+      controlledOnOpenChange(open);
+    } else {
+      setInternalOpen(open);
+    }
+  };
   const [academicOptions, setAcademicOptions] = useState<AcademicOption[]>([]);
   const [academicYear, setAcademicYear] = useState<string>();
   const [semester, setSemester] = useState<string>();
@@ -805,7 +825,7 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
     <Dialog
       open={isDialogOpen}
       onOpenChange={(open) => {
-        setIsDialogOpen(open);
+        handleOpenChange(open);
         if (!open) {
           setStudentData(null);
           setAcademicYear(undefined);
@@ -814,11 +834,13 @@ export default function GenerateCOGAdmin({ studentId }: { studentId: string }) {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline" className="border-none rounded-full">
-          <PrinterIcon />
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" className="border-none rounded-full">
+            <PrinterIcon />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Enter Academic Info</DialogTitle>
