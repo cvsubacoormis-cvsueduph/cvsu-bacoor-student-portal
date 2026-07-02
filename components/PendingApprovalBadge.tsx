@@ -15,7 +15,7 @@ export function PendingApprovalBadge() {
       const res = await fetch("/api/pending-grade-changes?status=PENDING");
       if (res.ok) {
         const data = await res.json();
-        setCount(data.length);
+        setCount(data.total ?? 0);
       }
     } catch {
       // Silently ignore
