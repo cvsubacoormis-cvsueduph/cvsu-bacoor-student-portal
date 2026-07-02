@@ -3,13 +3,10 @@
 import * as React from "react";
 import {
   ColumnDef,
-  ColumnFiltersState,
   SortingState,
   VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
@@ -19,6 +16,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Loader2,
+  Search,
 } from "lucide-react";
 
 import {
@@ -39,7 +38,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useEffect, useRef, useState } from "react";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50] as const;
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -48,6 +56,7 @@ interface DataTableProps<TData, TValue> {
   currentPage: number;
   currentPageSize: number;
   totalPages: number;
+  initialSearch?: string;
   onPageChange: (page: number, pageSize: number) => void;
   onSearchChange: (search: string) => void;
   isLoading: boolean;
@@ -60,22 +69,37 @@ export function DataTable<TData, TValue>({
   currentPage,
   currentPageSize,
   totalPages,
+  initialSearch = "",
   onPageChange,
   onSearchChange,
   isLoading,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState(initialSearch);
+  const committedSearchRef = useRef(initialSearch);
+  const isFirstMount = useRef(true);
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
 
-  // Debounce search
   useEffect(() => {
+    setSearchValue(initialSearch);
+    committedSearchRef.current = initialSearch;
+  }, [initialSearch]);
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+
     const timer = setTimeout(() => {
-      onSearchChange(searchValue);
-    }, 500);
+      if (searchValue !== committedSearchRef.current) {
+        committedSearchRef.current = searchValue;
+        onSearchChange(searchValue);
+      }
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [searchValue, onSearchChange]);
@@ -83,7 +107,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    pageCount: totalPages,
+    pageCount: totalPages || 1,
     state: {
       sorting,
       columnVisibility,
@@ -102,20 +126,25 @@ export function DataTable<TData, TValue>({
     manualFiltering: true,
   });
 
+  const from = totalRecords > 0 ? (currentPage - 1) * currentPageSize + 1 : 0;
+  const to = Math.min(currentPage * currentPageSize, totalRecords);
+
   return (
-    <div>
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Search students..."
-          value={searchValue}
-          onChange={(event) => {
-            setSearchValue(event.target.value);
-          }}
-          className="w-full sm:max-w-xs"
-        />
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search students..."
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            aria-label="Search students"
+            className="pl-8 w-full"
+          />
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
+            <Button variant="outline" size="sm" className="sm:ml-auto shrink-0">
               Columns
             </Button>
           </DropdownMenuTrigger>
@@ -123,44 +152,49 @@ export function DataTable<TData, TValue>({
             {table
               .getAllColumns()
               .filter((column) => column.getCanHide())
-              .map((column) => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
+              .map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className="capitalize"
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) =>
+                    column.toggleVisibility(!!value)
+                  }
+                >
+                  {column.id}
+                </DropdownMenuCheckboxItem>
+              ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="rounded-md border">
+
+      <div className="relative rounded-md border overflow-x-auto">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-background/50 flex items-center justify-center rounded-md">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} className="text-center">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className="text-center whitespace-nowrap"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
                           header.column.columnDef.header,
                           header.getContext()
                         )}
-                    </TableHead>
-                  );
-                })}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody className="text-center ">
+          <TableBody className="text-center">
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
@@ -168,7 +202,7 @@ export function DataTable<TData, TValue>({
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="whitespace-nowrap">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -190,65 +224,82 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          {totalRecords > 0
+            ? `Showing ${from}–${to} of ${totalRecords}`
+            : "No records"}
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center gap-1 flex-wrap justify-center">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onPageChange(1, currentPageSize)}
-            disabled={currentPage === 1 || isLoading}
+            disabled={currentPage <= 1 || isLoading}
+            aria-label="First page"
           >
             <ChevronsLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onPageChange(currentPage - 1, currentPageSize)}
-            disabled={currentPage === 1 || isLoading}
+            onClick={() =>
+              onPageChange(currentPage - 1, currentPageSize)
+            }
+            disabled={currentPage <= 1 || isLoading}
+            aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm">
+          <span className="text-sm whitespace-nowrap px-1">
             Page{" "}
             <strong>
-              {currentPage} of {totalPages}
+              {totalPages > 0 ? currentPage : 0} of {totalPages}
             </strong>
           </span>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onPageChange(currentPage + 1, currentPageSize)}
-            disabled={currentPage === totalPages || isLoading}
+            onClick={() =>
+              onPageChange(currentPage + 1, currentPageSize)
+            }
+            disabled={currentPage >= totalPages || isLoading}
+            aria-label="Next page"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onPageChange(totalPages, currentPageSize)}
-            disabled={currentPage === totalPages || isLoading}
+            onClick={() =>
+              onPageChange(totalPages, currentPageSize)
+            }
+            disabled={currentPage >= totalPages || isLoading}
+            aria-label="Last page"
           >
             <ChevronsRight className="h-4 w-4" />
           </Button>
+          <Select
+            value={String(currentPageSize)}
+            onValueChange={(value) => onPageChange(1, Number(value))}
+            disabled={isLoading}
+          >
+            <SelectTrigger
+              className="h-8 w-[100px]"
+              aria-label="Rows per page"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  Show {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <select
-          value={currentPageSize}
-          onChange={(e) => {
-            onPageChange(1, Number(e.target.value));
-          }}
-          className="border rounded p-1"
-          disabled={isLoading}
-        >
-          {[10, 20, 30, 50].map((pageSize) => (
-            <option key={pageSize} value={pageSize}>
-              Show {pageSize}
-            </option>
-          ))}
-        </select>
       </div>
     </div>
   );

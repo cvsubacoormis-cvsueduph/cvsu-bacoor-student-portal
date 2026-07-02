@@ -28,6 +28,8 @@ export function GradesListClient({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  const initialSearch = searchParams.get("search") ?? "";
+
   const updateURL = useCallback(
     (updates: { page?: number; pageSize?: number; search?: string }) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -41,7 +43,7 @@ export function GradesListClient({
       if (updates.search !== undefined) {
         if (updates.search) {
           params.set("search", updates.search);
-          params.set("page", "1"); // Reset to page 1 on search
+          params.set("page", "1");
         } else {
           params.delete("search");
         }
@@ -84,6 +86,7 @@ export function GradesListClient({
           currentPage={page}
           currentPageSize={pageSize}
           totalPages={totalPages}
+          initialSearch={initialSearch}
           onPageChange={handlePageChange}
           onSearchChange={handleSearchChange}
           isLoading={isPending}
