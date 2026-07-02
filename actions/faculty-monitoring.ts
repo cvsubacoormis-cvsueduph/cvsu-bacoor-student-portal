@@ -79,13 +79,41 @@ interface FacultyNamePermutations {
  */
 function normalizeInstructorName(name: string): string {
   if (!name) return "";
-  const cleaned = String(name).replace(/['.,\-]/g, "").toUpperCase();
+  const cleaned = String(name)
+    .replace(/['.,\-]/g, "")
+    .toUpperCase();
   const tokens = cleaned.split(/\s+/);
 
   const ignoredWords = new Set([
-    "MR", "MS", "MRS", "DR", "PROF", "ENGR", "ARCH", "ATTY", "REV", "FR",
-    "HON", "LPT", "MIT", "MSCS", "MAED", "PHD", "EDD", "MAT", "MBA", "MPA",
-    "RN", "CPA", "MD", "JD", "DMD", "DBA", "DPA", "INSTRUCTOR", "FACULTY",
+    "MR",
+    "MS",
+    "MRS",
+    "DR",
+    "PROF",
+    "ENGR",
+    "ARCH",
+    "ATTY",
+    "REV",
+    "FR",
+    "HON",
+    "LPT",
+    "MIT",
+    "MSCS",
+    "MAED",
+    "PHD",
+    "EDD",
+    "MAT",
+    "MBA",
+    "MPA",
+    "RN",
+    "CPA",
+    "MD",
+    "JD",
+    "DMD",
+    "DBA",
+    "DPA",
+    "INSTRUCTOR",
+    "FACULTY",
     "PROFESSOR",
   ]);
 
@@ -119,7 +147,12 @@ function buildFacultyNamePermutations(faculty: {
   const raw = new Set<string>();
 
   for (const v of rawVariants) {
-    raw.add(v.toLowerCase().replace(/[\s\-]+/g, " ").trim());
+    raw.add(
+      v
+        .toLowerCase()
+        .replace(/[\s\-]+/g, " ")
+        .trim(),
+    );
     const norm = normalizeInstructorName(v).toLowerCase();
     if (norm) normalized.add(norm);
   }
@@ -158,7 +191,13 @@ async function authorizeAccess(): Promise<void> {
   const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff", "faculty"];
+  const allowedRoles = [
+    "admin",
+    "superuser",
+    "registrar",
+    "registrar_staff",
+    "faculty",
+  ];
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden: insufficient permissions.");
   }
@@ -232,7 +271,9 @@ export async function getFacultyUploadStatus(
         );
       }
       if (group.instructor) {
-        const cleanInst = normalizeInstructorName(group.instructor).toLowerCase();
+        const cleanInst = normalizeInstructorName(
+          group.instructor,
+        ).toLowerCase();
         instructorMap.set(
           cleanInst,
           (instructorMap.get(cleanInst) ?? 0) + group._count.id,
@@ -306,7 +347,7 @@ export async function getFacultyUploadStatus(
 // ── History action: per-faculty upload tracking ─────────────────────────────
 
 /** Maximum GradeLog rows to fetch for history (pre-filtered by name). */
-const HISTORY_LOG_LIMIT = 10000;
+const HISTORY_LOG_LIMIT = 100000000;
 
 /** Time window (ms) used to cluster consecutive GradeLog entries into one session. */
 const SESSION_GAP_MS = 5 * 60 * 1000; // 5 minutes
@@ -441,6 +482,8 @@ async function getTermScopedHistory(
       OR: [
         { instructor: { contains: faculty.lastName, mode: "insensitive" } },
         { instructor: { contains: faculty.username, mode: "insensitive" } },
+        { importedName: { contains: faculty.lastName, mode: "insensitive" } },
+        { importedName: { contains: faculty.username, mode: "insensitive" } },
       ],
     },
     orderBy: { performedAt: "desc" },
@@ -450,6 +493,7 @@ async function getTermScopedHistory(
       action: true,
       performedAt: true,
       instructor: true,
+      importedName: true,
       studentNumber: true,
       courseCode: true,
       courseTitle: true,
@@ -458,10 +502,12 @@ async function getTermScopedHistory(
     },
   });
 
-  // Step 4: Refine — keep logs whose instructor matches either the faculty
-  // directly, or one of the instructor names seen in attributed grades.
+  // Step 4: Refine — keep logs whose instructor or importedName matches
+  // either the faculty directly, or one of the instructor names seen in
+  // attributed grades.
   const matched = logs.filter((log) => {
     if (nameMatchesFaculty(log.instructor, perms)) return true;
+    if (nameMatchesFaculty(log.importedName ?? "", perms)) return true;
     const key = log.instructor.toLowerCase().replace(/\s+/g, " ").trim();
     return attributedInstructorKeys.has(key);
   });
@@ -527,7 +573,10 @@ async function getTermScopedHistory(
       grade: g.grade,
       remarks: g.remarks,
     }));
-    return buildHistoryResult([...matched, ...syntheticLogs], currentRecordsCount);
+    return buildHistoryResult(
+      [...matched, ...syntheticLogs],
+      currentRecordsCount,
+    );
   }
 
   return buildHistoryResult(matched, currentRecordsCount);
@@ -552,6 +601,8 @@ async function getAllTimeHistory(
       OR: [
         { instructor: { contains: faculty.lastName, mode: "insensitive" } },
         { instructor: { contains: faculty.username, mode: "insensitive" } },
+        { importedName: { contains: faculty.lastName, mode: "insensitive" } },
+        { importedName: { contains: faculty.username, mode: "insensitive" } },
       ],
     },
     orderBy: { performedAt: "desc" },
@@ -561,6 +612,7 @@ async function getAllTimeHistory(
       action: true,
       performedAt: true,
       instructor: true,
+      importedName: true,
       studentNumber: true,
       courseCode: true,
       courseTitle: true,
@@ -569,8 +621,10 @@ async function getAllTimeHistory(
     },
   });
 
-  const matched = logs.filter((log) =>
-    nameMatchesFaculty(log.instructor, perms),
+  const matched = logs.filter(
+    (log) =>
+      nameMatchesFaculty(log.instructor, perms) ||
+      nameMatchesFaculty(log.importedName ?? "", perms),
   );
 
   // currentRecordsCount is not available in all-time mode (no term filter)
@@ -849,7 +903,9 @@ export async function getFacultyUploadedGrades(
       prisma.gradeLog.findMany({
         where: {
           ...filterWhere,
-          ...(courseCode ? { courseCode: { equals: courseCode, mode: "insensitive" } } : {}),
+          ...(courseCode
+            ? { courseCode: { equals: courseCode, mode: "insensitive" } }
+            : {}),
         },
         select: { courseTitle: true },
         distinct: ["courseTitle"],
@@ -954,16 +1010,30 @@ export interface RollbackFacultyGradesResult {
 export async function rollbackFacultyGrades(
   params: RollbackFacultyGradesParams,
 ): Promise<RollbackFacultyGradesResult> {
-  const { facultyId, academicYear, semester, sessionStartedAt, sessionEndedAt, courseCode, courseTitle, entries } =
-    params;
+  const {
+    facultyId,
+    academicYear,
+    semester,
+    sessionStartedAt,
+    sessionEndedAt,
+    courseCode,
+    courseTitle,
+    entries,
+  } = params;
 
   await authorizeAccess();
 
   // Only admin, superuser, and registrar can rollback
   const { sessionClaims } = await auth();
   const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-  if (userRole !== "admin" && userRole !== "superuser" && userRole !== "registrar") {
-    throw new Error("Forbidden: only admin, superuser, and registrar can perform rollbacks.");
+  if (
+    userRole !== "admin" &&
+    userRole !== "superuser" &&
+    userRole !== "registrar"
+  ) {
+    throw new Error(
+      "Forbidden: only admin, superuser, and registrar can perform rollbacks.",
+    );
   }
 
   try {
@@ -1090,8 +1160,12 @@ export async function rollbackFacultyGrades(
           { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
           { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
         ],
-        ...(courseCode ? { courseCode: { equals: courseCode, mode: "insensitive" } } : {}),
-        ...(courseTitle ? { courseTitle: { contains: courseTitle, mode: "insensitive" } } : {}),
+        ...(courseCode
+          ? { courseCode: { equals: courseCode, mode: "insensitive" } }
+          : {}),
+        ...(courseTitle
+          ? { courseTitle: { contains: courseTitle, mode: "insensitive" } }
+          : {}),
       },
       select: {
         id: true,
