@@ -860,9 +860,12 @@ export async function getFacultyUploadedGrades(
       where.courseTitle = { contains: courseTitle, mode: "insensitive" };
     }
 
+    // Pre-query Student table for name-matching studentNumbers when a
+    // search term is provided.  Used by both GradeLog and Grade-table
+    // fallback paths.
+    let nameMatchNumbers: string[] = [];
+
     if (search) {
-      // Pre-query Student table for name-matching studentNumbers since
-      // GradeLog has no Student relation.
       const matchingStudents = await prisma.student.findMany({
         where: {
           OR: [
@@ -873,7 +876,7 @@ export async function getFacultyUploadedGrades(
         select: { studentNumber: true },
         take: 500,
       });
-      const nameMatchNumbers = matchingStudents.map((s) => s.studentNumber);
+      nameMatchNumbers = matchingStudents.map((s) => s.studentNumber);
 
       const searchOr: Prisma.GradeLogWhereInput[] = [
         { studentNumber: { contains: search, mode: "insensitive" } },
@@ -885,7 +888,186 @@ export async function getFacultyUploadedGrades(
       where.AND = [{ OR: searchOr }];
     }
 
-    // ── 3. Get available filters (unfiltered by courseCode/courseTitle) ─
+    // ── 3. Build attributedInstructorKeys from Grade records ───────────
+    // Mirrors getTermScopedHistory so that GradeLog entries whose
+    // instructor field uses an abbreviated/nickname variant that
+    // nameMatchesFaculty cannot resolve are still included when the
+    // same instructor string appears in Grade records attributed to
+    // this faculty (e.g. Grade.uploadedBy has the full name that
+    // matches, but Grade.instructor and GradeLog.instructor share an
+    // abbreviated form like "JUAN C. SANTOS" vs "JUAN CARLOS SANTOS").
+    const candidateGrades = await prisma.grade.findMany({
+      where: {
+        academicYear,
+        semester,
+        OR: [
+          { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+          { instructor: { contains: faculty.username, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
+        ],
+      },
+      select: { instructor: true, uploadedBy: true },
+    });
+
+    const attributedInstructorKeys = new Set<string>();
+    for (const g of candidateGrades) {
+      if (
+        nameMatchesFaculty(g.instructor, perms) ||
+        nameMatchesFaculty(g.uploadedBy ?? "", perms)
+      ) {
+        const key = g.instructor
+          .toLowerCase()
+          .replace(/[\s\-]+/g, " ")
+          .trim();
+        if (key) attributedInstructorKeys.add(key);
+      }
+    }
+
+    // Push attributed instructor keys into the Prisma filter so the
+    // database handles the matching efficiently instead of fetching
+    // everything and refining in JS.
+    if (attributedInstructorKeys.size > 0) {
+      const keysArray = [...attributedInstructorKeys];
+      nameFilters.push(
+        { instructor: { in: keysArray, mode: "insensitive" } },
+        { importedName: { in: keysArray, mode: "insensitive" } },
+      );
+    }
+
+    // ── 4. Short-circuit: count GradeLog entries first ──────────────────
+    const gradeLogCount = await prisma.gradeLog.count({ where });
+
+    // ── 5. Grade-table fallback (synthetic sessions) ────────────────────
+    // When a session was built from synthetic logs (grades imported
+    // without GradeLog entries), the GradeLog table has no entries for
+    // this window.  Fall back to querying Grade records directly.
+    if (gradeLogCount === 0) {
+      const gradeWhere: Prisma.GradeWhereInput = {
+        academicYear,
+        semester,
+        createdAt: { gte: windowStart, lte: windowEnd },
+        OR: [
+          { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+          { instructor: { contains: faculty.username, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
+        ],
+      };
+
+      if (courseCode) {
+        gradeWhere.courseCode = { equals: courseCode, mode: "insensitive" };
+      }
+      if (courseTitle) {
+        gradeWhere.courseTitle = { contains: courseTitle, mode: "insensitive" };
+      }
+      if (search) {
+        const gradeSearch: Prisma.GradeWhereInput[] = [
+          { studentNumber: { contains: search, mode: "insensitive" } },
+        ];
+        if (nameMatchNumbers.length > 0) {
+          gradeSearch.push({ studentNumber: { in: nameMatchNumbers } });
+        }
+        gradeWhere.AND = [{ OR: gradeSearch }];
+      }
+
+      const [gradeRecords, gradeTotal] = await Promise.all([
+        prisma.grade.findMany({
+          where: gradeWhere,
+          select: {
+            id: true,
+            studentNumber: true,
+            courseCode: true,
+            courseTitle: true,
+            creditUnit: true,
+            grade: true,
+            remarks: true,
+            instructor: true,
+            uploadedBy: true,
+            createdAt: true,
+          },
+          orderBy: [{ courseCode: "asc" }, { courseTitle: "asc" }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.grade.count({ where: gradeWhere }),
+      ]);
+
+      const attributedGrades = gradeRecords.filter(
+        (g) =>
+          nameMatchesFaculty(g.instructor, perms) ||
+          nameMatchesFaculty(g.uploadedBy ?? "", perms),
+      );
+
+      // Build filter dropdowns from ALL attributed grades (not just the
+      // current page) for accurate filter options.
+      const allGradesForFilter = gradeRecords.length === gradeTotal
+        ? gradeRecords // already fetched all → reuse
+        : await prisma.grade.findMany({
+            where: gradeWhere,
+            select: { courseCode: true, courseTitle: true },
+            orderBy: { courseCode: "asc" },
+          });
+
+      const allAttributed = allGradesForFilter.filter(
+        (g) =>
+          nameMatchesFaculty(g.instructor, perms) ||
+          nameMatchesFaculty(g.uploadedBy ?? "", perms),
+      );
+
+      const gradeStudentNums = [
+        ...new Set(attributedGrades.map((g) => g.studentNumber)),
+      ];
+      const gradeStudents =
+        gradeStudentNums.length > 0
+          ? await prisma.student.findMany({
+              where: { studentNumber: { in: gradeStudentNums } },
+              select: {
+                studentNumber: true,
+                firstName: true,
+                lastName: true,
+              },
+            })
+          : [];
+
+      const gradeNameMap = new Map<string, string>();
+      for (const s of gradeStudents) {
+        gradeNameMap.set(
+          s.studentNumber,
+          `${s.lastName}, ${s.firstName}`,
+        );
+      }
+
+      return {
+        data: attributedGrades.map((g) => ({
+          id: g.id,
+          studentNumber: g.studentNumber,
+          studentName:
+            gradeNameMap.get(g.studentNumber) ?? g.studentNumber,
+          courseCode: g.courseCode,
+          courseTitle: g.courseTitle,
+          creditUnit: g.creditUnit,
+          grade: g.grade,
+          reExam: null,
+          remarks: g.remarks,
+          instructor: g.instructor,
+          uploadedBy: g.uploadedBy ?? g.instructor,
+          createdAt: g.createdAt.toISOString(),
+          action: "CREATED",
+        })),
+        total: gradeTotal,
+        availableCourseCodes: [
+          ...new Set(allAttributed.map((g) => g.courseCode)),
+        ].sort(),
+        availableCourseTitles: [
+          ...new Set(allAttributed.map((g) => g.courseTitle)),
+        ].sort(),
+      };
+    }
+
+    // ── 6. Get available filters (unfiltered by courseCode/courseTitle) ─
+    // Query across all matching GradeLog entries (not just the page) so
+    // the filter dropdowns include every available option.
     const filterWhere: Prisma.GradeLogWhereInput = {
       academicYear,
       semester,
@@ -913,8 +1095,8 @@ export async function getFacultyUploadedGrades(
       }),
     ]);
 
-    // ── 4. Query GradeLog entries with pagination ──────────────────────
-    const [logs, total] = await Promise.all([
+    // ── 7. Query GradeLog with DB-level pagination ──────────────────────
+    const [logs] = await Promise.all([
       prisma.gradeLog.findMany({
         where,
         select: {
@@ -934,17 +1116,16 @@ export async function getFacultyUploadedGrades(
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.gradeLog.count({ where }),
     ]);
 
-    // ── 5. Post-filter: only keep logs matching the faculty name ───────
+    // ── 8. JS-refine the current page ───────────────────────────────────
     const matched = logs.filter(
       (log) =>
         nameMatchesFaculty(log.instructor, perms) ||
         nameMatchesFaculty(log.importedName ?? "", perms),
     );
 
-    // ── 6. Fetch student names for matched log entries ─────────────────
+    // ── 9. Fetch student names for matched entries ──────────────────────
     const studentNumbers = [...new Set(matched.map((l) => l.studentNumber))];
     const students =
       studentNumbers.length > 0
@@ -963,7 +1144,8 @@ export async function getFacultyUploadedGrades(
       data: matched.map((log) => ({
         id: log.id,
         studentNumber: log.studentNumber,
-        studentName: studentNameMap.get(log.studentNumber) ?? log.studentNumber,
+        studentName:
+          studentNameMap.get(log.studentNumber) ?? log.studentNumber,
         courseCode: log.courseCode,
         courseTitle: log.courseTitle,
         creditUnit: log.creditUnit,
@@ -975,7 +1157,7 @@ export async function getFacultyUploadedGrades(
         createdAt: log.performedAt.toISOString(),
         action: log.action,
       })),
-      total,
+      total: gradeLogCount,
       availableCourseCodes: distinctCodes.map((c) => c.courseCode),
       availableCourseTitles: distinctTitles.map((t) => t.courseTitle),
     };
