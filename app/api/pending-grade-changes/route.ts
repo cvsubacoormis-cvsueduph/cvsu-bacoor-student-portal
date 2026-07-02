@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 const REVIEWER_ROLES = ["admin", "superuser", "registrar"];
 
 // ---------------------------------------------------------------------------
-// GET — List pending grade changes
+// GET — List pending grade changes (paginated)
 // ---------------------------------------------------------------------------
 export async function GET(request: Request) {
   try {
@@ -42,9 +42,11 @@ export async function GET(request: Request) {
       console.error("Rate limiter error (non-blocking):", error.message);
     }
 
-    // Optional query params
+    // Query params
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "PENDING";
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(10000, Math.max(1, parseInt(searchParams.get("pageSize") || "10", 10)));
 
     // Validate status
     const validStatuses = ["PENDING", "APPROVED", "REJECTED"];
@@ -55,27 +57,37 @@ export async function GET(request: Request) {
       );
     }
 
-    // Fetch pending changes. If the table doesn't exist yet (fresh deploy
-    // before migration), return an empty array instead of crashing.
-    let changes;
+    const where = { status };
+
+    // Fetch paginated data with total count
+    let changes: Awaited<ReturnType<typeof prisma.pendingGradeChange.findMany>> = [];
+    let total = 0;
     try {
-      changes = await prisma.pendingGradeChange.findMany({
-        where: { status },
-        orderBy: { createdAt: "desc" },
-      });
+      const result = await prisma.$transaction([
+        prisma.pendingGradeChange.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.pendingGradeChange.count({ where }),
+      ]);
+      changes = result[0];
+      total = result[1];
     } catch (dbError: any) {
       console.error("Database error fetching pending changes:", dbError.message);
       // If the table doesn't exist yet, return empty gracefully
       if (dbError.message?.includes("does not exist") || dbError.code === "P2021") {
-        return NextResponse.json([]);
+        return NextResponse.json({ data: [], total: 0, page, pageSize, totalPages: 0 });
       }
-      throw dbError; // re-throw for the outer catch
+      throw dbError;
     }
 
-    return NextResponse.json(changes);
+    const totalPages = Math.ceil(total / pageSize);
+
+    return NextResponse.json({ data: changes, total, page, pageSize, totalPages });
   } catch (error: any) {
     console.error("Error fetching pending changes:", error);
-    // Return the actual error message so the frontend can display it
     return NextResponse.json(
       { error: error.message || "Failed to fetch pending changes" },
       { status: 500 }

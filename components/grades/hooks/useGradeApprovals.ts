@@ -120,7 +120,13 @@ function buildBulkSummaryHtml(
     </div>`;
 }
 
-export function useGradeApprovals() {
+export function useGradeApprovals({
+  page: externalPage,
+  pageSize: externalPageSize,
+}: {
+  page: number;
+  pageSize: number;
+}) {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -130,12 +136,25 @@ export function useGradeApprovals() {
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(
     new Set()
   );
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const buildUrl = useCallback(
+    (status: string) => {
+      const params = new URLSearchParams({ status });
+      params.set("page", String(externalPage));
+      params.set("pageSize", String(externalPageSize));
+      return `/api/pending-grade-changes?${params.toString()}`;
+    },
+    [externalPage, externalPageSize]
+  );
 
   const fetchPending = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch("/api/pending-grade-changes?status=PENDING");
+      const url = buildUrl("PENDING");
+      const res = await fetch(url);
       if (!res.ok) {
         let errorMessage = "Failed to fetch pending changes";
         try {
@@ -151,27 +170,32 @@ export function useGradeApprovals() {
         }
         throw new Error(errorMessage);
       }
-      const data = await res.json();
-      setPendingChanges(data);
+      const result = await res.json();
+      setPendingChanges(result.data ?? []);
+      setTotal(result.total ?? 0);
+      setTotalPages(result.totalPages ?? 0);
     } catch (err: any) {
       setError(err.message || "Failed to load pending changes");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildUrl]);
 
   const silentPoll = useCallback(async () => {
     try {
-      const res = await fetch("/api/pending-grade-changes?status=PENDING");
+      const url = buildUrl("PENDING");
+      const res = await fetch(url);
       if (res.ok) {
-        const data = await res.json();
-        setPendingChanges(data);
+        const result = await res.json();
+        setPendingChanges(result.data ?? []);
+        setTotal(result.total ?? 0);
+        setTotalPages(result.totalPages ?? 0);
         setError("");
       }
     } catch {
       // Ignore poll errors
     }
-  }, []);
+  }, [buildUrl]);
 
   useEffect(() => {
     fetchPending();
@@ -398,8 +422,40 @@ export function useGradeApprovals() {
   }, []);
 
   const handleApproveAll = useCallback(async () => {
-    const allChanges = pendingChanges;
-    if (allChanges.length === 0) return;
+    // Fetch ALL pending changes across all pages
+    let allChanges: PendingChange[];
+    try {
+      setProcessingAll(true);
+      const fetchRes = await fetch(
+        "/api/pending-grade-changes?status=PENDING&page=1&pageSize=10000"
+      );
+      if (!fetchRes.ok) {
+        const err = await fetchRes.json();
+        throw new Error(err.error || "Failed to fetch pending changes");
+      }
+      const result = await fetchRes.json();
+      allChanges = result.data ?? [];
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Fetch Failed",
+        text: err.message,
+      });
+      setProcessingAll(false);
+      return;
+    }
+
+    if (allChanges.length === 0) {
+      Swal.fire({
+        icon: "info",
+        title: "No Pending Changes",
+        text: "There are no pending changes to approve.",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+      setProcessingAll(false);
+      return;
+    }
 
     const createCount = allChanges.filter((c) => c.action === "CREATE").length;
     const updateCount = allChanges.filter((c) => c.action === "UPDATE").length;
@@ -411,7 +467,7 @@ export function useGradeApprovals() {
     if (updateCount) parts.push(`${updateCount} update`);
     if (deleteCount) parts.push(`${deleteCount} delete`);
 
-    const result = await Swal.fire({
+    const confirmResult = await Swal.fire({
       title: "Approve All Pending Changes?",
       html: `
         <div class="text-left text-sm space-y-2">
@@ -426,10 +482,12 @@ export function useGradeApprovals() {
       cancelButtonText: "Cancel",
     });
 
-    if (!result.isConfirmed) return;
+    if (!confirmResult.isConfirmed) {
+      setProcessingAll(false);
+      return;
+    }
 
     const ids = allChanges.map((c) => c.id);
-    setProcessingAll(true);
     setProcessingIds((prev) => {
       const next = new Set(prev);
       ids.forEach((id) => next.add(id));
@@ -496,7 +554,7 @@ export function useGradeApprovals() {
         return next;
       });
     }
-  }, [pendingChanges]);
+  }, []);
 
   const toggleStudent = useCallback((studentNumber: string) => {
     setExpandedStudents((prev) => {
@@ -527,5 +585,7 @@ export function useGradeApprovals() {
     handleApproveAll,
     handleReject,
     toggleStudent,
+    total,
+    totalPages,
   };
 }
