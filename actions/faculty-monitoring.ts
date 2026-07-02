@@ -1005,7 +1005,12 @@ export async function getFacultyUploadedGrades(
         ? gradeRecords // already fetched all → reuse
         : await prisma.grade.findMany({
             where: gradeWhere,
-            select: { courseCode: true, courseTitle: true },
+            select: {
+              courseCode: true,
+              courseTitle: true,
+              instructor: true,
+              uploadedBy: true,
+            },
             orderBy: { courseCode: "asc" },
           });
 
