@@ -196,7 +196,7 @@ export default function GenerateCOGAdmin({
         student.grades as Grade[],
         includeStamp,
       );
-      setIsDialogOpen(false);
+      handleOpenChange(false);
     } catch (error) {
       console.error("PDF Generate Error:", error);
       const err = error as { message: string; code?: string };
