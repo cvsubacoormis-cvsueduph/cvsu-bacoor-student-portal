@@ -275,13 +275,24 @@ export function UploadGrades() {
       "application/vnd.ms-excel.sheet.macroEnabled.12",
     ];
 
-    if (!validTypes.includes(selectedFile.type)) {
+    const validExtensions = [".xlsx", ".xls"];
+    const fileName = selectedFile.name.toLowerCase();
+    const hasValidExtension = validExtensions.some((ext) =>
+      fileName.endsWith(ext),
+    );
+    const hasValidType = validTypes.includes(selectedFile.type);
+
+    if (!hasValidType && !hasValidExtension) {
       Swal.fire({
         icon: "error",
         title: "Invalid File",
         text: "Please select a valid Excel file (.xls or .xlsx)",
       });
       return;
+    }
+
+    if (!selectedFile.type && hasValidExtension) {
+      // Some systems/browsers don't detect Excel MIME types — proceed by extension
     }
 
     setFile(selectedFile);
