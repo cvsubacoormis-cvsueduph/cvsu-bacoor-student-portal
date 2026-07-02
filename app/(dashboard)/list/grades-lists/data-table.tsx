@@ -168,7 +168,7 @@ export function DataTable<TData, TValue>({
         </DropdownMenu>
       </div>
 
-      <div className="relative rounded-md border overflow-x-auto">
+      <div className="relative rounded-md border">
         {isLoading && (
           <div className="absolute inset-0 z-10 bg-background/50 flex items-center justify-center rounded-md">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -202,7 +202,7 @@ export function DataTable<TData, TValue>({
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="whitespace-nowrap">
+                    <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
