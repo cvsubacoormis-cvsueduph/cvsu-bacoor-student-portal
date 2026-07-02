@@ -134,7 +134,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="flex items-center py-4 gap-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center py-4 gap-2">
         <Input
           placeholder="Search students..."
           value={(table.getState().globalFilter as string) ?? ""}
@@ -145,7 +145,7 @@ export function DataTable<TData, TValue>({
         />
 
         {selectedCount > 0 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -235,8 +235,8 @@ export function DataTable<TData, TValue>({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="rounded-md border">
-        <Table>
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="min-w-[800px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -285,12 +285,12 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-3 py-4">
+        <div className="text-sm text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) selected.
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <Button
             variant="outline"
             size="sm"

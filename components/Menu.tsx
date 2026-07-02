@@ -1,12 +1,29 @@
-import { currentUser } from "@clerk/nextjs/server";
-import Image from "next/image";
-import Link from "next/link";
-import { PendingApprovalBadge } from "@/components/PendingApprovalBadge";
+"use client"
 
-export default async function Menu() {
-  const user = await currentUser();
-  const role = user?.publicMetadata.role as string;
-  const menuItems = [
+import Image from "next/image"
+import Link from "next/link"
+import { useSidebar } from "@/components/SidebarProvider"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { PendingApprovalBadge } from "@/components/PendingApprovalBadge"
+
+type MenuItem = {
+  icon: string
+  label: string
+  href: string
+  visible: string[]
+  badge?: boolean
+}
+
+type MenuGroup = {
+  title: string
+  items: MenuItem[]
+}
+
+export default function Menu({ role, forceExpand }: { role: string; forceExpand?: boolean }) {
+  const { collapsed } = useSidebar()
+  const showLabels = forceExpand || !collapsed
+
+  const menuItems: MenuGroup[] = [
     {
       title: "MENU",
       items: [
@@ -50,7 +67,7 @@ export default async function Menu() {
           icon: "/student.png",
           label: "Pending Approvals",
           href: "/list/approve-students",
-          visible: ["admin", "superuser",],
+          visible: ["admin", "superuser"],
         },
         {
           icon: "/profile.png",
@@ -99,6 +116,7 @@ export default async function Menu() {
           label: "Grade Approvals",
           href: "/list/grade-approvals",
           visible: ["admin", "superuser", "registrar"],
+          badge: true,
         },
         {
           icon: "/exam.png",
@@ -143,7 +161,13 @@ export default async function Menu() {
         },
         {
           icon: "/profile.png",
-          label: role === "faculty" ? "Faculty Profile" : role === "registrar" ? "Registrar Profile" : role === "registrar_staff" ? "Registrar Staff Profile" : "Admin Profile",
+          label: role === "faculty"
+            ? "Faculty Profile"
+            : role === "registrar"
+              ? "Registrar Profile"
+              : role === "registrar_staff"
+                ? "Registrar Staff Profile"
+                : "Admin Profile",
           href: "/list/adminprofile",
           visible: ["admin", "superuser", "faculty", "registrar", "registrar_staff"],
         },
@@ -185,32 +209,46 @@ export default async function Menu() {
         },
       ],
     },
-  ];
+  ]
 
   return (
     <div className="mt-4 text-sm">
-      {menuItems.map((i) => (
-        <div className="flex flex-col gap-2" key={i.title}>
-          <span className="hidden lg:block text-gray-400 font-light">
-            {i.title}
+      {menuItems.map((group) => (
+        <div className="flex flex-col gap-2 mb-4" key={group.title}>
+          <span
+            className={`text-gray-400 font-light ${showLabels ? "block" : "hidden"}`}
+          >
+            {group.title}
           </span>
-          {i.items.map((item) => {
-            if (item.visible.includes(role!)) {
+          {group.items.map((item) => {
+            if (!item.visible.includes(role)) return null
+            const link = (
+              <Link
+                href={item.href}
+                key={item.label}
+                className="flex items-center gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-gray-100"
+              >
+                <Image src={item.icon} alt={item.label} width={20} height={20} />
+                <span className={showLabels ? "flex items-center gap-1" : "hidden"}>
+                  {item.label}
+                  {item.badge && <PendingApprovalBadge />}
+                </span>
+              </Link>
+            )
+
+            if (!showLabels) {
               return (
-                <Link
-                  href={item.href}
-                  key={item.label}
-                  className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-gray-100"
-                >
-                  <Image src={item.icon} alt="icons" width={20} height={20} />
-                  <span className="hidden lg:block">{item.label}</span>
-                  {item.label === "Grade Approvals" && <PendingApprovalBadge />}
-                </Link>
-              );
+                <Tooltip key={item.label}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              )
             }
+
+            return link
           })}
         </div>
       ))}
     </div>
-  );
+  )
 }

@@ -82,7 +82,8 @@ export default function StudentsTable({
 
   return (
     <div>
-      <Table className="w-full mt-4">
+      <div className="overflow-x-auto">
+      <Table className="w-full mt-4 min-w-[600px]">
         <TableCaption>A list of your recent students.</TableCaption>
         <TableHeader>
           <TableRow>
@@ -192,6 +193,7 @@ export default function StudentsTable({
           )}
         </TableBody>
       </Table>
+      </div>
       <Pagination className="cursor-pointer">
         <PaginationContent>
           <PaginationItem>

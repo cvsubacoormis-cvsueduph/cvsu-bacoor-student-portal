@@ -133,7 +133,7 @@ function GradeApprovalsContent() {
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-lg font-semibold">Grade Change Approvals</h1>
           <span className="text-xs text-gray-500 font-semibold">
@@ -141,7 +141,7 @@ function GradeApprovalsContent() {
             registrar staff
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!loading && total > 0 && (
             <Button
               size="sm"
@@ -242,15 +242,15 @@ function GradeApprovalsContent() {
 
       {/* ── Pagination ── */}
       {!loading && totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-6 pt-4 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
             <span>
               Page {page} of {totalPages}
             </span>
             <span className="text-gray-300">|</span>
             <span>{total} total pending</span>
             <select
-              className="ml-2 border border-gray-200 rounded px-2 py-1 text-xs bg-white"
+              className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
               value={pageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
             >

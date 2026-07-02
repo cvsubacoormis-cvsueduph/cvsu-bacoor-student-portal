@@ -32,7 +32,7 @@ export function PendingApprovalBadge() {
   if (count === 0) return null;
 
   return (
-    <Badge className="ml-auto bg-red-500 hover:bg-red-600 text-white text-[10px] px-1.5 py-0 min-w-[18px] flex items-center justify-center rounded-full">
+    <Badge className="bg-red-500 hover:bg-red-600 text-white text-[10px] px-1.5 py-0 min-w-[18px] flex items-center justify-center rounded-full">
       {count}
     </Badge>
   );

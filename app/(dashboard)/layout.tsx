@@ -1,11 +1,13 @@
-import Menu from "@/components/Menu";
 import NavBar from "@/components/NavBar";
-import Image from "next/image";
 import { Toaster } from "sonner";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
+import { SidebarProvider } from "@/components/SidebarProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import Sidebar from "@/components/Sidebar";
+import MobileSidebar from "@/components/MobileSidebar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
@@ -18,17 +20,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (["admin", "faculty", "registrar", "registrar_staff"].includes(role)) {
     return (
-      <div className="h-screen flex overflow-hidden">
-        <div className="w-[14%] p-4">
-          <Image src="/logos.png" alt="logo" width={230} height={230} />
-          <Menu />
-        </div>
-        <div className="w-[86%] bg-[#F7F8FA] overflow-y-auto">
-          <NavBar />
-          {children}
-          <Toaster position="top-right" />
-        </div>
-      </div>
+      <TooltipProvider>
+        <SidebarProvider>
+          <div className="h-screen flex overflow-hidden">
+            <MobileSidebar role={role} />
+            <div className="hidden lg:block">
+              <Sidebar role={role} />
+            </div>
+            <div className="flex-1 bg-[#F7F8FA] overflow-y-auto flex flex-col min-w-0">
+              <NavBar />
+              {children}
+              <Toaster position="top-right" />
+            </div>
+          </div>
+        </SidebarProvider>
+      </TooltipProvider>
     );
   }
 
@@ -96,16 +102,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="h-screen flex">
-      <div className="w-[14%] p-4">
-        <Image src="/logos.png" alt="logo" width={230} height={230} />
-        <Menu />
-      </div>
-      <div className="w-[86%]">
-        <NavBar />
-        {children}
-        <Toaster position="top-right" />
-      </div>
-    </div>
+    <TooltipProvider>
+      <SidebarProvider>
+        <div className="h-screen flex overflow-hidden">
+          <MobileSidebar role={role} />
+          <div className="hidden lg:block">
+            <Sidebar role={role} />
+          </div>
+          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+            <NavBar />
+            <div className="flex-1 overflow-y-auto">
+              {children}
+            </div>
+            <Toaster position="top-right" />
+          </div>
+        </div>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

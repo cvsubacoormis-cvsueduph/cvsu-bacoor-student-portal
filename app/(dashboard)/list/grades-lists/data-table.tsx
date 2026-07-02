@@ -168,20 +168,20 @@ export function DataTable<TData, TValue>({
         </DropdownMenu>
       </div>
 
-      <div className="relative rounded-md border">
+      <div className="relative rounded-md border overflow-x-auto">
         {isLoading && (
           <div className="absolute inset-0 z-10 bg-background/50 flex items-center justify-center rounded-md">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         )}
-        <Table>
+        <Table className="min-w-[800px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="text-center whitespace-nowrap"
+                    className="text-center"
                   >
                     {header.isPlaceholder
                       ? null
