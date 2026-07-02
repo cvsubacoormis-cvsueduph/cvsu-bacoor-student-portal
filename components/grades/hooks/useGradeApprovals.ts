@@ -125,6 +125,7 @@ export function useGradeApprovals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [processingAll, setProcessingAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(
     new Set()
@@ -396,6 +397,107 @@ export function useGradeApprovals() {
     }
   }, []);
 
+  const handleApproveAll = useCallback(async () => {
+    const allChanges = pendingChanges;
+    if (allChanges.length === 0) return;
+
+    const createCount = allChanges.filter((c) => c.action === "CREATE").length;
+    const updateCount = allChanges.filter((c) => c.action === "UPDATE").length;
+    const deleteCount = allChanges.filter((c) => c.action === "DELETE").length;
+    const studentCount = new Set(allChanges.map((c) => c.studentNumber)).size;
+
+    const parts: string[] = [];
+    if (createCount) parts.push(`${createCount} create`);
+    if (updateCount) parts.push(`${updateCount} update`);
+    if (deleteCount) parts.push(`${deleteCount} delete`);
+
+    const result = await Swal.fire({
+      title: "Approve All Pending Changes?",
+      html: `
+        <div class="text-left text-sm space-y-2">
+          <p>This will approve <strong>all ${allChanges.length} pending changes</strong> across <strong>${studentCount} student(s)</strong>.</p>
+          <p class="text-xs text-gray-500">${parts.join(", ")}</p>
+          <p class="text-xs text-amber-600 font-medium mt-2">This action cannot be undone.</p>
+        </div>`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: `Yes, Approve All (${allChanges.length})`,
+      confirmButtonColor: "#16a34a",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!result.isConfirmed) return;
+
+    const ids = allChanges.map((c) => c.id);
+    setProcessingAll(true);
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/pending-grade-changes/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", ids }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Bulk approval failed");
+      }
+
+      const data = await res.json();
+
+      const succeeded =
+        data.results?.filter((r: any) => r.success).length ?? 0;
+      const failed =
+        data.results?.filter((r: any) => !r.success).length ?? 0;
+
+      if (failed > 0) {
+        Swal.fire({
+          icon: "warning",
+          title: "Partially Approved",
+          text: `${succeeded} approved, ${failed} failed out of ${allChanges.length} total.`,
+          timer: 4000,
+          showConfirmButton: true,
+        });
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: "All Approved",
+          text: `All ${succeeded} pending changes have been approved successfully.`,
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+
+      // Remove all successfully approved changes from the list
+      const approvedIds = new Set(
+        data.results
+          ?.filter((r: any) => r.success)
+          .map((r: any) => r.id) ?? []
+      );
+      setPendingChanges((prev) =>
+        prev.filter((c) => !approvedIds.has(c.id))
+      );
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Approval Failed",
+        text: err.message,
+      });
+    } finally {
+      setProcessingAll(false);
+      setProcessingIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+  }, [pendingChanges]);
+
   const toggleStudent = useCallback((studentNumber: string) => {
     setExpandedStudents((prev) => {
       const next = new Set(prev);
@@ -413,6 +515,7 @@ export function useGradeApprovals() {
     loading,
     error,
     processingIds,
+    processingAll,
     searchQuery,
     setSearchQuery,
     expandedStudents,
@@ -421,6 +524,7 @@ export function useGradeApprovals() {
     fetchPending,
     handleApprove,
     handleBulkApprove,
+    handleApproveAll,
     handleReject,
     toggleStudent,
   };

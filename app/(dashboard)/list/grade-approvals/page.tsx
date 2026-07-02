@@ -9,7 +9,14 @@ import { GradeApprovalCard } from "@/components/grades/GradeApprovalCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, CheckCircle, RefreshCw, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Loader2,
+  CheckCircle,
+  RefreshCw,
+  Search,
+  CheckCheck,
+} from "lucide-react";
 
 const ALLOWED_ROLES = ["admin", "superuser", "registrar"];
 
@@ -22,6 +29,7 @@ export default function GradeApprovalsPage() {
     loading,
     error,
     processingIds,
+    processingAll,
     searchQuery,
     setSearchQuery,
     expandedStudents,
@@ -30,6 +38,7 @@ export default function GradeApprovalsPage() {
     fetchPending,
     handleApprove,
     handleBulkApprove,
+    handleApproveAll,
     handleReject,
     toggleStudent,
   } = useGradeApprovals();
@@ -57,16 +66,39 @@ export default function GradeApprovalsPage() {
             registrar staff
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchPending}
-          disabled={loading}
-          className="flex items-center gap-1"
-        >
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {pendingChanges.length > 0 && (
+            <Button
+              size="sm"
+              onClick={handleApproveAll}
+              disabled={processingAll || loading}
+              className="bg-green-600 hover:bg-green-700 flex items-center gap-1.5"
+            >
+              {processingAll ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CheckCheck className="w-3.5 h-3.5" />
+              )}
+              <span>Approve All</span>
+              <Badge
+                variant="secondary"
+                className="ml-0.5 bg-white/20 text-white text-[10px] px-1.5 py-0"
+              >
+                {pendingChanges.length}
+              </Badge>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchPending}
+            disabled={loading || processingAll}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {!loading && pendingChanges.length > 0 && (
@@ -99,9 +131,7 @@ export default function GradeApprovalsPage() {
           <CardContent className="py-12 text-center text-gray-500">
             <CheckCircle className="w-12 h-12 mx-auto text-green-300 mb-3" />
             <p className="text-lg font-medium">No pending changes</p>
-            <p className="text-sm">
-              All grade submissions have been reviewed.
-            </p>
+            <p className="text-sm">All grade submissions have been reviewed.</p>
           </CardContent>
         </Card>
       )}
