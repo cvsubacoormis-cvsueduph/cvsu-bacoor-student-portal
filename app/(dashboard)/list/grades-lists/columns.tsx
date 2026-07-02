@@ -39,7 +39,7 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -49,7 +49,7 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" sideOffset={2}>
           <DropdownMenuItem asChild>
             <Link
               href={`/list/grades-lists/${student.studentNumber}?${params.toString()}`}

@@ -142,13 +142,13 @@ export function DataTable<TData, TValue>({
             className="pl-8 w-full"
           />
         </div>
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="sm:ml-auto shrink-0">
               Columns
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" sideOffset={2}>
             {table
               .getAllColumns()
               .filter((column) => column.getCanHide())

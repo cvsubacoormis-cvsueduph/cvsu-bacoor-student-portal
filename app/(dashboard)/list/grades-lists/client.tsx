@@ -78,8 +78,7 @@ export function GradesListClient({
       <span className="text-xs flex text-gray-500 font-semibold">
         List of grades
       </span>
-      <div className="container mx-auto">
-        <DataTable
+      <DataTable
           columns={columns}
           data={data}
           totalRecords={total}
@@ -91,7 +90,6 @@ export function GradesListClient({
           onSearchChange={handleSearchChange}
           isLoading={isPending}
         />
-      </div>
     </div>
   );
 }
