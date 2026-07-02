@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { Major } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { GRADE_HIERARCHY } from "@/lib/utils";
+import { computeFinalRemarks } from "@/lib/grade-utils";
 import { fuzzy } from "fast-fuzzy";
 import { redis } from "@/lib/redis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
@@ -264,16 +265,6 @@ export async function POST(req: Request) {
     ),
   ];
 
-  // Prepare names for lookup
-  const namesToLookup = new Set<string>();
-  grades.forEach(g => {
-    if (g.firstName && g.lastName) {
-      namesToLookup.add(normalizeName(g.firstName + " " + g.lastName));
-      // Also add reverse order just in case (Last First)
-      namesToLookup.add(normalizeName(g.lastName + " " + g.firstName));
-    }
-  });
-
   const { academicYear, semester } = grades[0] || {};
   if (!academicYear || !semester) {
     return NextResponse.json(
@@ -296,16 +287,17 @@ export async function POST(req: Request) {
   });
 
   const nameConditions = grades
-    .flatMap((g) => {
-      const conditions = [];
-      if (g.lastName) conditions.push({ lastName: { equals: g.lastName, mode: 'insensitive' as const } });
-      if (g.firstName) conditions.push({ firstName: { equals: g.firstName, mode: 'insensitive' as const } });
-      return conditions;
-    });
+    .map((g) => {
+      const andConditions = [];
+      if (g.firstName) andConditions.push({ firstName: { equals: g.firstName, mode: 'insensitive' as const } });
+      if (g.lastName) andConditions.push({ lastName: { equals: g.lastName, mode: 'insensitive' as const } });
+      if (andConditions.length === 0) return null;
+      return andConditions.length === 1 ? andConditions[0] : { AND: andConditions };
+    })
+    .filter((c): c is NonNullable<typeof c> => c != null);
 
   let studentsByName: typeof studentsByNumber = [];
   if (nameConditions.length > 0) {
-    // Chunking name queries if too many? Batch is 50, so 50 ORs is acceptable for Postgres.
     studentsByName = await prisma.student.findMany({
       where: {
         OR: nameConditions
@@ -480,7 +472,7 @@ export async function POST(req: Request) {
       }
       let sanitizedCourseCode = courseCodeValidation.normalized;
 
-      const sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
+      let sanitizedRemarks = sanitizeString(remarks)?.toUpperCase() ?? "";
 
       const isFaculty = userRole === "faculty";
       let finalInstructorName = sanitizedInstructor;
@@ -660,6 +652,17 @@ export async function POST(req: Request) {
           importedName: `${firstName || ""} ${lastName || ""}`.trim(),
         });
         continue;
+      }
+
+      const computedRemarks = computeFinalRemarks(standardizedGrade, standardizedReExam);
+      let remarkCorrected = false;
+      if (computedRemarks) {
+        if (!sanitizedRemarks) {
+          sanitizedRemarks = computedRemarks;
+        } else if (computedRemarks !== sanitizedRemarks) {
+          sanitizedRemarks = computedRemarks;
+          remarkCorrected = true;
+        }
       }
 
       // Match curriculum & subject offering
@@ -893,6 +896,12 @@ export async function POST(req: Request) {
       if (isDuplicated) {
         statusMsg = `${statusMsg} [duplicate in file — last entry was used]`;
         statusPrefix = "⚠️";
+      }
+
+      // Remark auto-correction warning
+      if (remarkCorrected) {
+        statusMsg = `${statusMsg} [remark auto-corrected to match grade]`;
+        if (statusPrefix !== "⚠️") statusPrefix = "⚠️";
       }
 
       if (existingGrade) {

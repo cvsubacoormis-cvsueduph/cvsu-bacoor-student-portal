@@ -41,14 +41,14 @@ export function computeRemarks(gradeValue: string): string {
   const g = parseFloat(gradeValue);
   if (isNaN(g)) {
     const upper = gradeValue.trim().toUpperCase();
-    if (upper === "S") return "PASSED";
-    if (upper === "US") return "UNSATISFACTORY";
+    if (upper === "S") return "SATISFACTORY";
+    if (upper === "US") return "SATISFACTORY";
     if (upper === "DRP") return "DROPPED";
     if (upper === "INC") return "LACK OF REQ.";
     return "";
   }
   if (g >= 1.0 && g <= 3.0) return "PASSED";
-  if (g === 4.0) return "CONDITIONAL FAILURE";
+  if (g === 4.0) return "CON. FAILURE";
   if (g === 5.0) return "FAILED";
   return "";
 }

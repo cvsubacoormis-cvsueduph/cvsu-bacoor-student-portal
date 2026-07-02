@@ -146,13 +146,13 @@ const calculateRemarks = (gradeVal: string, reExamVal: string) => {
   } else if (basis === "5.00") {
     return "FAILED";
   } else if (basis === "INC") {
-    return "LACK OF REQ";
+    return "LACK OF REQ.";
   } else if (basis === "DRP") {
     return "DROPPED";
   } else if (basis === "S") {
     return "SATISFACTORY";
   } else if (basis === "US") {
-    return "UNSATISFACTORY";
+    return "SATISFACTORY";
   }
   return "";
 };
