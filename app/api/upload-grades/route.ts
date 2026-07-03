@@ -35,9 +35,26 @@ function normalizeGrade(value: any): string | undefined {
   return !isNaN(num) ? num.toFixed(2) : str;
 }
 
+const STRIP_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060\uD800-\uDFFF]/g;
+const MAX_STRING_LENGTH = 500;
+
 function sanitizeString(value: any): string | null {
-  if (!value) return null;
-  return String(value).replace(/['"]+/g, "").replace(/,/g, "").trim();
+  if (!value && value !== 0) return null;
+  const str = String(value)
+    .replace(STRIP_PATTERN, "")
+    .replace(/['"]+/g, "")
+    .replace(/,/g, "")
+    .trim();
+  if (!str) return null;
+  return str.slice(0, MAX_STRING_LENGTH);
+}
+
+function sanitizeName(value: any): string {
+  if (!value) return "";
+  return String(value)
+    .replace(STRIP_PATTERN, "")
+    .trim()
+    .slice(0, 100);
 }
 
 function normalizeName(name: string) {
@@ -451,8 +468,8 @@ export async function POST(req: Request) {
       const courseCodeValidation = validateCourseCode(courseCode);
       if (!courseCodeValidation.valid) {
         results.push({
-          identifier: `${firstName || ""} ${lastName || ""}`.trim() || normalizedStudentNumber || "Unknown",
-          courseCode: String(courseCode || ""),
+          identifier: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()) || normalizedStudentNumber || "Unknown",
+          courseCode: sanitizeString(courseCode) ?? String(courseCode || ""),
           status: `❌ ${courseCodeValidation.error}`,
         });
         failedLogsToCreate.push({
@@ -466,7 +483,7 @@ export async function POST(req: Request) {
           academicYear,
           semester,
           action: "FAILED",
-          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+          importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
         });
         continue;
       }
@@ -489,7 +506,7 @@ export async function POST(req: Request) {
 
           if (score < 0.8) {
             results.push({
-              identifier: `${firstName} ${lastName}`,
+              identifier: sanitizeName(`${firstName} ${lastName}`),
               courseCode: sanitizedCourseCode,
               status: `❌ Instructor name mismatch: the file lists "${sanitizedInstructor}" but you are signed in as "${userFullName}". Faculty members can only upload under their own name.`,
             });
@@ -504,7 +521,7 @@ export async function POST(req: Request) {
               academicYear,
               semester,
               action: "FAILED",
-              importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+              importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
             });
             continue;
           }
@@ -570,13 +587,13 @@ export async function POST(req: Request) {
         let errorMsg = "Student not found in the database";
         if (studentByNum && fileFullName) {
           const dbName = `${studentByNum.firstName} ${studentByNum.lastName}`;
-          errorMsg = `Name mismatch: student ID belongs to "${dbName}" but the file lists "${firstName} ${lastName}". Please verify the correct student.`;
+          errorMsg = `Name mismatch: student ID belongs to "${dbName}" but the file lists "${sanitizeName(firstName)} ${sanitizeName(lastName)}". Please verify the correct student.`;
         } else if (normalizedStudentNumber && !studentByNum && !studentByName) {
           errorMsg = `Student ID "${normalizedStudentNumber}" was not found, and searching by name also returned no results. Please check the student number.`;
         }
 
         results.push({
-          identifier: `${firstName} ${lastName}`,
+          identifier: sanitizeName(`${firstName} ${lastName}`),
           courseCode: sanitizedCourseCode,
           status: `❌ ${errorMsg}`,
         });
@@ -591,7 +608,7 @@ export async function POST(req: Request) {
           academicYear,
           semester,
           action: "FAILED",
-          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+          importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
         });
         continue;
       }
@@ -616,7 +633,7 @@ export async function POST(req: Request) {
           academicYear,
           semester,
           action: "FAILED",
-          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+          importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
         });
         continue;
       }
@@ -649,7 +666,7 @@ export async function POST(req: Request) {
           academicYear,
           semester,
           action: "FAILED",
-          importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+          importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
         });
         continue;
       }
@@ -719,7 +736,7 @@ export async function POST(req: Request) {
               academicYear,
               semester,
               action: "FAILED",
-              importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+              importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
             });
             continue;
           }
@@ -847,7 +864,7 @@ export async function POST(req: Request) {
             academicYear,
             semester,
             action: "FAILED",
-            importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+            importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
           });
           continue;
         } else {
@@ -874,10 +891,10 @@ export async function POST(req: Request) {
         statusMsg = `Saved by name match — ${reason}, but the student was identified successfully`;
         statusPrefix = "⚠️";
       } else if (isFuzzyCode && checklistSubject) {
-        statusMsg = `Course code auto-corrected: "${entry.courseCode}" → "${checklistSubject.courseCode}" (best match found)`;
+        statusMsg = `Course code auto-corrected: "${sanitizeString(entry.courseCode) ?? "(invalid)"}" → "${checklistSubject.courseCode}" (best match found)`;
         statusPrefix = "⚠️";
       } else if (isTitleFallback && checklistSubject) {
-        statusMsg = `Course matched by title — mapped "${entry.courseCode || "missing code"}" to "${checklistSubject.courseCode}"`;
+        statusMsg = `Course matched by title — mapped "${sanitizeString(entry.courseCode) ?? "missing code"}" to "${checklistSubject.courseCode}"`;
         statusPrefix = "⚠️";
       } else if (isCrossProgramMatch && checklistSubject) {
         statusMsg = `Saved from another program — "${checklistSubject.courseCode}" belongs to ${checklistSubject.course}, not the student's program`;
@@ -1039,7 +1056,7 @@ export async function POST(req: Request) {
         semester,
         action: action,
         changeReason: batchChangeReason ?? null,
-        importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+        importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
       });
 
       // Determine match quality for preview color-coding
@@ -1102,7 +1119,7 @@ export async function POST(req: Request) {
         academicYear,
         semester,
         action: "FAILED",
-        importedName: `${firstName || ""} ${lastName || ""}`.trim(),
+        importedName: sanitizeName(`${firstName || ""} ${lastName || ""}`.trim()),
       });
     }
   }
