@@ -27,8 +27,8 @@ const adminUploadLimiter = new RateLimiterRedis({
   duration: 15 * 60,
 });
 
-function normalizeGrade(value: any): string | null {
-  if (!value) return null;
+function normalizeGrade(value: any): string | undefined {
+  if (!value) return undefined;
   const str = String(value).trim().toUpperCase();
   if (GRADE_HIERARCHY.includes(str)) return str;
   const num = parseFloat(str);
