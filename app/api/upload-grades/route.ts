@@ -945,8 +945,8 @@ export async function POST(req: Request) {
         // True upsert: last write wins — check if anything actually changed
         if (
           existingGrade.grade === standardizedGrade &&
-          existingGrade.reExam === standardizedReExam &&
-          existingGrade.remarks === sanitizedRemarks &&
+          (existingGrade.reExam || null) === (standardizedReExam || null) &&
+          (existingGrade.remarks || null) === (sanitizedRemarks || null) &&
           existingGrade.instructor === finalInstructorName
         ) {
           results.push({
@@ -969,7 +969,7 @@ export async function POST(req: Request) {
               creditUnit: resolvedCreditUnit,
               courseTitle: resolvedCourseTitle,
               grade: standardizedGrade,
-              reExam: standardizedReExam,
+reExam: standardizedReExam ?? null,
               remarks: sanitizedRemarks,
               instructor: finalInstructorName,
               studentNumber: targetStudent.studentNumber,
@@ -997,8 +997,8 @@ export async function POST(req: Request) {
 
           const pendingChanges: string[] = [];
           if (existingGrade.grade !== standardizedGrade) pendingChanges.push("grade");
-          if (existingGrade.reExam !== standardizedReExam) pendingChanges.push("re-exam");
-          if (existingGrade.remarks !== sanitizedRemarks) pendingChanges.push("remarks");
+          if ((existingGrade.reExam || null) !== (standardizedReExam || null)) pendingChanges.push("re-exam");
+          if ((existingGrade.remarks || null) !== (sanitizedRemarks || null)) pendingChanges.push("remarks");
           if (existingGrade.instructor !== finalInstructorName) pendingChanges.push("instructor");
 
           results.push({
@@ -1016,8 +1016,8 @@ export async function POST(req: Request) {
         // Build a descriptive status showing what changed
         const changes: string[] = [];
         if (existingGrade.grade !== standardizedGrade) changes.push("grade");
-        if (existingGrade.reExam !== standardizedReExam) changes.push("re-exam");
-        if (existingGrade.remarks !== sanitizedRemarks) changes.push("remarks");
+        if ((existingGrade.reExam || null) !== (standardizedReExam || null)) changes.push("re-exam");
+        if ((existingGrade.remarks || null) !== (sanitizedRemarks || null)) changes.push("remarks");
         if (existingGrade.instructor !== finalInstructorName) changes.push("instructor");
 
         statusMsg = changes.length > 0
@@ -1035,7 +1035,7 @@ export async function POST(req: Request) {
         courseTitle: resolvedCourseTitle,
         creditUnit: resolvedCreditUnit,
         grade: standardizedGrade,
-        reExam: standardizedReExam,
+        reExam: standardizedReExam ?? null,
         remarks: sanitizedRemarks,
         instructor: finalInstructorName,
         academicYear,
