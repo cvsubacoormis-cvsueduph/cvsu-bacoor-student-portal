@@ -1001,18 +1001,19 @@ export async function getFacultyUploadedGrades(
 
       // Build filter dropdowns from ALL attributed grades (not just the
       // current page) for accurate filter options.
-      const allGradesForFilter = gradeRecords.length === gradeTotal
-        ? gradeRecords // already fetched all → reuse
-        : await prisma.grade.findMany({
-            where: gradeWhere,
-            select: {
-              courseCode: true,
-              courseTitle: true,
-              instructor: true,
-              uploadedBy: true,
-            },
-            orderBy: { courseCode: "asc" },
-          });
+      const allGradesForFilter =
+        gradeRecords.length === gradeTotal
+          ? gradeRecords // already fetched all → reuse
+          : await prisma.grade.findMany({
+              where: gradeWhere,
+              select: {
+                courseCode: true,
+                courseTitle: true,
+                instructor: true,
+                uploadedBy: true,
+              },
+              orderBy: { courseCode: "asc" },
+            });
 
       const allAttributed = allGradesForFilter.filter(
         (g) =>
@@ -1037,18 +1038,14 @@ export async function getFacultyUploadedGrades(
 
       const gradeNameMap = new Map<string, string>();
       for (const s of gradeStudents) {
-        gradeNameMap.set(
-          s.studentNumber,
-          `${s.lastName}, ${s.firstName}`,
-        );
+        gradeNameMap.set(s.studentNumber, `${s.lastName}, ${s.firstName}`);
       }
 
       return {
         data: attributedGrades.map((g) => ({
           id: g.id,
           studentNumber: g.studentNumber,
-          studentName:
-            gradeNameMap.get(g.studentNumber) ?? g.studentNumber,
+          studentName: gradeNameMap.get(g.studentNumber) ?? g.studentNumber,
           courseCode: g.courseCode,
           courseTitle: g.courseTitle,
           creditUnit: g.creditUnit,
@@ -1149,8 +1146,7 @@ export async function getFacultyUploadedGrades(
       data: matched.map((log) => ({
         id: log.id,
         studentNumber: log.studentNumber,
-        studentName:
-          studentNameMap.get(log.studentNumber) ?? log.studentNumber,
+        studentName: studentNameMap.get(log.studentNumber) ?? log.studentNumber,
         courseCode: log.courseCode,
         courseTitle: log.courseTitle,
         creditUnit: log.creditUnit,
