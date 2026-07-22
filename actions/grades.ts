@@ -566,9 +566,9 @@ export type BulkUpdateGradeCourseInfoResult = {
 
 export async function updateGradeCourseInfoBulk(params: {
   entries: {
-    gradeId: string;
     studentNumber: string;
-    courseCode: string;
+    oldCourseCode: string;
+    newCourseCode: string;
     courseTitle: string;
   }[];
   academicYear: AcademicYear;
@@ -597,7 +597,7 @@ export async function updateGradeCourseInfoBulk(params: {
   const validEntries: typeof entries = [];
 
   for (const entry of entries) {
-    const code = entry.courseCode.trim().toUpperCase();
+    const code = entry.newCourseCode.trim().toUpperCase();
     const title = entry.courseTitle.trim().toUpperCase();
 
     if (!code) {
@@ -609,113 +609,82 @@ export async function updateGradeCourseInfoBulk(params: {
       continue;
     }
 
-    validEntries.push({ ...entry, courseCode: code, courseTitle: title });
+    validEntries.push({ ...entry, newCourseCode: code, courseTitle: title });
   }
 
   if (validEntries.length === 0) {
     return { success: false, updatedCount: 0, failedCount: entries.length, errors };
   }
 
-  // Check for conflicts: same studentNumber + courseCode + term, different gradeId
-  const conflictChecks = await Promise.all(
-    validEntries.map(async (entry) => {
-      const conflict = await prisma.grade.findFirst({
-        where: {
-          studentNumber: entry.studentNumber,
-          courseCode: entry.courseCode,
-          academicYear,
-          semester,
-          id: { not: entry.gradeId },
-        },
-        select: { id: true, studentNumber: true },
-      });
-      return conflict ? { entry, conflictStudentNumber: conflict.studentNumber } : null;
-    }),
-  );
+  // Check for conflicts: same studentNumber + newCourseCode + term,
+  // but exclude the record being edited (matched by oldCourseCode).
+  // We skip self-conflict by excluding the old key (studentNumber, oldCourseCode, term).
+  const conflictResults: { entry: typeof validEntries[number]; studentNumber: string }[] = [];
 
-  for (const conflict of conflictChecks) {
+  for (const entry of validEntries) {
+    // Skip the lookup if old and new codes are the same (not a code change)
+    if (entry.newCourseCode === entry.oldCourseCode.toUpperCase()) continue;
+
+    const conflict = await prisma.grade.findFirst({
+      where: {
+        studentNumber: entry.studentNumber,
+        courseCode: entry.newCourseCode,
+        academicYear,
+        semester,
+      },
+      select: { studentNumber: true },
+    });
+
     if (conflict) {
-      errors.push(
-        `Student ${conflict.entry.studentNumber}: course code "${conflict.entry.courseCode}" already exists in this term.`,
-      );
+      conflictResults.push({ entry, studentNumber: conflict.studentNumber });
     }
   }
 
+  for (const c of conflictResults) {
+    errors.push(
+      `Student ${c.entry.studentNumber}: course code "${c.entry.newCourseCode}" already exists in this term.`,
+    );
+  }
+
   // Remove conflicting entries
-  const conflictingIds = new Set(
-    conflictChecks.filter(Boolean).map((c) => c!.entry.gradeId),
+  const conflictingKeys = new Set(
+    conflictResults.map((c) => `${c.entry.studentNumber}::${c.entry.oldCourseCode}`),
   );
-  const cleanEntries = validEntries.filter((e) => !conflictingIds.has(e.gradeId));
+  const cleanEntries = validEntries.filter(
+    (e) => !conflictingKeys.has(`${e.studentNumber}::${e.oldCourseCode}`),
+  );
 
   if (cleanEntries.length === 0) {
     return { success: false, updatedCount: 0, failedCount: entries.length, errors };
   }
 
-  // Fetch existing records for audit
-  const gradeIds = cleanEntries.map((e) => e.gradeId);
-  const existingGrades = await prisma.grade.findMany({
-    where: { id: { in: gradeIds } },
-    select: {
-      id: true,
-      courseCode: true,
-      courseTitle: true,
-      creditUnit: true,
-      grade: true,
-      remarks: true,
-      instructor: true,
-      studentNumber: true,
-    },
-  });
-
-  const gradeMap = new Map(existingGrades.map((g) => [g.id, g]));
-
   let updatedCount = 0;
-  const logEntries: Array<{
-    studentNumber: string;
-    courseCode: string;
-    courseTitle: string;
-    creditUnit: number;
-    grade: string;
-    remarks: string | undefined;
-    instructor: string;
-    academicYear: AcademicYear;
-    semester: Semester;
-    action: string;
-    isResolved: boolean;
-    changeReason: string;
-  }> = [];
-  const entriesToUpdate: typeof cleanEntries = [];
+  const entriesToUpdate: { entry: typeof cleanEntries[number]; id: string }[] = [];
 
   for (const entry of cleanEntries) {
-    const existing = gradeMap.get(entry.gradeId);
+    const existing = await prisma.grade.findFirst({
+      where: {
+        studentNumber: entry.studentNumber,
+        courseCode: entry.oldCourseCode,
+        academicYear,
+        semester,
+      },
+      select: { id: true, courseCode: true, courseTitle: true, creditUnit: true, grade: true, remarks: true, instructor: true },
+    });
+
     if (!existing) {
-      errors.push(`Student ${entry.studentNumber}: grade record not found.`);
+      errors.push(`Student ${entry.studentNumber}: grade record for "${entry.oldCourseCode}" not found.`);
       continue;
     }
 
     const oldCode = existing.courseCode;
     const oldTitle = existing.courseTitle;
 
-    if (entry.courseCode === oldCode.toUpperCase() && entry.courseTitle === oldTitle.toUpperCase()) {
+    if (entry.newCourseCode === oldCode.toUpperCase() && entry.courseTitle === oldTitle.toUpperCase()) {
       continue; // no change
     }
 
-    entriesToUpdate.push(entry);
-
-    logEntries.push({
-      studentNumber: existing.studentNumber,
-      courseCode: entry.courseCode,
-      courseTitle: entry.courseTitle,
-      creditUnit: existing.creditUnit,
-      grade: existing.grade,
-      remarks: existing.remarks ?? undefined,
-      instructor: existing.instructor,
-      academicYear,
-      semester,
-      action: "UPDATED",
-      isResolved: true,
-      changeReason: `Course info edited from "${oldCode}" / "${oldTitle}" to "${entry.courseCode}" / "${entry.courseTitle}" by ${userRole}`,
-    });
+    entriesToUpdate.push({ entry, id: existing.id });
 
     updatedCount++;
   }
@@ -731,14 +700,41 @@ export async function updateGradeCourseInfoBulk(params: {
   }
 
   await prisma.$transaction(async (tx) => {
-    for (let i = 0; i < entriesToUpdate.length; i++) {
-      const entry = entriesToUpdate[i];
-      const logEntry = logEntries[i];
-      await tx.grade.update({
-        where: { id: entry.gradeId },
-        data: { courseCode: entry.courseCode, courseTitle: entry.courseTitle },
+    for (const eu of entriesToUpdate) {
+      const { entry } = eu;
+      const existing = await tx.grade.findFirst({
+        where: {
+          studentNumber: entry.studentNumber,
+          courseCode: entry.oldCourseCode,
+          academicYear,
+          semester,
+        },
+        select: { id: true, courseCode: true, courseTitle: true, creditUnit: true, grade: true, remarks: true, instructor: true, studentNumber: true },
       });
-      await tx.gradeLog.create({ data: logEntry });
+
+      if (!existing) continue;
+
+      await tx.grade.update({
+        where: { id: existing.id },
+        data: { courseCode: entry.newCourseCode, courseTitle: entry.courseTitle },
+      });
+
+      await tx.gradeLog.create({
+        data: {
+          studentNumber: existing.studentNumber,
+          courseCode: entry.newCourseCode,
+          courseTitle: entry.courseTitle,
+          creditUnit: existing.creditUnit,
+          grade: existing.grade,
+          remarks: existing.remarks ?? undefined,
+          instructor: existing.instructor,
+          academicYear,
+          semester,
+          action: "UPDATED",
+          isResolved: true,
+          changeReason: `Course info edited from "${existing.courseCode}" / "${existing.courseTitle}" to "${entry.newCourseCode}" / "${entry.courseTitle}" by ${userRole}`,
+        },
+      });
     }
   });
 
@@ -758,14 +754,14 @@ export type UpdateGradeCourseInfoResult = {
 };
 
 export async function updateGradeCourseInfo(params: {
-  gradeId: string;
-  courseCode: string;
-  courseTitle: string;
   studentNumber: string;
+  oldCourseCode: string;
+  newCourseCode: string;
+  courseTitle: string;
   academicYear: AcademicYear;
   semester: Semester;
 }): Promise<UpdateGradeCourseInfoResult> {
-  const { gradeId, courseCode, courseTitle, studentNumber, academicYear, semester } = params;
+  const { studentNumber, oldCourseCode, newCourseCode, courseTitle, academicYear, semester } = params;
 
   const user = await currentUser();
   if (!user) throw new Error("Unauthorized");
@@ -779,43 +775,49 @@ export async function updateGradeCourseInfo(params: {
     throw new Error("Forbidden: only admin, superuser, and registrar can edit grade course info.");
   }
 
-  const trimmedCode = courseCode.trim().toUpperCase();
+  const trimmedCode = newCourseCode.trim().toUpperCase();
   const trimmedTitle = courseTitle.trim().toUpperCase();
 
   if (!trimmedCode) throw new Error("Course code cannot be empty.");
   if (!trimmedTitle) throw new Error("Course title cannot be empty.");
 
-  // Check for uniqueness conflict with another grade record
-  const existingConflict = await prisma.grade.findFirst({
+  const existing = await prisma.grade.findFirst({
     where: {
       studentNumber,
-      courseCode: trimmedCode,
+      courseCode: oldCourseCode,
       academicYear,
       semester,
-      id: { not: gradeId },
     },
-    select: { id: true },
-  });
-
-  if (existingConflict) {
-    throw new Error(
-      `A grade with course code "${trimmedCode}" already exists for this student in this term.`,
-    );
-  }
-
-  const existing = await prisma.grade.findUnique({
-    where: { id: gradeId },
-    select: { courseCode: true, courseTitle: true, creditUnit: true, grade: true, remarks: true, instructor: true },
+    select: { id: true, courseCode: true, courseTitle: true, creditUnit: true, grade: true, remarks: true, instructor: true },
   });
 
   if (!existing) throw new Error("Grade record not found.");
 
-  const oldCourseCode = existing.courseCode;
-  const oldCourseTitle = existing.courseTitle;
+  // Check for uniqueness conflict if the code actually changed
+  if (trimmedCode !== oldCourseCode.toUpperCase()) {
+    const existingConflict = await prisma.grade.findFirst({
+      where: {
+        studentNumber,
+        courseCode: trimmedCode,
+        academicYear,
+        semester,
+      },
+      select: { id: true },
+    });
+
+    if (existingConflict) {
+      throw new Error(
+        `A grade with course code "${trimmedCode}" already exists for this student in this term.`,
+      );
+    }
+  }
+
+  const oldCode = existing.courseCode;
+  const oldTitle = existing.courseTitle;
 
   await prisma.$transaction([
     prisma.grade.update({
-      where: { id: gradeId },
+      where: { id: existing.id },
       data: { courseCode: trimmedCode, courseTitle: trimmedTitle },
     }),
     prisma.gradeLog.create({
@@ -831,13 +833,13 @@ export async function updateGradeCourseInfo(params: {
         semester,
         action: "UPDATED",
         isResolved: true,
-        changeReason: `Course info edited from "${oldCourseCode}" / "${oldCourseTitle}" to "${trimmedCode}" / "${trimmedTitle}" by ${userRole}`,
+        changeReason: `Course info edited from "${oldCode}" / "${oldTitle}" to "${trimmedCode}" / "${trimmedTitle}" by ${userRole}`,
       },
     }),
   ]);
 
   return {
     success: true,
-    message: `Course info updated from "${oldCourseCode}" to "${trimmedCode}".`,
+    message: `Course info updated from "${oldCode}" to "${trimmedCode}".`,
   };
 }

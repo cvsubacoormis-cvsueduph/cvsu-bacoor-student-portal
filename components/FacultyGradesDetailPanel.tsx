@@ -418,10 +418,10 @@ export function FacultyGradesDetailPanel({
     setEditError(null);
     try {
       const result = await updateGradeCourseInfo({
-        gradeId: g.id,
-        courseCode: newCode,
-        courseTitle: newTitle,
         studentNumber: g.studentNumber,
+        oldCourseCode: g.courseCode,
+        newCourseCode: newCode,
+        courseTitle: newTitle,
         academicYear,
         semester,
       });
@@ -476,9 +476,9 @@ export function FacultyGradesDetailPanel({
       const result = await updateGradeCourseInfoBulk({
         entries: selectedGrades.map(function (g) {
           return {
-            gradeId: g.id,
             studentNumber: g.studentNumber,
-            courseCode: code,
+            oldCourseCode: g.courseCode,
+            newCourseCode: code,
             courseTitle: title,
           };
         }),
