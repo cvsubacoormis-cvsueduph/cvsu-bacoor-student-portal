@@ -669,8 +669,22 @@ export async function updateGradeCourseInfoBulk(params: {
 
   const gradeMap = new Map(existingGrades.map((g) => [g.id, g]));
 
-  const operations: Array<Promise<unknown>> = [];
   let updatedCount = 0;
+  const logEntries: Array<{
+    studentNumber: string;
+    courseCode: string;
+    courseTitle: string;
+    creditUnit: number;
+    grade: string;
+    remarks: string | undefined;
+    instructor: string;
+    academicYear: AcademicYear;
+    semester: Semester;
+    action: string;
+    isResolved: boolean;
+    changeReason: string;
+  }> = [];
+  const entriesToUpdate: typeof cleanEntries = [];
 
   for (const entry of cleanEntries) {
     const existing = gradeMap.get(entry.gradeId);
@@ -686,36 +700,27 @@ export async function updateGradeCourseInfoBulk(params: {
       continue; // no change
     }
 
-    operations.push(
-      prisma.grade.update({
-        where: { id: entry.gradeId },
-        data: { courseCode: entry.courseCode, courseTitle: entry.courseTitle },
-      }),
-    );
+    entriesToUpdate.push(entry);
 
-    operations.push(
-      prisma.gradeLog.create({
-        data: {
-          studentNumber: existing.studentNumber,
-          courseCode: entry.courseCode,
-          courseTitle: entry.courseTitle,
-          creditUnit: existing.creditUnit,
-          grade: existing.grade,
-          remarks: existing.remarks ?? undefined,
-          instructor: existing.instructor,
-          academicYear,
-          semester,
-          action: "UPDATED",
-          isResolved: true,
-          changeReason: `Course info edited from "${oldCode}" / "${oldTitle}" to "${entry.courseCode}" / "${entry.courseTitle}" by ${userRole}`,
-        },
-      }),
-    );
+    logEntries.push({
+      studentNumber: existing.studentNumber,
+      courseCode: entry.courseCode,
+      courseTitle: entry.courseTitle,
+      creditUnit: existing.creditUnit,
+      grade: existing.grade,
+      remarks: existing.remarks ?? undefined,
+      instructor: existing.instructor,
+      academicYear,
+      semester,
+      action: "UPDATED",
+      isResolved: true,
+      changeReason: `Course info edited from "${oldCode}" / "${oldTitle}" to "${entry.courseCode}" / "${entry.courseTitle}" by ${userRole}`,
+    });
 
     updatedCount++;
   }
 
-  if (operations.length === 0) {
+  if (updatedCount === 0) {
     const totalFailed = entries.length - updatedCount;
     return {
       success: totalFailed === 0,
@@ -725,7 +730,17 @@ export async function updateGradeCourseInfoBulk(params: {
     };
   }
 
-  await prisma.$transaction(operations);
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < entriesToUpdate.length; i++) {
+      const entry = entriesToUpdate[i];
+      const logEntry = logEntries[i];
+      await tx.grade.update({
+        where: { id: entry.gradeId },
+        data: { courseCode: entry.courseCode, courseTitle: entry.courseTitle },
+      });
+      await tx.gradeLog.create({ data: logEntry });
+    }
+  });
 
   return {
     success: true,
