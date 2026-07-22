@@ -1,7 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { AcademicYear, Major, Semester } from "@prisma/client";
+import { AcademicYear, Major, Prisma, Semester } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
 export type StudentSearchResult = {
@@ -553,4 +553,276 @@ export async function checkExsistingGrade({
   });
 
   return !!existing;
+}
+
+// ── Bulk edit course code & course title ────────────────────────────────
+
+export type BulkUpdateGradeCourseInfoResult = {
+  success: boolean;
+  updatedCount: number;
+  failedCount: number;
+  errors: string[];
+};
+
+export async function updateGradeCourseInfoBulk(params: {
+  entries: {
+    gradeId: string;
+    studentNumber: string;
+    courseCode: string;
+    courseTitle: string;
+  }[];
+  academicYear: AcademicYear;
+  semester: Semester;
+}): Promise<BulkUpdateGradeCourseInfoResult> {
+  const { entries, academicYear, semester } = params;
+
+  const user = await currentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const userRole = user.publicMetadata?.role as string | undefined;
+  if (
+    userRole !== "admin" &&
+    userRole !== "superuser" &&
+    userRole !== "registrar"
+  ) {
+    throw new Error("Forbidden: only admin, superuser, and registrar can edit grade course info.");
+  }
+
+  if (!entries || entries.length === 0) {
+    throw new Error("No entries provided.");
+  }
+
+  // Validate all entries have non-empty courseCode and courseTitle
+  const errors: string[] = [];
+  const validEntries: typeof entries = [];
+
+  for (const entry of entries) {
+    const code = entry.courseCode.trim().toUpperCase();
+    const title = entry.courseTitle.trim().toUpperCase();
+
+    if (!code) {
+      errors.push(`Student ${entry.studentNumber}: course code cannot be empty.`);
+      continue;
+    }
+    if (!title) {
+      errors.push(`Student ${entry.studentNumber}: course title cannot be empty.`);
+      continue;
+    }
+
+    validEntries.push({ ...entry, courseCode: code, courseTitle: title });
+  }
+
+  if (validEntries.length === 0) {
+    return { success: false, updatedCount: 0, failedCount: entries.length, errors };
+  }
+
+  // Check for conflicts: same studentNumber + courseCode + term, different gradeId
+  const conflictChecks = await Promise.all(
+    validEntries.map(async (entry) => {
+      const conflict = await prisma.grade.findFirst({
+        where: {
+          studentNumber: entry.studentNumber,
+          courseCode: entry.courseCode,
+          academicYear,
+          semester,
+          id: { not: entry.gradeId },
+        },
+        select: { id: true, studentNumber: true },
+      });
+      return conflict ? { entry, conflictStudentNumber: conflict.studentNumber } : null;
+    }),
+  );
+
+  for (const conflict of conflictChecks) {
+    if (conflict) {
+      errors.push(
+        `Student ${conflict.entry.studentNumber}: course code "${conflict.entry.courseCode}" already exists in this term.`,
+      );
+    }
+  }
+
+  // Remove conflicting entries
+  const conflictingIds = new Set(
+    conflictChecks.filter(Boolean).map((c) => c!.entry.gradeId),
+  );
+  const cleanEntries = validEntries.filter((e) => !conflictingIds.has(e.gradeId));
+
+  if (cleanEntries.length === 0) {
+    return { success: false, updatedCount: 0, failedCount: entries.length, errors };
+  }
+
+  // Fetch existing records for audit
+  const gradeIds = cleanEntries.map((e) => e.gradeId);
+  const existingGrades = await prisma.grade.findMany({
+    where: { id: { in: gradeIds } },
+    select: {
+      id: true,
+      courseCode: true,
+      courseTitle: true,
+      creditUnit: true,
+      grade: true,
+      remarks: true,
+      instructor: true,
+      studentNumber: true,
+    },
+  });
+
+  const gradeMap = new Map(existingGrades.map((g) => [g.id, g]));
+
+  const operations: Prisma.PrismaPromise<unknown>[] = [];
+  let updatedCount = 0;
+
+  for (const entry of cleanEntries) {
+    const existing = gradeMap.get(entry.gradeId);
+    if (!existing) {
+      errors.push(`Student ${entry.studentNumber}: grade record not found.`);
+      continue;
+    }
+
+    const oldCode = existing.courseCode;
+    const oldTitle = existing.courseTitle;
+
+    if (entry.courseCode === oldCode.toUpperCase() && entry.courseTitle === oldTitle.toUpperCase()) {
+      continue; // no change
+    }
+
+    operations.push(
+      prisma.grade.update({
+        where: { id: entry.gradeId },
+        data: { courseCode: entry.courseCode, courseTitle: entry.courseTitle },
+      }),
+    );
+
+    operations.push(
+      prisma.gradeLog.create({
+        data: {
+          studentNumber: existing.studentNumber,
+          courseCode: entry.courseCode,
+          courseTitle: entry.courseTitle,
+          creditUnit: existing.creditUnit,
+          grade: existing.grade,
+          remarks: existing.remarks ?? undefined,
+          instructor: existing.instructor,
+          academicYear,
+          semester,
+          action: "UPDATED",
+          isResolved: true,
+          changeReason: `Course info edited from "${oldCode}" / "${oldTitle}" to "${entry.courseCode}" / "${entry.courseTitle}" by ${userRole}`,
+        },
+      }),
+    );
+
+    updatedCount++;
+  }
+
+  if (operations.length === 0) {
+    const totalFailed = entries.length - updatedCount;
+    return {
+      success: totalFailed === 0,
+      updatedCount,
+      failedCount: totalFailed,
+      errors,
+    };
+  }
+
+  await prisma.$transaction(operations);
+
+  return {
+    success: true,
+    updatedCount,
+    failedCount: entries.length - updatedCount,
+    errors,
+  };
+}
+
+// ── Edit course code & course title (single) ─────────────────────────────
+
+export type UpdateGradeCourseInfoResult = {
+  success: boolean;
+  message: string;
+};
+
+export async function updateGradeCourseInfo(params: {
+  gradeId: string;
+  courseCode: string;
+  courseTitle: string;
+  studentNumber: string;
+  academicYear: AcademicYear;
+  semester: Semester;
+}): Promise<UpdateGradeCourseInfoResult> {
+  const { gradeId, courseCode, courseTitle, studentNumber, academicYear, semester } = params;
+
+  const user = await currentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const userRole = user.publicMetadata?.role as string | undefined;
+  if (
+    userRole !== "admin" &&
+    userRole !== "superuser" &&
+    userRole !== "registrar"
+  ) {
+    throw new Error("Forbidden: only admin, superuser, and registrar can edit grade course info.");
+  }
+
+  const trimmedCode = courseCode.trim().toUpperCase();
+  const trimmedTitle = courseTitle.trim().toUpperCase();
+
+  if (!trimmedCode) throw new Error("Course code cannot be empty.");
+  if (!trimmedTitle) throw new Error("Course title cannot be empty.");
+
+  // Check for uniqueness conflict with another grade record
+  const existingConflict = await prisma.grade.findFirst({
+    where: {
+      studentNumber,
+      courseCode: trimmedCode,
+      academicYear,
+      semester,
+      id: { not: gradeId },
+    },
+    select: { id: true },
+  });
+
+  if (existingConflict) {
+    throw new Error(
+      `A grade with course code "${trimmedCode}" already exists for this student in this term.`,
+    );
+  }
+
+  const existing = await prisma.grade.findUnique({
+    where: { id: gradeId },
+    select: { courseCode: true, courseTitle: true, creditUnit: true, grade: true, remarks: true, instructor: true },
+  });
+
+  if (!existing) throw new Error("Grade record not found.");
+
+  const oldCourseCode = existing.courseCode;
+  const oldCourseTitle = existing.courseTitle;
+
+  await prisma.$transaction([
+    prisma.grade.update({
+      where: { id: gradeId },
+      data: { courseCode: trimmedCode, courseTitle: trimmedTitle },
+    }),
+    prisma.gradeLog.create({
+      data: {
+        studentNumber,
+        courseCode: trimmedCode,
+        courseTitle: trimmedTitle,
+        creditUnit: existing.creditUnit,
+        grade: existing.grade,
+        remarks: existing.remarks ?? undefined,
+        instructor: existing.instructor,
+        academicYear,
+        semester,
+        action: "UPDATED",
+        isResolved: true,
+        changeReason: `Course info edited from "${oldCourseCode}" / "${oldCourseTitle}" to "${trimmedCode}" / "${trimmedTitle}" by ${userRole}`,
+      },
+    }),
+  ]);
+
+  return {
+    success: true,
+    message: `Course info updated from "${oldCourseCode}" to "${trimmedCode}".`,
+  };
 }
