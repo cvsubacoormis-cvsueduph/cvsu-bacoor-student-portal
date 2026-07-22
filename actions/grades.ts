@@ -719,6 +719,16 @@ export async function updateGradeCourseInfoBulk(params: {
         data: { courseCode: entry.newCourseCode, courseTitle: entry.courseTitle },
       });
 
+      await tx.gradeLog.updateMany({
+        where: {
+          studentNumber: existing.studentNumber,
+          courseCode: entry.oldCourseCode,
+          academicYear,
+          semester,
+        },
+        data: { courseCode: entry.newCourseCode, courseTitle: entry.courseTitle },
+      });
+
       await tx.gradeLog.create({
         data: {
           studentNumber: existing.studentNumber,
@@ -818,6 +828,16 @@ export async function updateGradeCourseInfo(params: {
   await prisma.$transaction([
     prisma.grade.update({
       where: { id: existing.id },
+      data: { courseCode: trimmedCode, courseTitle: trimmedTitle },
+    }),
+    // Update existing GradeLog entries so the monitoring page shows the new code/title
+    prisma.gradeLog.updateMany({
+      where: {
+        studentNumber,
+        courseCode: oldCode,
+        academicYear,
+        semester,
+      },
       data: { courseCode: trimmedCode, courseTitle: trimmedTitle },
     }),
     prisma.gradeLog.create({
