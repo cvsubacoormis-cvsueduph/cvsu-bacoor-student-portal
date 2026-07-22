@@ -1,7 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { AcademicYear, Major, Prisma, Semester } from "@prisma/client";
+import { AcademicYear, Major, Semester } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
 export type StudentSearchResult = {
@@ -669,7 +669,7 @@ export async function updateGradeCourseInfoBulk(params: {
 
   const gradeMap = new Map(existingGrades.map((g) => [g.id, g]));
 
-  const operations: Prisma.PrismaPromise<unknown>[] = [];
+  const operations: Array<Promise<unknown>> = [];
   let updatedCount = 0;
 
   for (const entry of cleanEntries) {
