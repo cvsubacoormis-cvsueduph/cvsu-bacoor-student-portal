@@ -16,7 +16,13 @@ export async function GET(request: Request) {
         createdAt: "desc",
       },
     });
-    return NextResponse.json(news);
+    // Reference data — safe to cache publicly for 2min (CDN: 10min, stale-while-revalidate: 1hr)
+    return NextResponse.json(news, {
+      headers: {
+        "Cache-Control":
+          "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+      },
+    });
   } catch (error) {
     return NextResponse.json(
       { message: "An unexpected error occurred" },

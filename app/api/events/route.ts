@@ -26,7 +26,10 @@ export async function GET(request: NextRequest) {
 
     const totalEvents = await prisma.event.count();
 
-    return NextResponse.json({ events, totalEvents });
+    // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
+    const response = NextResponse.json({ events, totalEvents });
+    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    return response;
   } catch (error) {
     console.error("Error fetching events:", error);
     return NextResponse.json(

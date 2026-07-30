@@ -81,11 +81,19 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil(totalStudents / limit);
 
-    return Response.json({
-      data: students,
-      totalPages,
-      currentPage: page,
-    });
+    // Per-user search results — private cache only
+    return Response.json(
+      {
+        data: students,
+        totalPages,
+        currentPage: page,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching students:", error);
     throw error;

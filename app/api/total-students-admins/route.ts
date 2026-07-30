@@ -18,7 +18,10 @@ export async function GET() {
   try {
     const totalStudents = await prisma.student.count();
     const totalAdmins = await prisma.admin.count();
-    return NextResponse.json({ totalStudents, totalAdmins });
+    // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
+    const response = NextResponse.json({ totalStudents, totalAdmins });
+    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    return response;
   } catch (error) {
     console.error("Error fetching totals:", error);
     return NextResponse.json(

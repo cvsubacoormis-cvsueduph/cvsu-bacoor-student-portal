@@ -49,6 +49,7 @@ export async function GET() {
     );
   }
 
+  // Static file — cache publicly and treat as immutable
   return new NextResponse(fileBuffer, {
     headers: {
       "Content-Type":
@@ -56,6 +57,7 @@ export async function GET() {
       "Content-Disposition":
         'attachment; filename="UREG-QF-12-Request-for-Change-of-Grades.docx"',
       "Content-Length": String(fileBuffer.length),
+      "Cache-Control": "public, max-age=86400, immutable",
     },
   });
 }

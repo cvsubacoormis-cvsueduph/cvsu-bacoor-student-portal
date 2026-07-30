@@ -75,7 +75,13 @@ export async function GET(request: Request) {
             creditUnit: offer.curriculum.creditLec + offer.curriculum.creditLab,
         }));
 
-        return NextResponse.json(mapped);
+        // Cache publicly — same data for all users per academic year & semester
+        return NextResponse.json(mapped, {
+            headers: {
+                "Cache-Control":
+                    "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+            },
+        });
     } catch (error) {
         console.error("Error fetching subject offerings:", error);
         return NextResponse.json(

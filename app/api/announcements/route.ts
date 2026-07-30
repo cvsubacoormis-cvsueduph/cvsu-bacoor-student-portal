@@ -29,11 +29,20 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      announcements,
-      totalPages: Math.ceil(totalAnnouncements / limit),
-      currentPage: page,
-    });
+    // Reference data — safe to cache publicly for 2min (CDN: 10min, stale-while-revalidate: 1hr)
+    return NextResponse.json(
+      {
+        announcements,
+        totalPages: Math.ceil(totalAnnouncements / limit),
+        currentPage: page,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+        },
+      }
+    );
   } catch (error) {
     return NextResponse.json(
       { message: "An unexpected error occurred" },

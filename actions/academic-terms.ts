@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { AcademicYear, Semester } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
@@ -42,6 +43,13 @@ export async function createAcademicTerm(data: {
             },
         });
 
+        // Invalidate cache so subsequent reads pick up the new term
+        try {
+            await redis.del("cache:academicTerms:v1");
+        } catch {
+            // Redis failure should not break the write operation
+        }
+
         revalidatePath("/list/subject-offering");
         return { success: true, message: "Academic Term created successfully." };
     } catch (error) {
@@ -57,12 +65,25 @@ export async function getAllAcademicTerms() {
     }
 
     try {
+        // Try Redis cache first (TTL: 1 hour — academic terms change at most once per semester)
+        const cached = await withRedisFallback(async () => {
+            const raw = await redis.get("cache:academicTerms:v1");
+            return raw ? JSON.parse(raw) : null;
+        }, null);
+        if (cached) return cached;
+
         const terms = await prisma.academicTerm.findMany({
             orderBy: [
                 { academicYear: "desc" },
                 { semester: "desc" }, // Sort semester conceptually if possible, existing enum might be tricky but this is fine
             ],
         });
+
+        // Cache for 1 hour (fire-and-forget; Redis failure won't block response)
+        withRedisFallback(async () => {
+            await redis.set("cache:academicTerms:v1", JSON.stringify(terms), "EX", 3600);
+        });
+
         return terms;
     } catch (error) {
         console.error("Failed to fetch academic terms:", error);

@@ -22,8 +22,10 @@ export async function GET() {
         course: true,
       },
     });
-    // Return JSON with the grouped data
-    return NextResponse.json({ data: coursesCount });
+    // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
+    const response = NextResponse.json({ data: coursesCount });
+    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    return response;
   } catch (error) {
     if (error instanceof Error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

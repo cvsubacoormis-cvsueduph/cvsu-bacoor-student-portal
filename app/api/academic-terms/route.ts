@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -14,22 +15,47 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const studentNumber = searchParams.get("studentNumber");
 
-    // Always fetch all configured academic terms as the base set.
-    // This ensures admins/registrars can add grades for ANY term,
-    // even when a student has no existing grades yet.
-    const [allTerms, studentTerms] = await Promise.all([
-      prisma.academicTerm.findMany({
-        select: { academicYear: true, semester: true },
-        orderBy: { academicYear: "desc" },
-      }),
-      studentNumber
-        ? prisma.grade.findMany({
+    // Try Redis cache for all configured terms (TTL: 1 hour — terms change at most once per semester)
+    const cachedTerms = await withRedisFallback(async () => {
+      const raw = await redis.get("cache:academicTerms:v1");
+      return raw ? (JSON.parse(raw) as { academicYear: string; semester: string }[]) : null;
+    }, null);
+
+    let allTerms: { academicYear: string; semester: string }[];
+    let studentTerms: { academicYear: string; semester: string }[];
+
+    if (cachedTerms) {
+      allTerms = cachedTerms;
+      studentTerms = studentNumber
+        ? await prisma.grade.findMany({
             where: { studentNumber },
             select: { academicYear: true, semester: true },
             distinct: ["academicYear", "semester"],
           })
-        : Promise.resolve([]),
-    ]);
+        : [];
+    } else {
+      // Always fetch all configured academic terms as the base set.
+      // This ensures admins/registrars can add grades for ANY term,
+      // even when a student has no existing grades yet.
+      [allTerms, studentTerms] = await Promise.all([
+        prisma.academicTerm.findMany({
+          select: { academicYear: true, semester: true },
+          orderBy: { academicYear: "desc" },
+        }),
+        studentNumber
+          ? prisma.grade.findMany({
+              where: { studentNumber },
+              select: { academicYear: true, semester: true },
+              distinct: ["academicYear", "semester"],
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Cache for 1 hour (fire-and-forget; Redis failure won't block response)
+      withRedisFallback(async () => {
+        await redis.set("cache:academicTerms:v1", JSON.stringify(allTerms), "EX", 3600);
+      });
+    }
 
     // Merge student-specific terms with all configured terms (deduplicate)
     const termSet = new Map<string, { academicYear: string; semester: string }>();
@@ -49,7 +75,13 @@ export async function GET(request: Request) {
       b.academicYear.localeCompare(a.academicYear),
     );
 
-    return NextResponse.json(terms);
+    // Reference data — safe to cache publicly for 5min (CDN: 1hr, stale-while-revalidate: 24hr)
+    return NextResponse.json(terms, {
+      headers: {
+        "Cache-Control":
+          "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+      },
+    });
   } catch (error) {
     console.error("Error fetching academic terms:", error);
     return NextResponse.json(

@@ -1,8 +1,15 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { CurriculumItem } from "@/lib/types";
-import { Courses, Major, Semester, yearLevels } from "@prisma/client";
+import {
+  Courses,
+  Major,
+  Semester,
+  yearLevels,
+  CurriculumChecklist,
+} from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { curriculumChecklistData } from "@/prisma/curriculum";
@@ -14,24 +21,44 @@ export interface SeedLog {
 export async function getCurriculumChecklist(
   course: string,
   major: string | null,
-  grades?: Array<{ courseCode: string; grade: string }> // Add grades parameter
+  grades?: Array<{ courseCode: string; grade: string }>
 ): Promise<CurriculumItem[]> {
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
   }
   try {
-    const curriculum = await prisma.curriculumChecklist.findMany({
-      where: {
-        course: course as Courses,
-        major: (major as Major) || "NONE",
-      },
-      orderBy: [
-        { yearLevel: "asc" },
-        { semester: "asc" },
-        { courseCode: "asc" },
-      ],
+    // Cache key includes course, major and a version suffix for easy invalidation
+    // TTL: 3600s (1 hour) — curriculum data changes infrequently
+    const cacheKey = `cache:curriculum:checklist:${course}:${major || "NONE"}:v1`;
+
+    // Try Redis cache first (gracefully falls through on Redis failure)
+    const cached = await withRedisFallback(async () => {
+      const raw = await redis.get(cacheKey);
+      return raw ? (JSON.parse(raw) as CurriculumChecklist[]) : null;
     });
+
+    let curriculum: CurriculumChecklist[];
+    if (cached) {
+      curriculum = cached;
+    } else {
+      curriculum = await prisma.curriculumChecklist.findMany({
+        where: {
+          course: course as Courses,
+          major: (major as Major) || "NONE",
+        },
+        orderBy: [
+          { yearLevel: "asc" },
+          { semester: "asc" },
+          { courseCode: "asc" },
+        ],
+      });
+
+      // Cache the raw result (student grades are applied per-request below)
+      await withRedisFallback(async () => {
+        await redis.set(cacheKey, JSON.stringify(curriculum), "EX", 3600);
+      });
+    }
 
     return curriculum.map((item) => {
       // Find matching grade if grades array is provided
@@ -54,7 +81,7 @@ export async function getCurriculumChecklist(
           lab: item.creditLab || 0,
         },
         preRequisite: item.preRequisite || "",
-        grade: studentGrade?.grade || "", // Use actual grade if available
+        grade: studentGrade?.grade || "",
         remarks: "",
         completion: studentGrade ? "Taken" : "Not Taken",
       };
@@ -99,6 +126,14 @@ export async function createCurriculumChecklist(data: {
     },
   });
 
+  // Invalidate Redis cache for this course+major and the full list
+  await withRedisFallback(async () => {
+    await redis.del(
+      `cache:curriculum:checklist:${data.course}:${data.major}:v1`,
+      "cache:curriculum:all:v1"
+    );
+  });
+
   revalidatePath("/curriculum");
   return item;
 }
@@ -118,9 +153,28 @@ export async function getCurriculumChecklistForCourse() {
     throw new Error("Unauthorized role");
   }
 
-  return prisma.curriculumChecklist.findMany({
+  // Cache key for the full curriculum list (admin view)
+  // TTL: 3600s (1 hour)
+  const cacheKey = "cache:curriculum:all:v1";
+
+  const cached = await withRedisFallback(async () => {
+    const raw = await redis.get(cacheKey);
+    return raw ? (JSON.parse(raw) as CurriculumChecklist[]) : null;
+  });
+
+  if (cached) {
+    return cached;
+  }
+
+  const data = await prisma.curriculumChecklist.findMany({
     orderBy: { courseCode: "asc" },
   });
+
+  await withRedisFallback(async () => {
+    await redis.set(cacheKey, JSON.stringify(data), "EX", 3600);
+  });
+
+  return data;
 }
 
 export async function updateCurriculumChecklist(data: {
@@ -157,6 +211,14 @@ export async function updateCurriculumChecklist(data: {
       preRequisite: data.preRequisite || null,
     },
   });
+  // Invalidate Redis cache for this course+major and the full list
+  await withRedisFallback(async () => {
+    await redis.del(
+      `cache:curriculum:checklist:${data.course}:${data.major}:v1`,
+      "cache:curriculum:all:v1"
+    );
+  });
+
   revalidatePath("/curriculum");
   return item;
 }
@@ -181,6 +243,11 @@ export async function deleteCurriculumChecklist(id: string) {
     where: {
       id: id,
     },
+  });
+
+  // Invalidate the full-list cache (we don't have course+major from id alone)
+  await withRedisFallback(async () => {
+    await redis.del("cache:curriculum:all:v1");
   });
 
   revalidatePath("/curriculum");
@@ -252,6 +319,25 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
         message: `✅ Added ${subject.courseCode} (${subject.course})`,
       });
     }
+
+    // Invalidate all curriculum cache keys after bulk seeding
+    await withRedisFallback(async () => {
+      let cursor = "0";
+      do {
+        const result = await redis.scan(
+          cursor,
+          "MATCH",
+          "cache:curriculum:*",
+          "COUNT",
+          "100"
+        );
+        cursor = result[0];
+        const keys = result[1];
+        if (keys.length > 0) {
+          await redis.del(...keys);
+        }
+      } while (cursor !== "0");
+    });
 
     logs.push({
       type: "success",

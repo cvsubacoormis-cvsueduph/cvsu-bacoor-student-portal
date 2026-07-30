@@ -23,11 +23,14 @@ export async function GET() {
     const femaleCount = await prisma.student.count({
       where: { sex: "FEMALE" },
     });
-    return NextResponse.json({
+    // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
+    const response = NextResponse.json({
       maleCount,
       femaleCount,
       total: maleCount + femaleCount,
     });
+    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    return response;
   } catch (error) {
     console.error("Error fetching gender counts:", error);
     return NextResponse.json(
