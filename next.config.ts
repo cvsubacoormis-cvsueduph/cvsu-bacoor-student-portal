@@ -22,8 +22,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Static files in /public (images, fonts, etc.) — cache for 1 hour
-        source: "/((?!api|_next/static|_next/image|favicon.ico).*)",
+        // Static files in /public (images, fonts, etc.) — cache for 1 hour. Excludes dashboard pages which use page-level revalidate.
+        source: "/((?!api|_next/static|_next/image|favicon.ico|list|admin|student).*)",
         headers: [
           {
             key: "Cache-Control",
