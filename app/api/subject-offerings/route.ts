@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,9 @@ export async function GET(request: Request) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const rl = await checkApiRateLimit("subject_offerings", 60, 60);
+        if (rl.error) return rl.error;
 
         const { searchParams } = new URL(request.url);
         const academicYear = searchParams.get("academicYear");

@@ -20,14 +20,16 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "5", 10);
     const skip = (page - 1) * limit;
 
-    const totalAnnouncements = await prisma.announcement.count();
-    const announcements = await prisma.announcement.findMany({
-      skip,
-      take: limit,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const [totalAnnouncements, announcements] = await Promise.all([
+      prisma.announcement.count(),
+      prisma.announcement.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+    ]);
 
     // Reference data — safe to cache publicly for 2min (CDN: 10min, stale-while-revalidate: 1hr)
     // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers

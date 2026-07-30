@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = await checkApiRateLimit("grade_history_read", 60, 60);
+    if (rl.error) return rl.error;
 
     const { searchParams } = new URL(request.url);
     const result = querySchema.safeParse({

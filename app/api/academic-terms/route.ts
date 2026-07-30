@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { redis, withRedisFallback } from "@/lib/redis";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +12,9 @@ export async function GET(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = await checkApiRateLimit("academic_terms", 60, 60);
+    if (rl.error) return rl.error;
 
     const { searchParams } = new URL(request.url);
     const studentNumber = searchParams.get("studentNumber");

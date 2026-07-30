@@ -278,26 +278,30 @@ export async function POST(request: Request) {
     const results: { id: string; success: boolean; error?: string }[] = [];
 
     if (action === "APPROVE") {
+      // Batch-fetch all pending grade changes in a single query
+      const pendingChanges = await prisma.pendingGradeChange.findMany({
+        where: { id: { in: ids } },
+      });
+      const pendingChangeMap = new Map(pendingChanges.map((pc) => [pc.id, pc]));
+
       for (const id of ids) {
-        try {
-          const pendingChange = await prisma.pendingGradeChange.findUnique({
-            where: { id },
+        const pendingChange = pendingChangeMap.get(id);
+
+        if (!pendingChange) {
+          results.push({ id, success: false, error: "Not found" });
+          continue;
+        }
+
+        if (pendingChange.status !== "PENDING") {
+          results.push({
+            id,
+            success: false,
+            error: `Already ${pendingChange.status}`,
           });
+          continue;
+        }
 
-          if (!pendingChange) {
-            results.push({ id, success: false, error: "Not found" });
-            continue;
-          }
-
-          if (pendingChange.status !== "PENDING") {
-            results.push({
-              id,
-              success: false,
-              error: `Already ${pendingChange.status}`,
-            });
-            continue;
-          }
-
+        try {
           await applyApprove(pendingChange);
 
           await prisma.pendingGradeChange.update({
@@ -316,41 +320,51 @@ export async function POST(request: Request) {
         }
       }
     } else {
+      // Batch-fetch all pending grade changes in a single query
+      const pendingChanges = await prisma.pendingGradeChange.findMany({
+        where: { id: { in: ids } },
+      });
+      const pendingChangeMap = new Map(pendingChanges.map((pc) => [pc.id, pc]));
+
+      const validUpdateIds: string[] = [];
+
       for (const id of ids) {
-        try {
-          const pendingChange = await prisma.pendingGradeChange.findUnique({
-            where: { id },
-          });
+        const pendingChange = pendingChangeMap.get(id);
 
-          if (!pendingChange) {
-            results.push({ id, success: false, error: "Not found" });
-            continue;
-          }
-
-          if (pendingChange.status !== "PENDING") {
-            results.push({
-              id,
-              success: false,
-              error: `Already ${pendingChange.status}`,
-            });
-            continue;
-          }
-
-          await prisma.pendingGradeChange.update({
-            where: { id },
-            data: {
-              status: "REJECTED",
-              reviewedById: userId,
-              reviewedByName: reviewerName,
-              reviewedAt: new Date(),
-              rejectionReason: rejectionReason || null,
-            },
-          });
-
-          results.push({ id, success: true });
-        } catch (err: any) {
-          results.push({ id, success: false, error: err.message });
+        if (!pendingChange) {
+          results.push({ id, success: false, error: "Not found" });
+          continue;
         }
+
+        if (pendingChange.status !== "PENDING") {
+          results.push({
+            id,
+            success: false,
+            error: `Already ${pendingChange.status}`,
+          });
+          continue;
+        }
+
+        validUpdateIds.push(id);
+        results.push({ id, success: true });
+      }
+
+      if (validUpdateIds.length > 0) {
+        // Batch all REJECT updates in a single transaction
+        await prisma.$transaction(
+          validUpdateIds.map((id) =>
+            prisma.pendingGradeChange.update({
+              where: { id },
+              data: {
+                status: "REJECTED",
+                reviewedById: userId,
+                reviewedByName: reviewerName,
+                reviewedAt: new Date(),
+                rejectionReason: rejectionReason || null,
+              },
+            })
+          )
+        );
       }
     }
 

@@ -68,16 +68,32 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const students = await prisma.student.findMany({
-      where: whereClause,
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' } // Good practice to have stable sort
-    });
-
-    const totalStudents = await prisma.student.count({
-      where: whereClause,
-    });
+    const [students, totalStudents] = await Promise.all([
+      prisma.student.findMany({
+        where: whereClause,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' }, // Good practice to have stable sort
+        select: {
+          id: true,
+          studentNumber: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          middleInit: true,
+          email: true,
+          phone: true,
+          address: true,
+          sex: true,
+          course: true,
+          major: true,
+          status: true,
+        },
+      }),
+      prisma.student.count({
+        where: whereClause,
+      }),
+    ]);
 
     const totalPages = Math.ceil(totalStudents / limit);
 

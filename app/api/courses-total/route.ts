@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 export const runtime = "nodejs";
 
 
@@ -15,6 +16,10 @@ export async function GET() {
   if (!role || !allowedRoles.includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const rl = await checkApiRateLimit("courses_total", 30, 60);
+  if (rl.error) return rl.error;
+
   try {
     const coursesCount = await prisma.student.groupBy({
       by: ["course"],

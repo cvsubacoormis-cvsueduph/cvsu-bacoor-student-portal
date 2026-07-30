@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { Courses } from "@prisma/client";
 import { addDays, format, isAfter, isSameDay, parseISO } from "date-fns";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 const getCacheKey = (course: string, date: Date) =>
     `course-access:${course}:${date.toISOString().split("T")[0]}`;
@@ -15,6 +16,9 @@ export async function GET(req: Request) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const rl = await checkApiRateLimit("schedules_read", 60, 60);
+        if (rl.error) return rl.error;
 
         const url = new URL(req.url);
 

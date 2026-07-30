@@ -16,15 +16,16 @@ export async function GET(request: NextRequest) {
     const limit = Number(url.searchParams.get("limit")) || 10;
     const skip = (page - 1) * limit;
 
-    const events = await prisma.event.findMany({
-      skip,
-      take: limit,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    const totalEvents = await prisma.event.count();
+    const [events, totalEvents] = await Promise.all([
+      prisma.event.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+      prisma.event.count(),
+    ]);
 
     // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
     const response = NextResponse.json({ events, totalEvents });
