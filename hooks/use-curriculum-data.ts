@@ -45,15 +45,11 @@ export function useCurriculumData() {
         const student = result.student;
         const grades = result.student.grades || [];
 
-        const curriculum = await getCurriculumChecklist(
-          student.course,
-          student.major,
-        );
-
-        // Fetch credited subjects to merge with curriculum
-        const creditedSubjectCodes = await getCreditedSubjectCodes(
-          student.studentNumber,
-        );
+        // Fetch curriculum and credited subjects in parallel (2x faster)
+        const [curriculum, creditedSubjectCodes] = await Promise.all([
+          getCurriculumChecklist(student.course, student.major),
+          getCreditedSubjectCodes(student.studentNumber),
+        ]);
 
         const gradesByCourse: Record<string, typeof grades> = {};
         grades.forEach((grade: any) => {

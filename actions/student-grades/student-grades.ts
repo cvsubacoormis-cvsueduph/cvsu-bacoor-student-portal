@@ -183,6 +183,19 @@ export async function getStudentGradesWithReExam(
     }
   }
 
+  // ── Redis cache (separate key from getStudentData — different shape) ─────
+  const cacheKey = `cache:student:${userId}:gradesWithReExam:v1`;
+
+  const cached = await withRedisFallback(async () => {
+    const raw = await redis.get(cacheKey);
+    return raw ? (JSON.parse(raw) as GetStudentWithGradesResult) : null;
+  });
+
+  if (cached) {
+    return cached;
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const student = await prisma.student.findUnique({
     where: { id: studentId || userId },
     select: {
@@ -221,7 +234,18 @@ export async function getStudentGradesWithReExam(
   if (!student)
     return { student: null, hidden: false, error: "Student not found" };
 
-  return { student, hidden: false, error: null };
+  const result: GetStudentWithGradesResult = {
+    student,
+    hidden: false,
+    error: null,
+  };
+
+  // Populate cache (fire-and-forget; Redis failure won't block)
+  await withRedisFallback(async () => {
+    await redis.set(cacheKey, JSON.stringify(result), "EX", 300);
+  });
+
+  return result;
 }
 
 export async function getAvailableAcademicOptions() {

@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { z } from "zod";
@@ -99,6 +100,23 @@ export async function getCreditedSubjects(studentNumber: string) {
 export async function getCreditedSubjectCodes(
   studentNumber: string,
 ): Promise<Record<string, { courseTitle: string; creditUnits: number }>> {
+  // ── Redis cache (TTL 600s — credits don't change often) ──────────────────
+  const cacheKey = `cache:creditedCodes:${studentNumber}:v1`;
+
+  const cached = await withRedisFallback(async () => {
+    const raw = await redis.get(cacheKey);
+    return raw
+      ? (JSON.parse(
+          raw,
+        ) as Record<string, { courseTitle: string; creditUnits: number }>)
+      : null;
+  });
+
+  if (cached) {
+    return cached;
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const credited = await prisma.creditedSubject.findMany({
     where: { studentNumber },
     select: { courseCode: true, courseTitle: true, creditUnits: true },
@@ -111,6 +129,12 @@ export async function getCreditedSubjectCodes(
       creditUnits: c.creditUnits,
     };
   }
+
+  // Populate cache (fire-and-forget; Redis failure won't block)
+  await withRedisFallback(async () => {
+    await redis.set(cacheKey, JSON.stringify(map), "EX", 600);
+  });
+
   return map;
 }
 

@@ -66,6 +66,7 @@ export default function AdminListsTable() {
   const callerRole = user?.publicMetadata?.role as string | undefined;
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [entries, setEntries] = useState<AdminListEntry[]>([]);
@@ -106,6 +107,14 @@ export default function AdminListsTable() {
   useEffect(() => {
     setPage(1);
   }, [searchQuery, roleFilter]);
+
+  // Debounce search input — only update searchQuery after 300ms of no typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(localSearchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localSearchQuery]);
 
   const showActions = callerRole === "admin" || callerRole === "superuser";
   const isRoleFilterActive = roleFilter !== "ALL";
@@ -154,8 +163,8 @@ export default function AdminListsTable() {
               type="search"
               placeholder="Search by name or email..."
               className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={localSearchQuery}
+              onChange={(e) => setLocalSearchQuery(e.target.value)}
             />
           </div>
 
