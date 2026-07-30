@@ -76,10 +76,12 @@ export async function GET(request: Request) {
     );
 
     // Reference data — safe to cache publicly for 5min (CDN: 1hr, stale-while-revalidate: 24hr)
+    // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
     return NextResponse.json(terms, {
       headers: {
         "Cache-Control":
           "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+        "Vary": "Accept-Encoding",
       },
     });
   } catch (error) {

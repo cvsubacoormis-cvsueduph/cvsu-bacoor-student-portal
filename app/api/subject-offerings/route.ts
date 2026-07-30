@@ -80,6 +80,7 @@ export async function GET(request: Request) {
             headers: {
                 "Cache-Control":
                     "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+                "Vary": "Accept-Encoding", // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
             },
         });
     } catch (error) {

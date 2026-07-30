@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
     const response = NextResponse.json({ events, totalEvents });
     response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
+    response.headers.set("Vary", "Accept-Encoding");
     return response;
   } catch (error) {
     console.error("Error fetching events:", error);

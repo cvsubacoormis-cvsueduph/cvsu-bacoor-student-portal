@@ -50,7 +50,7 @@ export async function GET() {
   }
 
   // Static file — cache publicly and treat as immutable
-  return new NextResponse(fileBuffer, {
+  return new NextResponse(new Uint8Array(fileBuffer), {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -58,6 +58,7 @@ export async function GET() {
         'attachment; filename="UREG-QF-12-Request-for-Change-of-Grades.docx"',
       "Content-Length": String(fileBuffer.length),
       "Cache-Control": "public, max-age=86400, immutable",
+      "Vary": "Accept-Encoding", // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
     },
   });
 }

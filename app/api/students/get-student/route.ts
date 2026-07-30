@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
       {
         headers: {
           "Cache-Control": "private, max-age=30",
+          "Vary": "Accept-Encoding", // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
         },
       }
     );

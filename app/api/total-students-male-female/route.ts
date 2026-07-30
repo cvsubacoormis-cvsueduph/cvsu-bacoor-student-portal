@@ -30,6 +30,8 @@ export async function GET() {
       total: maleCount + femaleCount,
     });
     response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
+    response.headers.set("Vary", "Accept-Encoding");
     return response;
   } catch (error) {
     console.error("Error fetching gender counts:", error);
