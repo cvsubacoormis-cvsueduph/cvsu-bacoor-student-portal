@@ -68,6 +68,8 @@ model Student {
   creditedSubjects CreditedSubject[]
   isPasswordSet    Boolean  @default(false)
   isApproved    Boolean  @default(false)
+
+  @@index([course])
 }
 
 model CurriculumChecklist {
@@ -194,6 +196,8 @@ model PendingGradeChange {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
 }
 
 enum AcademicYear {

@@ -36,6 +36,7 @@ import { useUser } from "@clerk/nextjs";
 import { courseMap, formatMajor } from "@/lib/courses";
 import { StudentCardSkeleton } from "./skeleton/StudentCardSkeleton";
 import { humanizeMajor, humanizeSex, humanizeStatus } from "@/lib/student-utils";
+import { formatDate } from "@/lib/date-utils";
 import { useStudentPagination } from "@/hooks/use-student-pagination";
 import { GradesHiddenMessage } from "@/components/GradesHiddenMessage";
 
@@ -162,7 +163,7 @@ function ProfileHeader({
               </div>
               <div className="flex items-center gap-2">
                 <CalendarClock className="size-4 text-primary/70" />
-                <span>Joined {student.createdAt.toLocaleDateString()}</span>
+                <span>Joined {formatDate(student.createdAt)}</span>
               </div>
             </div>
           </div>

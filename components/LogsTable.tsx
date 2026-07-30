@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { FailedLog, resolveGradeLog, LogsMetadata } from "@/actions/logs";
 import { AcademicTerm } from "@prisma/client";
+import { formatDate } from "@/lib/date-utils";
 import {
     Table,
     TableBody,
@@ -422,7 +423,7 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        {new Date(log.performedAt).toLocaleDateString()}
+                                        {formatDate(log.performedAt)}
                                     </TableCell>
                                     <TableCell>
                                         <div>{log.studentNumber}</div>

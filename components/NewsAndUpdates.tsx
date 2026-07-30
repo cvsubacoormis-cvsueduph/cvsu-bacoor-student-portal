@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { formatDate } from "@/lib/date-utils";
 import {
   Dialog,
   DialogContent,
@@ -328,7 +329,7 @@ export function NewsAndUpdates() {
                         Important
                       </Badge>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(item.createdAt).toLocaleDateString()}
+                        {formatDate(item.createdAt)}
                       </span>
                     </div>
                     <h3 className="mt-2 text-lg font-bold">{item.title}</h3>
@@ -362,7 +363,7 @@ export function NewsAndUpdates() {
                     Posted by: {item.author}
                     {item.updatedAt && (
                       <span className="ml-1 block sm:inline">
-                        (Edited: {new Date(item.updatedAt).toLocaleDateString()}
+                        (Edited:                         {formatDate(item.updatedAt)}
                         )
                       </span>
                     )}
@@ -390,7 +391,7 @@ export function NewsAndUpdates() {
                         {item.category}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(item.createdAt).toLocaleDateString()}
+                        {formatDate(item.createdAt)}
                       </span>
                     </div>
                     <h3 className="mt-1 text-lg font-medium">{item.title}</h3>
@@ -424,7 +425,7 @@ export function NewsAndUpdates() {
                     Posted by: {item.author}
                     {item.updatedAt && (
                       <span className="ml-1 block sm:inline">
-                        (Edited: {new Date(item.updatedAt).toLocaleDateString()}
+                        (Edited:                         {formatDate(item.updatedAt)}
                         )
                       </span>
                     )}

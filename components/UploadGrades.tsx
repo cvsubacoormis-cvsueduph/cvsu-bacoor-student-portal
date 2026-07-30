@@ -46,6 +46,7 @@ import Swal from "sweetalert2";
 import UploadGradeNotice from "./Notices/upload-grade-notice";
 import GradeChangePolicyNotice from "./Notices/GradeChangePolicyNotice";
 import { z } from "zod";
+import { formatDateTime } from "@/lib/date-utils";
 import { Badge } from "@/components/ui/badge";
 import { useUser } from "@clerk/nextjs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -871,7 +872,7 @@ export function UploadGrades() {
             <p className="mb-2">
               We found an unsaved upload session from{" "}
               {recoveredState?.timestamp
-                ? new Date(recoveredState.timestamp).toLocaleString()
+                ? formatDateTime(recoveredState.timestamp)
                 : "earlier"}
               . Your file, settings, and results have been restored.
             </p>

@@ -22,6 +22,7 @@ import { Loader2, Download, FileSpreadsheet } from "lucide-react";
 import * as XLSX from "xlsx";
 import toast from "react-hot-toast";
 import { allCourses } from "@/lib/utils";
+import { formatDate } from "@/lib/date-utils";
 
 interface ExportStudentsProps {
   query?: string;
@@ -106,9 +107,7 @@ export default function ExportStudents({
           Address: student.address || "",
           Approved: student.isApproved ? "Yes" : "No",
           "Password Set": student.isPasswordSet ? "Yes" : "No",
-          "Created At": student.createdAt
-            ? new Date(student.createdAt as string).toLocaleDateString()
-            : "",
+          "Created At": formatDate(student.createdAt as string),
         })
       );
 
