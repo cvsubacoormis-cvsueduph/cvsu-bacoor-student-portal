@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { AcademicYear, Semester, Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
@@ -1324,6 +1325,26 @@ export async function rollbackFacultyGrades(
         }),
       ]);
 
+      // Invalidate grade caches for all affected students (entries path)
+      const affectedStudentNumbers1 = [
+        ...new Set(matched.map((g) => g.studentNumber)),
+      ];
+      const affectedStudents1 = await prisma.student
+        .findMany({
+          where: { studentNumber: { in: affectedStudentNumbers1 } },
+          select: { id: true },
+        })
+        .catch(() => []);
+
+      await Promise.all(
+        affectedStudents1.map(({ id: userId }) =>
+          Promise.all([
+            redis.del(`cache:student:${userId}:v1`),
+            invalidateByPattern(`cache:grades:${userId}:*`),
+          ]).catch(() => {}),
+        ),
+      ).catch(() => {});
+
       return {
         deletedCount: gradeIds.length,
         rollbackLogIds: [],
@@ -1409,6 +1430,26 @@ export async function rollbackFacultyGrades(
         data: rollbackLogData,
       }),
     ]);
+
+    // Invalidate grade caches for all affected students (session-window path)
+    const affectedStudentNumbers2 = [
+      ...new Set(matched.map((g) => g.studentNumber)),
+    ];
+    const affectedStudents2 = await prisma.student
+      .findMany({
+        where: { studentNumber: { in: affectedStudentNumbers2 } },
+        select: { id: true },
+      })
+      .catch(() => []);
+
+    await Promise.all(
+      affectedStudents2.map(({ id: userId }) =>
+        Promise.all([
+          redis.del(`cache:student:${userId}:v1`),
+          invalidateByPattern(`cache:grades:${userId}:*`),
+        ]).catch(() => {}),
+      ),
+    ).catch(() => {});
 
     return {
       deletedCount: gradeIds.length,

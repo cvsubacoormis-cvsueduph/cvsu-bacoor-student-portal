@@ -3,6 +3,7 @@
 
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { Role, UserSex } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { AdminEntry, AdminListEntry, UserEntry } from "@/lib/types";
@@ -52,6 +53,20 @@ export async function getAdminsAndUsers(params?: {
   const skip = (page - 1) * limit;
   const roleFilter = params?.role?.trim().toLowerCase();
   const searchTerm = params?.search?.trim();
+
+  // ── Redis cache (shared across all admin users — no userId in key) ──
+  // Key includes filtering/pagination params since this function performs
+  // server-side search/role filtering and pagination.
+  const cacheKey = `cache:admins:list:v1:${page}:${limit}:${roleFilter || ""}:${searchTerm || ""}`;
+
+  const cached = await withRedisFallback(async () => {
+    const raw = await redis.get(cacheKey);
+    return raw ? (JSON.parse(raw) as PaginatedAdminListResult) : null;
+  });
+
+  if (cached) {
+    return cached;
+  }
 
   // ── Build where clauses ──
   const adminWhere: Record<string, unknown> = {};
@@ -159,13 +174,20 @@ export async function getAdminsAndUsers(params?: {
     .sort((a, b) => a.lastName.localeCompare(b.lastName))
     .slice(0, limit);
 
-  return {
+  const result: PaginatedAdminListResult = {
     entries: combined,
     total,
     page,
     limit,
     totalPages: Math.max(1, Math.ceil(total / limit)),
   };
+
+  // Populate cache (fire-and-forget) with 5-minute TTL
+  withRedisFallback(async () => {
+    await redis.set(cacheKey, JSON.stringify(result), "EX", 300);
+  });
+
+  return result;
 }
 
 // ─── Unified Delete ───────────────────────────────────────────────────────────

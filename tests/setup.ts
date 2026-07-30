@@ -156,12 +156,14 @@ vi.mock("@/lib/redis", () => ({
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue("OK"),
     del: vi.fn().mockResolvedValue(1),
+    scan: vi.fn().mockResolvedValue(["0", []]),
     connect: vi.fn().mockResolvedValue(undefined),
     status: "ready",
     on: vi.fn(),
   },
   isRedisConnected: vi.fn(() => true),
   withRedisFallback: vi.fn((fn) => fn()),
+  invalidateByPattern: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("xlsx", () => ({

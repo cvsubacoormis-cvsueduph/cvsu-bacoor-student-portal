@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { AcademicYear, Semester, type Grade } from "@prisma/client";
@@ -72,24 +73,47 @@ export async function getGrades(
       windowSeconds: 60,
     });
 
-    const student = await prisma.student.findUnique({
-      where: { id: userId },
-      include: {
-        grades: {
-          where: {
-            academicYear: year,
-            semester: semester,
-          },
-          orderBy: [{ courseCode: "asc" }],
-        },
-      },
+    // Cache key scoped to userId + year + semester to avoid collisions with other cached entities
+    const yearPart = year ?? "ALL";
+    const semPart = semester ?? "ALL";
+    const cacheKey = `cache:grades:${userId}:${yearPart}:${semPart}:v1`;
+
+    // Try Redis cache first (gracefully falls through on Redis failure)
+    const cached = await withRedisFallback(async () => {
+      const raw = await redis.get(cacheKey);
+      return raw ? (JSON.parse(raw) as Grade[]) : null;
     });
 
-    if (!student) {
-      return { data: null, hidden: false, error: "Student not found" };
+    let grades: Grade[];
+    if (cached) {
+      grades = cached;
+    } else {
+      const student = await prisma.student.findUnique({
+        where: { id: userId },
+        include: {
+          grades: {
+            where: {
+              academicYear: year,
+              semester: semester,
+            },
+            orderBy: [{ courseCode: "asc" }],
+          },
+        },
+      });
+
+      if (!student) {
+        return { data: null, hidden: false, error: "Student not found" };
+      }
+
+      grades = student.grades;
+
+      // Cache for 2 minutes (fire-and-forget)
+      withRedisFallback(async () => {
+        await redis.set(cacheKey, JSON.stringify(grades), "EX", 120);
+      });
     }
 
-    return { data: student.grades, hidden: false, error: null };
+    return { data: grades, hidden: false, error: null };
   } catch (err: unknown) {
     return {
       data: null,

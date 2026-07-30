@@ -2,6 +2,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { StudentData } from "@/lib/types";
 import { auth } from "@clerk/nextjs/server";
 import { getSetting } from "@/actions/settings";
@@ -13,6 +14,21 @@ export async function getStudentData(): Promise<StudentData> {
 
     const gradesVisible = await getSetting("GRADES_VISIBLE_TO_STUDENTS");
     const gradesHidden = gradesVisible === "false";
+
+    // Cache key: per-user student data (grades, retake info, profile)
+    // TTL: 300s (5 minutes) — quick convergence when grades are updated
+    const cacheKey = `cache:student:${userId}:v1`;
+
+    const cached = await withRedisFallback(async () => {
+      const raw = await redis.get(cacheKey);
+      return raw ? (JSON.parse(raw) as StudentData) : null;
+    });
+
+    if (cached) {
+      // Use current gradesHidden setting (may have changed independently)
+      cached.gradesHidden = gradesHidden;
+      return cached;
+    }
 
     const student = await prisma.student.findUnique({
       where: { id: userId },
@@ -72,7 +88,7 @@ export async function getStudentData(): Promise<StudentData> {
       }
     });
 
-    return {
+    const data: StudentData = {
       id: student.id,
       username: student.username,
       firstName: student.firstName,
@@ -108,6 +124,13 @@ export async function getStudentData(): Promise<StudentData> {
       isPasswordSet: student.isPasswordSet,
       createdAt: student.createdAt,
     };
+
+    // Populate cache for subsequent requests (fire-and-forget; Redis failure won't block)
+    await withRedisFallback(async () => {
+      await redis.set(cacheKey, JSON.stringify(data), "EX", 300);
+    });
+
+    return data;
   } catch (err: any) {
     if (err.code === "RATE_LIMIT_EXCEEDED") {
       throw err;

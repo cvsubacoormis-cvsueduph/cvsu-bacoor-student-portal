@@ -73,3 +73,27 @@ export async function withRedisFallback<T>(
     return fallback;
   }
 }
+
+/**
+ * Invalidate all cache keys matching a SCAN pattern.
+ * Uses SCAN + DEL to avoid blocking the Redis server.
+ * Failures are silently caught so callers don't need try/catch.
+ */
+export async function invalidateByPattern(pattern: string): Promise<void> {
+  await withRedisFallback(async () => {
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await redis.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        "100"
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
+  });
+}

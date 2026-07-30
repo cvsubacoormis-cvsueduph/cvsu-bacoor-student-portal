@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
 import { AcademicYear, Semester } from "@prisma/client";
@@ -89,6 +90,24 @@ async function applyApprove(pendingChange: {
           action: "APPROVED_CREATE",
         },
       });
+
+      // Invalidate grade caches for the affected student
+      const affectedStudentNumbers = [pendingChange.studentNumber];
+      const affectedStudents = await prisma.student
+        .findMany({
+          where: { studentNumber: { in: affectedStudentNumbers } },
+          select: { id: true },
+        })
+        .catch(() => []);
+
+      await Promise.all(
+        affectedStudents.map(({ id: userId }) =>
+          Promise.all([
+            redis.del(`cache:student:${userId}:v1`),
+            invalidateByPattern(`cache:grades:${userId}:*`),
+          ]).catch(() => {})
+        )
+      ).catch(() => {});
       break;
     }
 
@@ -129,6 +148,24 @@ async function applyApprove(pendingChange: {
           },
         });
       }
+
+      // Invalidate grade caches for the affected student
+      const affectedStudentNumbers = [pendingChange.studentNumber];
+      const affectedStudents = await prisma.student
+        .findMany({
+          where: { studentNumber: { in: affectedStudentNumbers } },
+          select: { id: true },
+        })
+        .catch(() => []);
+
+      await Promise.all(
+        affectedStudents.map(({ id: userId }) =>
+          Promise.all([
+            redis.del(`cache:student:${userId}:v1`),
+            invalidateByPattern(`cache:grades:${userId}:*`),
+          ]).catch(() => {})
+        )
+      ).catch(() => {});
       break;
     }
 
@@ -167,6 +204,24 @@ async function applyApprove(pendingChange: {
         });
 
         await prisma.grade.delete({ where: { id: pendingChange.gradeId } });
+
+        // Invalidate grade caches for the affected student
+        const affectedStudentNumbers = [gradeToDelete.studentNumber];
+        const affectedStudents = await prisma.student
+          .findMany({
+            where: { studentNumber: { in: affectedStudentNumbers } },
+            select: { id: true },
+          })
+          .catch(() => []);
+
+        await Promise.all(
+          affectedStudents.map(({ id: userId }) =>
+            Promise.all([
+              redis.del(`cache:student:${userId}:v1`),
+              invalidateByPattern(`cache:grades:${userId}:*`),
+            ]).catch(() => {})
+          )
+        ).catch(() => {});
       }
       break;
     }

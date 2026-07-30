@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
@@ -172,6 +173,21 @@ export async function PATCH(
               action: "APPROVED_CREATE",
             },
           });
+
+          // Invalidate grade caches for this student
+          const affectedStudent = await prisma.student
+            .findUnique({
+              where: { studentNumber: pendingChange.studentNumber },
+              select: { id: true },
+            })
+            .catch(() => null);
+
+          if (affectedStudent) {
+            await Promise.all([
+              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+            ]).catch(() => {});
+          }
           break;
         }
 
@@ -219,6 +235,21 @@ export async function PATCH(
               },
             });
           }
+
+          // Invalidate grade caches for this student
+          const affectedStudent = await prisma.student
+            .findUnique({
+              where: { studentNumber: pendingChange.studentNumber },
+              select: { id: true },
+            })
+            .catch(() => null);
+
+          if (affectedStudent) {
+            await Promise.all([
+              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+            ]).catch(() => {});
+          }
           break;
         }
 
@@ -263,6 +294,21 @@ export async function PATCH(
             });
 
             await prisma.grade.delete({ where: { id: pendingChange.gradeId } });
+          }
+
+          // Invalidate grade caches for this student
+          const affectedStudent = await prisma.student
+            .findUnique({
+              where: { studentNumber: pendingChange.studentNumber },
+              select: { id: true },
+            })
+            .catch(() => null);
+
+          if (affectedStudent) {
+            await Promise.all([
+              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+            ]).catch(() => {});
           }
           break;
         }

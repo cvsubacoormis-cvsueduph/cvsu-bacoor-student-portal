@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { AcademicYear, Major, Semester } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
@@ -507,6 +508,21 @@ export async function addManualGrade(
       },
     });
   });
+
+  // Invalidate grade caches for this student
+  const student = await prisma.student
+    .findUnique({
+      where: { studentNumber: gradeData.studentNumber },
+      select: { id: true },
+    })
+    .catch(() => null);
+
+  if (student) {
+    await Promise.all([
+      redis.del(`cache:student:${student.id}:v1`).catch(() => {}),
+      invalidateByPattern(`cache:grades:${student.id}:*`).catch(() => {}),
+    ]).catch(() => {});
+  }
 
   return {
     success: true,

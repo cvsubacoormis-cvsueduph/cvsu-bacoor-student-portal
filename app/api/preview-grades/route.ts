@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -344,6 +345,21 @@ export async function PATCH(request: Request) {
       },
     });
 
+    // Invalidate grade caches for this student
+    const affectedStudent = await prisma.student
+      .findUnique({
+        where: { studentNumber: existingGrade.studentNumber },
+        select: { id: true },
+      })
+      .catch(() => null);
+
+    if (affectedStudent) {
+      await Promise.all([
+        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+      ]).catch(() => {});
+    }
+
     return NextResponse.json(updatedGrade);
   } catch (error) {
     console.error("Error updating grade:", error);
@@ -507,6 +523,21 @@ export async function POST(request: Request) {
       },
     });
 
+    // Invalidate grade caches for this student
+    const affectedStudent = await prisma.student
+      .findUnique({
+        where: { studentNumber },
+        select: { id: true },
+      })
+      .catch(() => null);
+
+    if (affectedStudent) {
+      await Promise.all([
+        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+      ]).catch(() => {});
+    }
+
     return NextResponse.json(newGrade, { status: 201 });
   } catch (error) {
     console.error("Error creating grade:", error);
@@ -630,6 +661,21 @@ export async function DELETE(request: Request) {
     });
 
     await prisma.grade.delete({ where: { id } });
+
+    // Invalidate grade caches for this student
+    const affectedStudent = await prisma.student
+      .findUnique({
+        where: { studentNumber: existingGrade.studentNumber },
+        select: { id: true },
+      })
+      .catch(() => null);
+
+    if (affectedStudent) {
+      await Promise.all([
+        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
+        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
+      ]).catch(() => {});
+    }
 
     return NextResponse.json({ message: "Grade deleted successfully" });
   } catch (error) {

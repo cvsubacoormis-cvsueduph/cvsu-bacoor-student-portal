@@ -5,7 +5,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { GRADE_HIERARCHY } from "@/lib/utils";
 import { computeFinalRemarks } from "@/lib/grade-utils";
 import { fuzzy } from "fast-fuzzy";
-import { redis } from "@/lib/redis";
+import { redis, invalidateByPattern } from "@/lib/redis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 
 export const runtime = "nodejs";
@@ -1178,6 +1178,24 @@ reExam: standardizedReExam ?? null,
           skipDuplicates: true,
         })
       ]);
+
+      // Invalidate grade caches for all affected students
+      const affectedStudentNumbers = [...new Set(gradesToUpsert.map(g => g.studentNumber))];
+      const affectedStudents = await prisma.student
+        .findMany({
+          where: { studentNumber: { in: affectedStudentNumbers } },
+          select: { id: true },
+        })
+        .catch(() => []);
+
+      await Promise.all(
+        affectedStudents.map(({ id: userId }) =>
+          Promise.all([
+            redis.del(`cache:student:${userId}:v1`),
+            invalidateByPattern(`cache:grades:${userId}:*`),
+          ]).catch(() => {})
+        )
+      ).catch(() => {});
     } catch (txError) {
       console.error("Batch Transaction Failed", txError);
       return NextResponse.json({ error: "Database transaction failed for this batch" }, { status: 500 });
