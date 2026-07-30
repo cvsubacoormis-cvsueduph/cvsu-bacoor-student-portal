@@ -1,3 +1,5 @@
+export const revalidate = 60; // ISR: re-render every 60s to cache prisma.findMany results
+
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { columns } from "./columns";
 import { DataTable } from "./data-table";

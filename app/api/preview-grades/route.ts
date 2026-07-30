@@ -173,7 +173,13 @@ export async function GET(request: Request) {
       lastName: grade.student.lastName,
     }));
 
-    return NextResponse.json(mappedGrades);
+    // Cache headers — reduce Neon DB compute via browser + Cloudflare CDN
+    return NextResponse.json(mappedGrades, {
+      headers: {
+        "Cache-Control": "private, max-age=30",
+        "Vary": "Accept-Encoding",
+      },
+    });
   } catch (error) {
     console.error("Error fetching grades:", error);
     return NextResponse.json(

@@ -1,3 +1,5 @@
+export const revalidate = 30; // ISR: re-render every 30s to cache prisma.findMany results
+
 import { Status } from "@prisma/client";
 import { Grades } from "./columns";
 import prisma from "@/lib/prisma";

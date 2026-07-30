@@ -70,6 +70,7 @@ export async function GET(req: Request) {
             prisma.courseAccessSchedule.count({ where: whereClause }),
         ]);
 
+        // Cache headers — reduce Neon DB compute via browser + Cloudflare CDN
         return NextResponse.json({
             schedules,
             meta: {
@@ -78,6 +79,11 @@ export async function GET(req: Request) {
                 limit,
                 totalPages: Math.ceil(total / limit)
             }
+        }, {
+            headers: {
+                "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=3600",
+                "Vary": "Accept-Encoding",
+            },
         });
     } catch (err: any) {
         console.error("❌ /api/schedules GET error:", err);

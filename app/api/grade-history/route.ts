@@ -47,7 +47,13 @@ export async function GET(request: Request) {
       take: 20,
     });
 
-    return NextResponse.json(logs);
+    // Cache headers — reduce Neon DB compute via browser + Cloudflare CDN
+    return NextResponse.json(logs, {
+      headers: {
+        "Cache-Control": "private, max-age=30",
+        "Vary": "Accept-Encoding",
+      },
+    });
   } catch (error) {
     console.error("Error fetching grade history:", error);
     return NextResponse.json(
