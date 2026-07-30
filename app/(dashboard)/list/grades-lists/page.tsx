@@ -3,9 +3,10 @@ export const revalidate = 30; // ISR: re-render every 30s to cache prisma.findMa
 import { Status } from "@prisma/client";
 import { Grades } from "./columns";
 import prisma from "@/lib/prisma";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { GradesListClient } from "./client";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
@@ -97,7 +98,7 @@ export default async function GradesListsPage({
 }) {
   // Authentication check
   const { userId } = await auth();
-  const user = await currentUser();
+  const user = await getCurrentUser();
 
   if (!userId) {
     return <RedirectToSignIn />;
@@ -109,7 +110,7 @@ export default async function GradesListsPage({
     redirect("/");
   }
   try {
-    await checkRateLimit({
+    await checkRateLimitRedis({
       action: "grades-list-view",
       limit: 30,
       windowSeconds: 60,

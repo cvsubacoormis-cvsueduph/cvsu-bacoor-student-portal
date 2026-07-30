@@ -1,6 +1,7 @@
 import NavBar from "@/components/NavBar";
 import { Toaster } from "sonner";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
@@ -11,7 +12,7 @@ import MobileSidebar from "@/components/MobileSidebar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
-  const user = await currentUser();
+  const user = await getCurrentUser();
 
   if (!userId || !user) redirect("/sign-in");
 

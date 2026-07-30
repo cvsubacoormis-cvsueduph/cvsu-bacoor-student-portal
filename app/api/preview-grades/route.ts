@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AcademicYear, Semester } from "@prisma/client";
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { redis, invalidateByPattern } from "@/lib/redis";
 import { z } from "zod";
 
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "preview-grades-get",
         limit: 20,
         windowSeconds: 60,
@@ -212,7 +213,7 @@ export async function PATCH(request: Request) {
 
     // Rate limiting
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "preview-grades-patch",
         limit: 60,
         windowSeconds: 60,
@@ -247,7 +248,7 @@ export async function PATCH(request: Request) {
     const { courseCode, creditUnit, courseTitle, grade, reExam, remarks, instructor } =
       validationResult.data;
 
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const editorIdentifier = user?.fullName ?? "";
     const isRegistrarStaff = role === "registrar_staff";
 
@@ -391,7 +392,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "preview-grades-post",
         limit: 30,
         windowSeconds: 60,
@@ -428,7 +429,7 @@ export async function POST(request: Request) {
       instructor,
     } = validationResult.data;
 
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const editorIdentifier = user?.fullName ?? "";
     const isRegistrarStaff = role === "registrar_staff";
 
@@ -569,7 +570,7 @@ export async function DELETE(request: Request) {
     }
 
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "preview-grades-delete",
         limit: 30,
         windowSeconds: 60,
@@ -587,7 +588,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const editorIdentifier = user?.fullName ?? "";
     const isRegistrarStaff = role === "registrar_staff";
 

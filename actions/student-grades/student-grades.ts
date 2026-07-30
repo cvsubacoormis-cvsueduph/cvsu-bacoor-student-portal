@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { redis, withRedisFallback } from "@/lib/redis";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { AcademicYear, Semester, type Grade } from "@prisma/client";
 import { getSetting } from "@/actions/settings";
@@ -67,7 +67,7 @@ export async function getGrades(
       }
     }
 
-    await checkRateLimit({
+    await checkRateLimitRedis({
       action: "getGrades",
       limit: 10,
       windowSeconds: 60,

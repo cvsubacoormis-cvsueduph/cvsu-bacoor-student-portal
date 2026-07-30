@@ -3,7 +3,8 @@
 import prisma from "@/lib/prisma";
 import { redis, invalidateByPattern } from "@/lib/redis";
 import { AcademicYear, Major, Semester } from "@prisma/client";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 
 export type StudentSearchResult = {
   studentNumber: string;
@@ -155,7 +156,7 @@ export async function getStudentDetails(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const role = (user?.publicMetadata?.role as string) || "";
   const allowedRoles = [
     "admin",
@@ -218,7 +219,7 @@ export type AddManualGradeResult = {
 export async function addManualGrade(
   gradeData: GradeData,
 ): Promise<AddManualGradeResult> {
-  const user = await currentUser();
+  const user = await getCurrentUser();
   if (!user) {
     throw new Error("Unauthorized");
   }
@@ -592,7 +593,7 @@ export async function updateGradeCourseInfoBulk(params: {
 }): Promise<BulkUpdateGradeCourseInfoResult> {
   const { entries, academicYear, semester } = params;
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
   const userRole = user.publicMetadata?.role as string | undefined;
@@ -789,7 +790,7 @@ export async function updateGradeCourseInfo(params: {
 }): Promise<UpdateGradeCourseInfoResult> {
   const { studentNumber, oldCourseCode, newCourseCode, courseTitle, academicYear, semester } = params;
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
   const userRole = user.publicMetadata?.role as string | undefined;

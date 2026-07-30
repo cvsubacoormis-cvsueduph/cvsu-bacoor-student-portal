@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { redis, invalidateByPattern } from "@/lib/redis";
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { auth } from "@clerk/nextjs/server";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
 
@@ -244,7 +245,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "pending-changes-bulk",
         limit: 10,
         windowSeconds: 60,
@@ -271,7 +272,7 @@ export async function POST(request: Request) {
 
     const { action, ids, rejectionReason } = validationResult.data;
 
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const reviewerName = user?.fullName ?? "";
 
     const results: { id: string; success: boolean; error?: string }[] = [];

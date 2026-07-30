@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { redis, invalidateByPattern } from "@/lib/redis";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
 
@@ -52,7 +53,7 @@ export async function PATCH(
 
     // Rate limiting — log and continue on non-RATE_LIMIT_EXCEEDED errors
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "pending-changes-patch",
         limit: 30,
         windowSeconds: 60,
@@ -99,7 +100,7 @@ export async function PATCH(
       );
     }
 
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const reviewerName = user?.fullName ?? "";
 
     // ------------------------------------------------------------------

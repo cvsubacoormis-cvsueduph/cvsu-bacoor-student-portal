@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import {
   CheckCircle2Icon,
   XCircleIcon,
@@ -347,7 +347,7 @@ export default async function VerifyPage({
 
   // ── Rate Limiting ───────────────────────────────────────────────
   try {
-    await checkRateLimit({ action: "verify_cog", limit: 30, windowSeconds: 60 });
+    await checkRateLimitRedis({ action: "verify_cog", limit: 30, windowSeconds: 60 });
   } catch {
     return <RateLimitedPage />;
   }

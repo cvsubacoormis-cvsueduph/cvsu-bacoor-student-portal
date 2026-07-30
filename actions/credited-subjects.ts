@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { z } from "zod";
 
 // ─── Validation Schemas ─────────────────────────────────────────────────
@@ -43,7 +44,7 @@ async function requireAuthorizedRole(): Promise<void> {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const role = (user?.publicMetadata?.role as string) || "";
 
   const allowedRoles = [
@@ -69,7 +70,7 @@ export async function getCreditedSubjects(studentNumber: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const role = (user?.publicMetadata?.role as string) || "";
 
   // Students can only view their own credited subjects

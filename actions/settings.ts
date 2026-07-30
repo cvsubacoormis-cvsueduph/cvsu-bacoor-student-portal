@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { redis, withRedisFallback } from "@/lib/redis";
 
 // Cache TTL of 60 seconds — short enough to avoid stale access-control decisions
@@ -50,7 +51,7 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string): Promise<boolean> {
     try {
-        const user = await currentUser();
+        const user = await getCurrentUser();
         const userRole = (user?.publicMetadata?.role as string) || "";
         const isAdmin = userRole === "admin";
 
@@ -85,7 +86,7 @@ export async function setSetting(key: string, value: string): Promise<boolean> {
  */
 export async function toggleGradeVisibility(enabled: boolean): Promise<boolean> {
     try {
-        const user = await currentUser();
+        const user = await getCurrentUser();
         const userRole = (user?.publicMetadata?.role as string) || "";
         const allowedRoles = ["admin", "superuser", "faculty"];
 

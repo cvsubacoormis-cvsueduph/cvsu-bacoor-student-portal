@@ -6,14 +6,14 @@ import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
 import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
 import { UploadGrades } from "@/components/UploadGrades";
 import { getSetting, getGradeVisibility } from "@/actions/settings";
-import { currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import AdminUploadToggle from "@/components/AdminUploadToggle";
 import GradeVisibilityToggle from "@/components/GradeVisibilityToggle";
 import FacultyApprovalToggle from "@/components/FacultyApprovalToggle";
 import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 
 export default async function GradeUploader() {
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const isAdmin = role === "admin" || role === "superuser";
   const canToggleGradeVisibility = isAdmin || role === "registrar";

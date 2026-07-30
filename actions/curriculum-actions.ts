@@ -11,6 +11,7 @@ import {
   CurriculumChecklist,
 } from "@prisma/client";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
 import { curriculumChecklistData } from "@/prisma/curriculum";
 
@@ -266,7 +267,7 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
     return logs;
   }
 
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const isAdmin =
     user?.publicMetadata?.role === "admin" ||
     user?.privateMetadata?.role === "admin";

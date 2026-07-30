@@ -2,6 +2,7 @@
 "use server";
 
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import prisma from "@/lib/prisma";
 import { redis, withRedisFallback } from "@/lib/redis";
 import { Role, UserSex } from "@prisma/client";
@@ -40,7 +41,7 @@ export async function getAdminsAndUsers(params?: {
   if (!userId) {
     throw new Error("Unauthorized: must be signed in.");
   }
-  const clerkUser = await currentUser();
+  const clerkUser = await getCurrentUser();
   const callerRole = clerkUser?.publicMetadata?.role as string | undefined;
 
   if (!callerRole || !ALLOWED_ROLES.includes(callerRole as (typeof ALLOWED_ROLES)[number])) {
@@ -218,7 +219,7 @@ export async function deleteByRole(
   if (!userId) return { success: false, error: "Unauthorized" };
 
   // 2. Role check
-  const caller = await currentUser();
+  const caller = await getCurrentUser();
   const callerRole = caller?.publicMetadata?.role as string | undefined;
   const ALLOWED = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
@@ -299,7 +300,7 @@ export async function deleteAdminOrUser(
   if (!userId) return { success: false, error: "Unauthorized" };
 
   // 2. Role check
-  const caller = await currentUser();
+  const caller = await getCurrentUser();
   const callerRole = caller?.publicMetadata?.role as string | undefined;
   const ALLOWED = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
@@ -392,7 +393,7 @@ export async function updateAdmin(
   const { userId } = await auth();
   if (!userId) return { success: false, error: "Unauthorized" };
 
-  const caller = await currentUser();
+  const caller = await getCurrentUser();
   const callerRole = caller?.publicMetadata?.role as string | undefined;
   const ALLOWED_UPDATE = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED_UPDATE.includes(callerRole as (typeof ALLOWED_UPDATE)[number])) {

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 
 export type MyGradeChange = {
   id: string;
@@ -24,7 +25,7 @@ export type MyGradeChange = {
 };
 
 export async function getMyGradeChanges(): Promise<MyGradeChange[]> {
-  const user = await currentUser();
+  const user = await getCurrentUser();
   if (!user) {
     throw new Error("Unauthorized");
   }

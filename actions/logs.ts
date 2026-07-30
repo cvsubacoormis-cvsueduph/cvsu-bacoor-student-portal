@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { GradeData } from "./grades";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { redis, invalidateByPattern } from "@/lib/redis";
 
 export type FailedLog = {
@@ -41,7 +42,7 @@ export async function getFailedLogs(
     limit: number = 10
 ): Promise<{ data: FailedLog[]; metadata: LogsMetadata }> {
     const { userId } = await auth();
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const role = user?.publicMetadata.role as string;
     if (!userId) {
         throw new Error("Permission Denied: You must be logged in to view logs.");
@@ -108,7 +109,7 @@ export async function resolveGradeLog(
     logId: string,
     gradeData: GradeData
 ): Promise<void> {
-    const user = await currentUser();
+    const user = await getCurrentUser();
     if (!user) {
         throw new Error("Permission Denied: You must be logged in to perform this action.");
     }
@@ -287,7 +288,7 @@ export async function bulkResolveLogs(
     logIds: string[],
     overrides?: Partial<GradeData>
 ): Promise<BulkResolveResult> {
-    const user = await currentUser();
+    const user = await getCurrentUser();
     const role = user?.publicMetadata.role as string;
 
     if (!user) {

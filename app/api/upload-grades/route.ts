@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Major } from "@prisma/client";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { GRADE_HIERARCHY } from "@/lib/utils";
 import { computeFinalRemarks } from "@/lib/grade-utils";
 import { fuzzy } from "fast-fuzzy";
@@ -187,7 +188,7 @@ function normalizeInstructorName(name: string) {
 
 export async function POST(req: Request) {
   const { userId } = await auth();
-  const user = await currentUser();
+  const user = await getCurrentUser();
 
   if (!userId || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

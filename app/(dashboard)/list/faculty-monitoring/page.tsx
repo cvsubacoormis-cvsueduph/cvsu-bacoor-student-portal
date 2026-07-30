@@ -1,4 +1,4 @@
-import { currentUser } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@clerk/nextjs";
 import { FacultyMonitoringClient } from "@/components/FacultyMonitoringClient";
 import { getFacultyUploadStatus } from "@/actions/faculty-monitoring";
@@ -63,7 +63,7 @@ export default async function FacultyMonitoringPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // ── Auth check ─────────────────────────────────────────────────────────
-  const user = await currentUser();
+  const user = await getCurrentUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const isAdminOrRegistrar =
     role === "admin" ||

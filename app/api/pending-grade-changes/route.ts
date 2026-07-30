@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { checkRateLimit } from "@/lib/rate-limit-postgres";
+import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 
 export const runtime = "nodejs";
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     // Rate limiting — if it fails for any reason other than RATE_LIMIT_EXCEEDED,
     // log and continue rather than blocking the request entirely.
     try {
-      await checkRateLimit({
+      await checkRateLimitRedis({
         action: "pending-changes-get",
         limit: 30,
         windowSeconds: 60,

@@ -14,6 +14,10 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: clerkClient,
 }));
 
+vi.mock("@/lib/auth-helpers", () => ({
+  getCurrentUser: vi.fn(async () => currentUser()),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   default: {
     student: {
