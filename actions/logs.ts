@@ -186,7 +186,7 @@ export async function resolveGradeLog(
             courseTitle: gradeData.courseTitle.toUpperCase(),
             creditUnit: Number(gradeData.creditUnit),
             grade: gradeData.grade,
-            reExam: gradeData.reExam,
+            reExam: gradeData.reExam ?? null,
             remarks: String(gradeData.remarks),
             instructor: gradeData.instructor,
             academicYear: gradeData.academicYear,

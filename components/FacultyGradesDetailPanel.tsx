@@ -7,6 +7,7 @@ import {
   type UploadSession,
   type UploadedGradeRecord,
 } from "@/actions/faculty-monitoring";
+import { updateGradeCourseInfo, updateGradeCourseInfoBulk } from "@/actions/grades";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -42,13 +43,16 @@ import { useDebouncedCallback } from "use-debounce";
 import {
   AlertTriangle,
   BookOpen,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Pencil,
   RefreshCw,
   Search,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -124,6 +128,19 @@ export function FacultyGradesDetailPanel({
 
   // ── Checkbox selection state ──────────────────────────────────────────
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+
+  // ── Inline edit state ─────────────────────────────────────────────────
+  const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
+  const [editCourseCode, setEditCourseCode] = useState("");
+  const [editCourseTitle, setEditCourseTitle] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // ── Bulk edit state ───────────────────────────────────────────────────
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkCourseCode, setBulkCourseCode] = useState("");
+  const [bulkCourseTitle, setBulkCourseTitle] = useState("");
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
 
   // ── Fetch grades ──────────────────────────────────────────────────────
   const fetchGrades = useCallback(
@@ -363,6 +380,139 @@ export function FacultyGradesDetailPanel({
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
 
+  // ── Inline edit handlers ───────────────────────────────────────────────
+  const handleStartEdit = useCallback(function (g: UploadedGradeRecord) {
+    if (editingGradeId !== null) return; // only one row at a time
+    setEditingGradeId(g.id);
+    setEditCourseCode(g.courseCode);
+    setEditCourseTitle(g.courseTitle);
+    setEditError(null);
+  }, [editingGradeId]);
+
+  const handleCancelEdit = useCallback(function () {
+    setEditingGradeId(null);
+    setEditCourseCode("");
+    setEditCourseTitle("");
+    setEditError(null);
+  }, []);
+
+  const handleSaveEdit = useCallback(async function (g: UploadedGradeRecord) {
+    const newCode = editCourseCode.trim().toUpperCase();
+    const newTitle = editCourseTitle.trim().toUpperCase();
+
+    if (!newCode) {
+      setEditError("Course code cannot be empty.");
+      return;
+    }
+    if (!newTitle) {
+      setEditError("Course title cannot be empty.");
+      return;
+    }
+
+    if (newCode === g.courseCode.toUpperCase() && newTitle === g.courseTitle.toUpperCase()) {
+      handleCancelEdit();
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+    try {
+      const result = await updateGradeCourseInfo({
+        studentNumber: g.studentNumber,
+        oldCourseCode: g.courseCode,
+        newCourseCode: newCode,
+        courseTitle: newTitle,
+        academicYear,
+        semester,
+      });
+      toast.success(result.message);
+      handleCancelEdit();
+      fetchGrades();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update course info.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [editCourseCode, editCourseTitle, academicYear, semester, fetchGrades, handleCancelEdit]);
+
+  const handleEditKeyDown = useCallback(function (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    g: UploadedGradeRecord,
+  ) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveEdit(g);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  }, [handleSaveEdit, handleCancelEdit]);
+
+  // ── Bulk edit handler ──────────────────────────────────────────────────
+  const handleBulkEdit = useCallback(async function () {
+    const code = bulkCourseCode.trim().toUpperCase();
+    const title = bulkCourseTitle.trim().toUpperCase();
+
+    if (!code) {
+      toast.error("Course code cannot be empty.");
+      return;
+    }
+    if (!title) {
+      toast.error("Course title cannot be empty.");
+      return;
+    }
+
+    const selectedGrades = grades.filter(function (g) {
+      return selectedEntries.has(entryKey(g));
+    });
+
+    if (selectedGrades.length === 0) {
+      toast.error("No grades selected.");
+      return;
+    }
+
+    setIsBulkSaving(true);
+    try {
+      const result = await updateGradeCourseInfoBulk({
+        entries: selectedGrades.map(function (g) {
+          return {
+            studentNumber: g.studentNumber,
+            oldCourseCode: g.courseCode,
+            newCourseCode: code,
+            courseTitle: title,
+          };
+        }),
+        academicYear,
+        semester,
+      });
+
+      if (result.updatedCount > 0) {
+        toast.success(`Updated ${result.updatedCount} grade(s).`);
+      }
+      if (result.failedCount > 0) {
+        toast.error(`${result.failedCount} grade(s) failed to update.`);
+      }
+      if (result.errors.length > 0) {
+        for (const err of result.errors.slice(0, 3)) {
+          toast.error(err);
+        }
+        if (result.errors.length > 3) {
+          toast.error(`... and ${result.errors.length - 3} more errors.`);
+        }
+      }
+
+      setBulkEditOpen(false);
+      setBulkCourseCode("");
+      setBulkCourseTitle("");
+      setSelectedEntries(new Set());
+      fetchGrades();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk edit failed.");
+    } finally {
+      setIsBulkSaving(false);
+    }
+  }, [bulkCourseCode, bulkCourseTitle, grades, selectedEntries, entryKey, academicYear, semester, fetchGrades]);
+
   // ── Render ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -587,6 +737,127 @@ export function FacultyGradesDetailPanel({
             </AlertDialogContent>
           </AlertDialog>
         )}
+
+        {/* Bulk Edit button — admin/registrar/superuser only, shown when checkboxes selected */}
+        {canRollback && selectedEntries.size > 0 && (
+          <AlertDialog
+            open={bulkEditOpen}
+            onOpenChange={function (open) {
+              if (!open) {
+                setBulkCourseCode("");
+                setBulkCourseTitle("");
+              }
+              setBulkEditOpen(open);
+            }}
+          >
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                disabled={isBulkSaving}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Bulk Edit ({selectedEntries.size})
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <Pencil className="h-5 w-5 text-blue-600" />
+                  Bulk Edit Course Info
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    Update <strong>course code</strong> and{" "}
+                    <strong>course title</strong> for{" "}
+                    <strong className="text-gray-800">
+                      {selectedEntries.size} selected grade
+                      {selectedEntries.size !== 1 ? "s" : ""}
+                    </strong>{" "}
+                    in this session.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="bulk-course-code"
+                        className="text-xs font-medium"
+                      >
+                        New Course Code
+                      </Label>
+                      <Input
+                        id="bulk-course-code"
+                        value={bulkCourseCode}
+                        onChange={function (e) {
+                          setBulkCourseCode(e.target.value);
+                        }}
+                        placeholder="e.g. CS101"
+                        className="h-9 text-sm font-mono"
+                        onKeyDown={function (e) {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleBulkEdit();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="bulk-course-title"
+                        className="text-xs font-medium"
+                      >
+                        New Course Title
+                      </Label>
+                      <Input
+                        id="bulk-course-title"
+                        value={bulkCourseTitle}
+                        onChange={function (e) {
+                          setBulkCourseTitle(e.target.value);
+                        }}
+                        placeholder="e.g. Introduction to Computer Science"
+                        className="h-9 text-sm"
+                        onKeyDown={function (e) {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleBulkEdit();
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-xs">
+                    <p>
+                      This will apply the same course code and title to all{" "}
+                      <strong>{selectedEntries.size}</strong> selected grade
+                      records. Conflicts are automatically skipped.
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <Button
+                  onClick={handleBulkEdit}
+                  disabled={
+                    !bulkCourseCode.trim() ||
+                    !bulkCourseTitle.trim() ||
+                    isBulkSaving
+                  }
+                  className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600 text-white"
+                >
+                  {isBulkSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    `Update ${selectedEntries.size} Grade${selectedEntries.size !== 1 ? "s" : ""}`
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* ── Filters bar ───────────────────────────────────────────────── */}
@@ -691,12 +962,15 @@ export function FacultyGradesDetailPanel({
                   <TableHead className="w-[72px] text-center">Grade</TableHead>
                   <TableHead className="w-[120px]">Remarks</TableHead>
                   <TableHead className="w-[90px] text-center">Action</TableHead>
+                  <TableHead className="w-[40px]"></TableHead>
                   <TableHead className="w-[140px]">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {grades.map(function (g) {
                   const isSelected = selectedEntries.has(entryKey(g));
+                  const isEditing = editingGradeId === g.id;
+                  const isOtherEditing = editingGradeId !== null && editingGradeId !== g.id;
                   return (
                     <TableRow key={g.id} className="hover:bg-gray-50">
                       <TableCell>
@@ -715,10 +989,38 @@ export function FacultyGradesDetailPanel({
                         {g.studentName}
                       </TableCell>
                       <TableCell className="font-mono text-xs font-medium">
-                        {g.courseCode}
+                        {isEditing ? (
+                          <Input
+                            className="h-7 text-xs font-mono"
+                            value={editCourseCode}
+                            onChange={function (e) {
+                              setEditCourseCode(e.target.value);
+                              setEditError(null);
+                            }}
+                            onKeyDown={function (e) {
+                              handleEditKeyDown(e, g);
+                            }}
+                          />
+                        ) : (
+                          g.courseCode
+                        )}
                       </TableCell>
                       <TableCell className="text-xs max-w-[200px] truncate">
-                        {g.courseTitle}
+                        {isEditing ? (
+                          <Input
+                            className="h-7 text-xs"
+                            value={editCourseTitle}
+                            onChange={function (e) {
+                              setEditCourseTitle(e.target.value);
+                              setEditError(null);
+                            }}
+                            onKeyDown={function (e) {
+                              handleEditKeyDown(e, g);
+                            }}
+                          />
+                        ) : (
+                          g.courseTitle
+                        )}
                       </TableCell>
                       <TableCell className="text-center text-xs">
                         {g.creditUnit}
@@ -757,8 +1059,59 @@ export function FacultyGradesDetailPanel({
                           </Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <div className="flex items-center gap-1 justify-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-green-600 hover:text-green-700"
+                              disabled={isSavingEdit}
+                              onClick={function () {
+                                handleSaveEdit(g);
+                              }}
+                            >
+                              {isSavingEdit ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-red-600"
+                              disabled={isSavingEdit}
+                              onClick={handleCancelEdit}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          canRollback && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-blue-600"
+                              disabled={isOtherEditing}
+                              onClick={function () {
+                                handleStartEdit(g);
+                              }}
+                              title="Edit course code and title"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )
+                        )}
+                      </TableCell>
                       <TableCell className="text-[11px] text-gray-400">
-                        {formatDateTime(g.createdAt)}
+                        {isEditing && editError ? (
+                          <div className="text-red-500 text-[10px] leading-tight">
+                            {editError}
+                          </div>
+                        ) : (
+                          formatDateTime(g.createdAt)
+                        )}
                       </TableCell>
                     </TableRow>
                   );

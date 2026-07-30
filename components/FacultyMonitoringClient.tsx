@@ -75,7 +75,8 @@ const STATUS_OPTIONS = [
 function generateAcademicYears(): AcademicYear[] {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentAyStartYear = now.getMonth() >= 6 ? currentYear : currentYear - 1;
+  const currentAyStartYear =
+    now.getMonth() >= 6 ? currentYear : currentYear - 1;
 
   const startYear = 2018;
   const years: string[] = [];
@@ -167,30 +168,33 @@ function FacultyHistoryPanel({
     null,
   );
 
-  useEffect(function fetchHistory() {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
+  useEffect(
+    function fetchHistory() {
+      let cancelled = false;
+      setIsLoading(true);
+      setError(null);
 
-    getFacultyHistory(facultyId, academicYear, semester)
-      .then(function (result) {
-        if (!cancelled) {
-          setHistory(result);
-          setIsLoading(false);
-        }
-      })
-      .catch(function (err) {
-        if (!cancelled) {
-          console.error("Failed to load faculty history", err);
-          setError("Failed to load upload history.");
-          setIsLoading(false);
-        }
-      });
+      getFacultyHistory(facultyId, academicYear, semester)
+        .then(function (result) {
+          if (!cancelled) {
+            setHistory(result);
+            setIsLoading(false);
+          }
+        })
+        .catch(function (err) {
+          if (!cancelled) {
+            console.error("Failed to load faculty history", err);
+            setError("Failed to load upload history.");
+            setIsLoading(false);
+          }
+        });
 
-    return function cleanup() {
-      cancelled = true;
-    };
-  }, [facultyId, academicYear, semester]);
+      return function cleanup() {
+        cancelled = true;
+      };
+    },
+    [facultyId, academicYear, semester],
+  );
 
   // Reset expanded session when history reloads
   useEffect(
@@ -200,14 +204,11 @@ function FacultyHistoryPanel({
     [history],
   );
 
-  const toggleSession = useCallback(
-    function (sessionId: string) {
-      setExpandedSessionId(function (prev) {
-        return prev === sessionId ? null : sessionId;
-      });
-    },
-    [],
-  );
+  const toggleSession = useCallback(function (sessionId: string) {
+    setExpandedSessionId(function (prev) {
+      return prev === sessionId ? null : sessionId;
+    });
+  }, []);
 
   if (isLoading) {
     return (
@@ -498,12 +499,9 @@ export function FacultyMonitoringClient({
     [updateURL],
   );
 
-  const debouncedSearch = useDebouncedCallback(
-    function (value: string) {
-      updateURL({ search: value || null, page: 1 });
-    },
-    400,
-  );
+  const debouncedSearch = useDebouncedCallback(function (value: string) {
+    updateURL({ search: value || null, page: 1 });
+  }, 400);
 
   const handleSearchInputChange = useCallback(
     function (e: React.ChangeEvent<HTMLInputElement>) {
@@ -664,38 +662,38 @@ export function FacultyMonitoringClient({
 
           {/* Filters bar */}
           <CardContent className="pb-0">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                {!isFacultyView && (
-                  <>
-                    <div className="relative w-full sm:max-w-xs">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Search by name or username..."
-                        value={searchInput}
-                        onChange={handleSearchInputChange}
-                        className="pl-9 h-10"
-                      />
-                    </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+              {!isFacultyView && (
+                <>
+                  <div className="relative w-full sm:max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search by name or username..."
+                      value={searchInput}
+                      onChange={handleSearchInputChange}
+                      className="pl-9 h-10"
+                    />
+                  </div>
 
-                    <Select
-                      value={statusFilter}
-                      onValueChange={handleStatusChange}
-                    >
-                      <SelectTrigger className="h-10 w-full sm:w-[180px]">
-                        <SelectValue placeholder="Filter by status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTIONS.map(function (opt) {
-                          return (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
+                  <Select
+                    value={statusFilter}
+                    onValueChange={handleStatusChange}
+                  >
+                    <SelectTrigger className="h-10 w-full sm:w-[180px]">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map(function (opt) {
+                        return (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
 
               {isPending && (
                 <Loader2 className="h-4 w-4 animate-spin text-amber-600 ml-2" />
@@ -784,7 +782,9 @@ export function FacultyMonitoringClient({
                                     <FacultyHistoryPanel
                                       facultyId={faculty.id}
                                       facultyName={faculty.name}
-                                      academicYear={academicYear as AcademicYear}
+                                      academicYear={
+                                        academicYear as AcademicYear
+                                      }
                                       semester={semester as Semester}
                                       isFacultyView={isFacultyView}
                                       canRollback={canRollback}
