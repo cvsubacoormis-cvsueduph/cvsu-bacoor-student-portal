@@ -41,9 +41,8 @@ export async function getFailedLogs(
     page: number = 1,
     limit: number = 10
 ): Promise<{ data: FailedLog[]; metadata: LogsMetadata }> {
-    const { userId } = await auth();
-    const user = await getCurrentUser();
-    const role = user?.publicMetadata.role as string;
+    const { userId, sessionClaims } = await auth();
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
     if (!userId) {
         throw new Error("Permission Denied: You must be logged in to view logs.");
     }
@@ -288,10 +287,10 @@ export async function bulkResolveLogs(
     logIds: string[],
     overrides?: Partial<GradeData>
 ): Promise<BulkResolveResult> {
-    const user = await getCurrentUser();
-    const role = user?.publicMetadata.role as string;
+    const { userId, sessionClaims } = await auth();
+    const role = (sessionClaims?.metadata as { role?: string })?.role;
 
-    if (!user) {
+    if (!userId) {
         throw new Error("Permission Denied: You must be logged in to perform this action.");
     }
 

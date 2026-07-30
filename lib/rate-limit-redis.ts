@@ -25,7 +25,6 @@ export async function checkRateLimitRedis({
   limit,
   windowSeconds,
 }: RateLimitOptions): Promise<RateLimitResult> {
-  console.log(`[checkRateLimitRedis] Checking rate limit for action: ${action}`);
   
   const { userId } = await auth();
   if (!userId) {

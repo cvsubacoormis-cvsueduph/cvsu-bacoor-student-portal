@@ -153,11 +153,10 @@ export async function searchStudent(
 export async function getStudentDetails(
   studentNumber: string,
 ): Promise<StudentDetails> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await getCurrentUser();
-  const role = (user?.publicMetadata?.role as string) || "";
+  const role = (sessionClaims?.metadata as { role?: string })?.role || "";
   const allowedRoles = [
     "admin",
     "superuser",
@@ -593,10 +592,10 @@ export async function updateGradeCourseInfoBulk(params: {
 }): Promise<BulkUpdateGradeCourseInfoResult> {
   const { entries, academicYear, semester } = params;
 
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const { userId, sessionClaims } = await auth();
+  if (!userId) throw new Error("Unauthorized");
 
-  const userRole = user.publicMetadata?.role as string | undefined;
+  const userRole = (sessionClaims?.metadata as { role?: string })?.role;
   if (
     userRole !== "admin" &&
     userRole !== "superuser" &&
@@ -790,10 +789,10 @@ export async function updateGradeCourseInfo(params: {
 }): Promise<UpdateGradeCourseInfoResult> {
   const { studentNumber, oldCourseCode, newCourseCode, courseTitle, academicYear, semester } = params;
 
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
+  const { userId, sessionClaims } = await auth();
+  if (!userId) throw new Error("Unauthorized");
 
-  const userRole = user.publicMetadata?.role as string | undefined;
+  const userRole = (sessionClaims?.metadata as { role?: string })?.role;
   if (
     userRole !== "admin" &&
     userRole !== "superuser" &&

@@ -16,7 +16,10 @@ import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 
 const clerk = await clerkClient();
 
-export async function getStudents() {
+export async function getStudents(params?: {
+  page?: number;
+  limit?: number;
+}) {
   const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
@@ -27,9 +30,29 @@ export async function getStudents() {
     throw new Error("Forbidden: insufficient permissions");
   }
   try {
+    const page = Math.max(1, Math.floor(params?.page ?? 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(params?.limit ?? 100)));
+    const skip = (page - 1) * limit;
+
     const students = await prisma.student.findMany({
+      skip,
+      take: limit,
       orderBy: {
         createdAt: "desc",
+      },
+      select: {
+        id: true,
+        studentNumber: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        middleInit: true,
+        email: true,
+        course: true,
+        major: true,
+        status: true,
+        isApproved: true,
+        createdAt: true,
       },
     });
     return { students, error: null };

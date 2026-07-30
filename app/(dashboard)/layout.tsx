@@ -1,7 +1,6 @@
 import NavBar from "@/components/NavBar";
 import { Toaster } from "sonner";
 import { auth } from "@clerk/nextjs/server";
-import { getCurrentUser } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
@@ -11,13 +10,12 @@ import Sidebar from "@/components/Sidebar";
 import MobileSidebar from "@/components/MobileSidebar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth();
-  const user = await getCurrentUser();
+  const { userId, sessionClaims } = await auth();
 
-  if (!userId || !user) redirect("/sign-in");
+  if (!userId || !sessionClaims) redirect("/sign-in");
 
-  const role = user.publicMetadata?.role as string;
-  const isApproved = user.publicMetadata?.isApproved as boolean;
+  const role = (sessionClaims.metadata as { role?: string })?.role as string;
+  const isApproved = (sessionClaims.metadata as { isApproved?: boolean })?.isApproved as boolean;
 
   if (["admin", "faculty", "registrar", "registrar_staff"].includes(role)) {
     return (

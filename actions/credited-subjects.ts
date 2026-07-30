@@ -41,11 +41,10 @@ export type RemoveCreditedSubjectInput = z.infer<
 // ─── Auth Guard ─────────────────────────────────────────────────────────
 
 async function requireAuthorizedRole(): Promise<void> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await getCurrentUser();
-  const role = (user?.publicMetadata?.role as string) || "";
+  const role = (sessionClaims?.metadata as { role?: string })?.role || "";
 
   const allowedRoles = [
     "admin",
@@ -67,11 +66,10 @@ async function requireAuthorizedRole(): Promise<void> {
  * Also accessible by the student themselves (to view their own credited subjects).
  */
 export async function getCreditedSubjects(studentNumber: string) {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const user = await getCurrentUser();
-  const role = (user?.publicMetadata?.role as string) || "";
+  const role = (sessionClaims?.metadata as { role?: string })?.role || "";
 
   // Students can only view their own credited subjects
   if (role === "student") {

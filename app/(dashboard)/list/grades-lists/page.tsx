@@ -4,7 +4,6 @@ import { Status } from "@prisma/client";
 import { Grades } from "./columns";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { getCurrentUser } from "@/lib/auth-helpers";
 import { GradesListClient } from "./client";
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { z } from "zod";
@@ -97,13 +96,12 @@ export default async function GradesListsPage({
   searchParams: Promise<{ page?: string; pageSize?: string; search?: string }>;
 }) {
   // Authentication check
-  const { userId } = await auth();
-  const user = await getCurrentUser();
+  const { userId, sessionClaims } = await auth();
 
   if (!userId) {
     return <RedirectToSignIn />;
   }
-  const role = (user?.publicMetadata as { role?: string })?.role;
+  const role = (sessionClaims?.metadata as { role?: string })?.role;
 
   const allowedRoles = ["admin", "superuser", "registrar", "registrar_staff"];
   if (!allowedRoles.includes(role || "")) {

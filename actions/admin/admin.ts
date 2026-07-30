@@ -37,12 +37,11 @@ export async function getAdminsAndUsers(params?: {
   page?: number;
   limit?: number;
 }): Promise<PaginatedAdminListResult> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) {
     throw new Error("Unauthorized: must be signed in.");
   }
-  const clerkUser = await getCurrentUser();
-  const callerRole = clerkUser?.publicMetadata?.role as string | undefined;
+  const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
 
   if (!callerRole || !ALLOWED_ROLES.includes(callerRole as (typeof ALLOWED_ROLES)[number])) {
     throw new Error("Forbidden: insufficient permissions.");
@@ -215,12 +214,11 @@ export async function deleteByRole(
   role: string
 ): Promise<BulkDeleteResult> {
   // 1. Auth
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) return { success: false, error: "Unauthorized" };
 
   // 2. Role check
-  const caller = await getCurrentUser();
-  const callerRole = caller?.publicMetadata?.role as string | undefined;
+  const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
   const ALLOWED = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
     return { success: false, error: "Forbidden: insufficient permissions." };
@@ -296,12 +294,11 @@ export async function deleteAdminOrUser(
   source: AdminListEntry["source"]
 ): Promise<DeleteResult> {
   // 1. Auth
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) return { success: false, error: "Unauthorized" };
 
   // 2. Role check
-  const caller = await getCurrentUser();
-  const callerRole = caller?.publicMetadata?.role as string | undefined;
+  const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
   const ALLOWED = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED.includes(callerRole as (typeof ALLOWED)[number])) {
     return { success: false, error: "Forbidden: insufficient permissions." };
@@ -390,11 +387,10 @@ export async function updateAdmin(
     sex: UserSex;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const { userId } = await auth();
+  const { userId, sessionClaims } = await auth();
   if (!userId) return { success: false, error: "Unauthorized" };
 
-  const caller = await getCurrentUser();
-  const callerRole = caller?.publicMetadata?.role as string | undefined;
+  const callerRole = (sessionClaims?.metadata as { role?: string })?.role;
   const ALLOWED_UPDATE = ["admin", "superuser"] as const;
   if (!callerRole || !ALLOWED_UPDATE.includes(callerRole as (typeof ALLOWED_UPDATE)[number])) {
     return { success: false, error: "Forbidden: insufficient permissions." };
