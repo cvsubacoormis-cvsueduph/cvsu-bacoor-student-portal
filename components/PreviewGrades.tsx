@@ -182,7 +182,7 @@ export function PreviewGrades({
           const data = await res.json();
           setAcademicTerms(data);
         } catch (err) {
-          console.log(err);
+          console.error(err);
         }
       }
       fetchAcademicTerms();

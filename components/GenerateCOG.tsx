@@ -134,12 +134,8 @@ export default function GenerateCOG() {
     setStudentData(null);
     
     try {
-      console.log("[GenerateCOG] Starting with:", { academicYear, semester });
-      
       // Use the rate-limited action for COG generation
       const result = await generateCOGWithRateLimit(academicYear, semester);
-      
-      console.log("[GenerateCOG] Got result:", result);
       
       if (!result || !result.student) {
         throw new Error("No data returned from server");

@@ -61,6 +61,7 @@ model Student {
   course        Courses
   major         Major?
   status        Status
+  enrollmentYear String?
   role          Role     @default(student)
   createdAt     DateTime @default(now())
   grades           Grade[]
@@ -129,6 +130,10 @@ model Grade {
   subjectOffering   SubjectOffering? @relation(fields: [subjectOfferingId], references: [id])
 
   @@unique([studentNumber, courseCode, academicYear, semester], map: "unique_grade_per_term")
+  @@index([studentNumber])
+  @@index([academicYear, semester])
+  @@index([instructor])
+  @@index([courseCode])
 }
 
 model GradeLog {
@@ -147,6 +152,9 @@ model GradeLog {
   performedAt   DateTime     @default(now())
   isResolved    Boolean      @default(false)
   importedName  String?
+
+  @@index([studentNumber, courseCode])
+  @@index([academicYear, semester])
 }
 
 model PendingGradeChange {

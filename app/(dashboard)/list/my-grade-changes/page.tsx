@@ -84,7 +84,7 @@ export default function MyGradeChangesPage() {
   }, [fetchChanges]);
 
   useEffect(() => {
-    const interval = setInterval(silentPoll, 15000);
+    const interval = setInterval(silentPoll, 60000);
     return () => clearInterval(interval);
   }, [silentPoll]);
 

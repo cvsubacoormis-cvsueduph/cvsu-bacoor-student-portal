@@ -202,7 +202,7 @@ export function useGradeApprovals({
   }, [fetchPending]);
 
   useEffect(() => {
-    const interval = setInterval(silentPoll, 10000);
+    const interval = setInterval(silentPoll, 60000);
     return () => clearInterval(interval);
   }, [silentPoll]);
 
