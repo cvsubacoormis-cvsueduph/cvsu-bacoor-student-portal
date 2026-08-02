@@ -81,6 +81,10 @@ export async function createUser(formData: {
 
     revalidatePath("/users");
 
+    // SECURITY: `generatedPassword` is a one-time display only. The admin
+    // must share it with the user through a secure channel. It is not cached
+    // server-side and should not be logged. A future improvement is to email
+    // the password via Resend (already in deps) and never return it here.
     return {
       success: true,
       user,

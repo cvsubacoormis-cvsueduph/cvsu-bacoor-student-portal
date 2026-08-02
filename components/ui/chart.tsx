@@ -78,6 +78,9 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 
   return (
     <style
+      // SAFETY: `config` is a developer-controlled prop (passed at component
+      // instantiation), not user input. Only CSS color values and variable
+      // names are injected. Never pass user-controlled data as `config`.
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(

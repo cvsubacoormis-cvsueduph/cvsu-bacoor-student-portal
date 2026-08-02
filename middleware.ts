@@ -2,10 +2,41 @@ import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { routeAccessMap } from "./lib/settings";
 
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 export default clerkMiddleware(async (auth, req) => {
   const { sessionClaims } = await auth();
   const role = (sessionClaims?.metadata as { role?: string })?.role;
   const pathname = req.nextUrl.pathname;
+
+  // CSRF protection: validate Origin header for state-changing API requests.
+  // Server actions in Next.js 15 have built-in same-origin enforcement via
+  // encrypted action IDs, so this only applies to custom API routes.
+  // Page routes (server actions, form submissions) are excluded.
+  if (pathname.startsWith("/api/") && STATE_CHANGING_METHODS.has(req.method)) {
+    const origin = req.headers.get("origin");
+    const host = req.headers.get("host");
+    if (!origin || !host) {
+      return NextResponse.json(
+        { error: "Forbidden: origin header required" },
+        { status: 403 }
+      );
+    }
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.host !== host) {
+        return NextResponse.json(
+          { error: "Forbidden: cross-origin request blocked" },
+          { status: 403 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Forbidden: invalid origin" },
+        { status: 403 }
+      );
+    }
+  }
 
   // Allow public routes
   if (

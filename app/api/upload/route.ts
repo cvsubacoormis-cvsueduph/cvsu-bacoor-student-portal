@@ -32,11 +32,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const ip = getClientIp(request);
+  // Rate limit by Clerk userId (not IP) — IP-based limits are spoofable via
+  // x-forwarded-for. userId is set by the platform and cannot be forged.
   const clerk = await clerkClient();
 
   try {
-    await rateLimiter.consume(ip);
+    await rateLimiter.consume(userId);
   } catch (rateLimiterRes) {
     return NextResponse.json(
       {
@@ -213,6 +214,10 @@ export async function POST(request: NextRequest) {
       message: `Success! Created ${studentsToCreate.length}/${students.length} students.`,
       duplicates,
       createdStudents,
+    }, {
+      // Response contains one-time-generated passwords — must not be cached
+      // or stored by any intermediary.
+      headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
     if (

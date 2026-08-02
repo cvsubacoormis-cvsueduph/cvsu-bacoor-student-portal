@@ -105,6 +105,9 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
       });
 
       results.successful++;
+      // SECURITY: `generatedPassword` is a one-time display only. Returned to
+      // the client so the admin can download credentials. A future improvement
+      // is to email each password via Resend and never return them here.
       results.createdUsers.push({
         username: formData.username,
         generatedPassword: password,

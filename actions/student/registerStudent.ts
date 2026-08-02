@@ -34,6 +34,10 @@ export async function registerStudent(formData: CreateStudentSchema) {
 
   const data = parsed.data;
 
+  // Rate limit by IP — this endpoint is pre-authentication (student
+  // self-registration), so userId is not available. IP-based limiting is
+  // spoofable via x-forwarded-for; this is a known limitation. A future
+  // improvement is to add CAPTCHA or Clerk's bot protection.
   const ip =
     (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
