@@ -194,6 +194,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Body size cap — 10 MB. Defense-in-depth on top of the 5000-row cap.
+  const MAX_BODY_SIZE = 10 * 1024 * 1024;
+  const contentLength = req.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return NextResponse.json(
+      { error: `Request body too large. Maximum is ${MAX_BODY_SIZE / 1024 / 1024}MB.` },
+      { status: 413 }
+    );
+  }
+
   const userRole = (user.publicMetadata?.role as string) || "";
   const isAdmin = userRole === "admin" || userRole === "superuser" || userRole === "registrar" || userRole === "registrar_staff";
 

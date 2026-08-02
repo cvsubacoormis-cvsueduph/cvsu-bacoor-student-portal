@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json({ error: error.message }, { status: 429 });
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
       }
       // Non-rate-limit error (e.g. DB connection) — log and allow through
       console.error("Rate limiter error (non-blocking):", error.message);
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("Error fetching pending changes:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch pending changes" },
+      { error: "Failed to fetch pending changes" },
       { status: 500 }
     );
   }

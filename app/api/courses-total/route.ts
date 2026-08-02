@@ -34,8 +34,7 @@ export async function GET() {
     response.headers.set("Vary", "Accept-Encoding");
     return response;
   } catch (error) {
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    console.error("courses-total error:", error);
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
   }
 }

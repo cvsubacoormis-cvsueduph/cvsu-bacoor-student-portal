@@ -60,7 +60,7 @@ export async function PATCH(
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json({ error: error.message }, { status: 429 });
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
       }
       console.error("Rate limiter error (non-blocking):", error.message);
     }

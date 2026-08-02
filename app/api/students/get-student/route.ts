@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 export const runtime = "nodejs";
 
 
@@ -14,6 +15,9 @@ export async function GET(request: NextRequest) {
   if (role === "student") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const rl = await checkApiRateLimit("get_student", 30, 60);
+  if (rl.error) return rl.error;
 
   const searchParams = request.nextUrl.searchParams;
   const query = (searchParams.get("query") || "").trim();

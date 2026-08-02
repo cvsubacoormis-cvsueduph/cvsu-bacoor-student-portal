@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
         return NextResponse.json(
-          { error: error.message },
+          { error: "Too many requests. Please try again later." },
           { status: 429 }
         );
       }
@@ -220,7 +220,7 @@ export async function PATCH(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json({ error: error.message }, { status: 429 });
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
       }
       throw error;
     }
@@ -399,7 +399,7 @@ export async function POST(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json({ error: error.message }, { status: 429 });
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
       }
       throw error;
     }
@@ -577,7 +577,7 @@ export async function DELETE(request: Request) {
       });
     } catch (error: any) {
       if (error.code === "RATE_LIMIT_EXCEEDED") {
-        return NextResponse.json({ error: error.message }, { status: 429 });
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
       }
       throw error;
     }

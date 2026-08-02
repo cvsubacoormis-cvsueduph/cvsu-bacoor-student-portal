@@ -1,13 +1,13 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 const clerk = await clerkClient();
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   const { userId, sessionClaims } = await auth();
 
   if (!userId) {
@@ -21,6 +21,32 @@ export async function DELETE() {
 
   const rl = await checkApiRateLimit("bulk_delete", 3, 300);
   if (rl.error) return rl.error;
+
+  // Require explicit confirmation phrase — defense against accidental clicks, misconfigured clients, and CSRF
+  let body: { confirm?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Confirmation required. Send { \"confirm\": \"DELETE ALL USERS\" } in the request body." },
+      { status: 400 }
+    );
+  }
+
+  if (body?.confirm !== "DELETE ALL USERS") {
+    return NextResponse.json(
+      { error: "Confirmation phrase missing or incorrect. Expected: \"DELETE ALL USERS\"." },
+      { status: 400 }
+    );
+  }
+
+  // Pre-delete audit log — required for forensic recovery if deletion is triggered accidentally or maliciously
+  console.warn("[bulk-delete] INITIATED", {
+    initiatedBy: userId,
+    initiatedAt: new Date().toISOString(),
+    targetScope: "all_clerk_users + all_students",
+    note: "This is irreversible. Clerk users and students will be deleted below.",
+  });
 
   try {
     let totalDeleted = 0;
@@ -64,7 +90,7 @@ export async function DELETE() {
   } catch (error: any) {
     console.error("Error deleting users:", error);
     return NextResponse.json(
-      { message: "An unexpected error occurred", error: error.message },
+      { message: "An unexpected error occurred" },
       { status: 500 }
     );
   }
