@@ -11,7 +11,7 @@ export default function Sidebar({ role }: { role: string }) {
   return (
     <aside
       className={cn(
-        "h-screen flex flex-col border-r bg-background transition-all duration-300 flex-shrink-0",
+        "h-screen sticky top-0 flex flex-col border-r bg-background transition-all duration-300 flex-shrink-0",
         collapsed ? "w-16 items-center" : "w-56",
         "p-4",
       )}
@@ -25,7 +25,7 @@ export default function Sidebar({ role }: { role: string }) {
           className="transition-all duration-300"
         />
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="sidebar-scroll flex-1 min-h-0 overflow-y-auto">
         <Menu role={role} />
       </div>
     </aside>
