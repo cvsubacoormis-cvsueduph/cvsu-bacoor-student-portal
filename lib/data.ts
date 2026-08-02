@@ -6899,17 +6899,8 @@ export const announcementsData1 = [
   },
 ];
 
-export const adminInfo = [
-  {
-    id: 1,
-    name: "Danilo Borreros",
-    email: "danilob@gmail.com",
-    birthDate: "January 1, 1990",
-    sex: "Male",
-    religion: "Roman Catholic",
-    civilStatus: "Single",
-    password: "Admin1234",
-    role: "admin",
-    img: "https://images.pexels.com/photos/2182970/pexels-photo-2182970.jpeg?auto=compress&cs=tinysrgb&w=1200",
-  },
-];
+// SECURITY: Hardcoded admin credentials were removed from this file.
+// All admin authentication now flows through Clerk (see lib/auth-helpers.ts
+// and middleware.ts). Do not reintroduce plaintext passwords or credential
+// constants in this module — they will be committed to source control and
+// visible to anyone with repository read access.

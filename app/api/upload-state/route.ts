@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { redis, withRedisFallback } from "@/lib/redis";
 import { z } from "zod";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rl = await checkApiRateLimit("upload_state_write", 60, 60);
+    if (rl.error) return rl.error;
+
     // Parse JSON body — return 400 on malformed JSON
     let body: unknown;
     try {
@@ -120,6 +124,9 @@ export async function DELETE() {
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const rl = await checkApiRateLimit("upload_state_write", 60, 60);
+    if (rl.error) return rl.error;
 
     await withRedisFallback(async () => {
       await redis.del(getStateKey(userId));

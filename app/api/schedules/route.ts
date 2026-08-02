@@ -107,6 +107,9 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
+        const rl = await checkApiRateLimit("schedules_write", 30, 60);
+        if (rl.error) return rl.error;
+
         const body = await req.json();
         const { course, startDate, endDate, startTime, endTime, accessDate } = body;
 
@@ -165,6 +168,9 @@ export async function PUT(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
+        const rl = await checkApiRateLimit("schedules_write", 30, 60);
+        if (rl.error) return rl.error;
+
         const body = await req.json();
         const { course, accessDate, newTaskDate, startTime, endTime, isActive } = body;
 
@@ -211,6 +217,9 @@ export async function DELETE(req: Request) {
         if (role !== "admin") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
+
+        const rl = await checkApiRateLimit("schedules_write", 30, 60);
+        if (rl.error) return rl.error;
 
         const url = new URL(req.url);
         const courseParam = url.searchParams.get("course");
