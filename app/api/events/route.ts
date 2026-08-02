@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
       prisma.event.count(),
     ]);
 
-    // Cache publicly for 60s browser, 300s CDN, serve stale up to 1hr while revalidating
+    // Cache publicly (browser: 5min, CDN: 1hr, stale-while-revalidate: 24hr)
     const response = NextResponse.json({ events, totalEvents });
-    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=3600");
+    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400");
     // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
     response.headers.set("Vary", "Accept-Encoding");
     return response;

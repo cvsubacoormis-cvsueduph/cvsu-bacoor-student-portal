@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { AcademicYear, Courses, Major, Semester } from "@prisma/client";
 
 interface SeedInput {
@@ -94,6 +95,25 @@ export async function seedSubjectOffering({
   logs.push({
     type: "success",
     message: "✅ Subject offering seeding completed.",
+  });
+
+  // Invalidate subject-offerings cache — new offerings were just created
+  await withRedisFallback(async () => {
+    let cursor = "0";
+    do {
+      const result = await redis.scan(
+        cursor,
+        "MATCH",
+        "cache:subject-offerings:*",
+        "COUNT",
+        "100"
+      );
+      cursor = result[0];
+      const keys = result[1];
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
   });
 
   return logs;

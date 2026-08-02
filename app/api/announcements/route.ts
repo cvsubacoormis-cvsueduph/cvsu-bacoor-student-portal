@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Reference data — safe to cache publicly for 2min (CDN: 10min, stale-while-revalidate: 1hr)
+    // Reference data — safe to cache publicly (browser: 5min, CDN: 1hr, stale-while-revalidate: 24hr)
     // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
     return NextResponse.json(
       {
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       {
         headers: {
           "Cache-Control":
-            "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+            "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
           "Vary": "Accept-Encoding",
         },
       }

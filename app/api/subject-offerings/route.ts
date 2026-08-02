@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { redis, withRedisFallback } from "@/lib/redis";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 
 export const runtime = "nodejs";
+
+const SUBJECT_OFFERINGS_CACHE_TTL = 1800; // 30 min — changes when curriculum or subject offerings are mutated
 
 const getQuerySchema = z.object({
     academicYear: z.nativeEnum(AcademicYear, {
@@ -36,8 +39,6 @@ export async function GET(request: Request) {
         });
 
         if (!validationResult.success) {
-            // If not provided, maybe return empty or error?
-            // For dropdowns, we usually need the context.
             return NextResponse.json(
                 { error: "Academic Year and Semester are required" },
                 { status: 400 }
@@ -46,44 +47,60 @@ export async function GET(request: Request) {
 
         const { academicYear: validAY, semester: validSem } = validationResult.data;
 
-        const subjectOfferings = await prisma.subjectOffering.findMany({
-            where: {
-                academicYear: validAY,
-                semester: validSem,
-                isActive: true,
-            },
-            include: {
-                curriculum: {
-                    select: {
-                        courseCode: true,
-                        courseTitle: true,
-                        creditLec: true,
-                        creditLab: true,
-                    },
-                },
-            },
-            orderBy: {
-                curriculum: {
-                    courseCode: 'asc'
-                }
-            }
+        // Redis cache (server-side) — same data for all users per academic year & semester
+        const cacheKey = `cache:subject-offerings:${validAY}:${validSem}:v1`;
+
+        const cached = await withRedisFallback(async () => {
+            const raw = await redis.get(cacheKey);
+            return raw ? (JSON.parse(raw) as { id: string; courseCode: string; courseTitle: string; creditUnit: number }[]) : null;
         });
 
-        // Map to a friendlier format if needed, but the structure:
-        // { id, curriculum: { courseCode... } } is fine.
-        // Adding a totalUnits helper.
-        const mapped = subjectOfferings.map(offer => ({
-            id: offer.id,
-            courseCode: offer.curriculum.courseCode,
-            courseTitle: offer.curriculum.courseTitle,
-            creditUnit: offer.curriculum.creditLec + offer.curriculum.creditLab,
-        }));
+        let mapped: { id: string; courseCode: string; courseTitle: string; creditUnit: number }[];
 
-        // Cache publicly — same data for all users per academic year & semester
+        if (cached) {
+            mapped = cached;
+        } else {
+            const subjectOfferings = await prisma.subjectOffering.findMany({
+                where: {
+                    academicYear: validAY,
+                    semester: validSem,
+                    isActive: true,
+                },
+                include: {
+                    curriculum: {
+                        select: {
+                            courseCode: true,
+                            courseTitle: true,
+                            creditLec: true,
+                            creditLab: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    curriculum: {
+                        courseCode: 'asc'
+                    }
+                }
+            });
+
+            mapped = subjectOfferings.map(offer => ({
+                id: offer.id,
+                courseCode: offer.curriculum.courseCode,
+                courseTitle: offer.curriculum.courseTitle,
+                creditUnit: offer.curriculum.creditLec + offer.curriculum.creditLab,
+            }));
+
+            // Populate cache (fire-and-forget; Redis failure won't block response)
+            await withRedisFallback(async () => {
+                await redis.set(cacheKey, JSON.stringify(mapped), "EX", SUBJECT_OFFERINGS_CACHE_TTL);
+            });
+        }
+
+        // CDN cache (edge) — same data for all users per academic year & semester
         return NextResponse.json(mapped, {
             headers: {
                 "Cache-Control":
-                    "public, max-age=120, s-maxage=600, stale-while-revalidate=3600",
+                    "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
                 "Vary": "Accept-Encoding", // Vary: Accept-Encoding only — prevents Cloudflare cache key fragmentation from RSC headers
             },
         });

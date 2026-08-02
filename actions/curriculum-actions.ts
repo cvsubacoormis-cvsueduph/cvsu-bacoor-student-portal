@@ -127,12 +127,28 @@ export async function createCurriculumChecklist(data: {
     },
   });
 
-  // Invalidate Redis cache for this course+major and the full list
+  // Invalidate Redis cache for this course+major, the full list, and subject-offerings
   await withRedisFallback(async () => {
     await redis.del(
       `cache:curriculum:checklist:${data.course}:${data.major}:v1`,
       "cache:curriculum:all:v1"
     );
+    // Subject offerings depend on curriculum data — bust all subject-offerings cache entries
+    let cursor = "0";
+    do {
+      const result = await redis.scan(
+        cursor,
+        "MATCH",
+        "cache:subject-offerings:*",
+        "COUNT",
+        "100"
+      );
+      cursor = result[0];
+      const keys = result[1];
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
   });
 
   revalidatePath("/curriculum");
@@ -212,12 +228,28 @@ export async function updateCurriculumChecklist(data: {
       preRequisite: data.preRequisite || null,
     },
   });
-  // Invalidate Redis cache for this course+major and the full list
+  // Invalidate Redis cache for this course+major, the full list, and subject-offerings
   await withRedisFallback(async () => {
     await redis.del(
       `cache:curriculum:checklist:${data.course}:${data.major}:v1`,
       "cache:curriculum:all:v1"
     );
+    // Subject offerings depend on curriculum data — bust all subject-offerings cache entries
+    let cursor = "0";
+    do {
+      const result = await redis.scan(
+        cursor,
+        "MATCH",
+        "cache:subject-offerings:*",
+        "COUNT",
+        "100"
+      );
+      cursor = result[0];
+      const keys = result[1];
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
   });
 
   revalidatePath("/curriculum");
@@ -247,8 +279,24 @@ export async function deleteCurriculumChecklist(id: string) {
   });
 
   // Invalidate the full-list cache (we don't have course+major from id alone)
+  // and all subject-offerings cache entries (curriculum change affects them)
   await withRedisFallback(async () => {
     await redis.del("cache:curriculum:all:v1");
+    let cursor = "0";
+    do {
+      const result = await redis.scan(
+        cursor,
+        "MATCH",
+        "cache:subject-offerings:*",
+        "COUNT",
+        "100"
+      );
+      cursor = result[0];
+      const keys = result[1];
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } while (cursor !== "0");
   });
 
   revalidatePath("/curriculum");
@@ -321,7 +369,7 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
       });
     }
 
-    // Invalidate all curriculum cache keys after bulk seeding
+    // Invalidate all curriculum and subject-offerings cache keys after bulk seeding
     await withRedisFallback(async () => {
       let cursor = "0";
       do {
@@ -329,6 +377,22 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
           cursor,
           "MATCH",
           "cache:curriculum:*",
+          "COUNT",
+          "100"
+        );
+        cursor = result[0];
+        const keys = result[1];
+        if (keys.length > 0) {
+          await redis.del(...keys);
+        }
+      } while (cursor !== "0");
+
+      cursor = "0";
+      do {
+        const result = await redis.scan(
+          cursor,
+          "MATCH",
+          "cache:subject-offerings:*",
           "COUNT",
           "100"
         );
