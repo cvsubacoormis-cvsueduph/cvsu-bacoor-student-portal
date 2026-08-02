@@ -304,13 +304,18 @@ export async function bulkResolveLogs(
         failures: [],
     };
 
-    // Process logs sequentially to avoid database lock issues with transactions if any
+    // Batch-fetch all logs in a single query (avoids N+1).
+    // The sequential resolveGradeLog calls below are intentional — each one
+    // writes to the DB and we want to avoid lock contention.
+    const logs = await prisma.gradeLog.findMany({
+        where: { id: { in: logIds } }
+    });
+    const logMap = new Map(logs.map((l) => [l.id, l]));
+
     for (const logId of logIds) {
         let currentStudentNumber = "Unknown";
         try {
-            const log = await prisma.gradeLog.findUnique({
-                where: { id: logId }
-            });
+            const log = logMap.get(logId);
 
             if (!log) {
                 throw new Error("Log Retrieval Failed: The specified log entry could not be found.");
