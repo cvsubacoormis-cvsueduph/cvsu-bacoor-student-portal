@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
       {
         key: "Content-Security-Policy",
         value:
-          "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://clerk.cvsu.edu.ph https://clerk.cvsu-bacoor.com https://analytics.cvsu-bacoor.com; style-src 'self' 'unsafe-inline' https://clerk.cvsu-bacoor.com; font-src 'self' data:; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.cvsu-bacoor.com https://analytics.cvsu-bacoor.com https://api.openweathermap.org; frame-src 'self' https://*.clerk.accounts.dev https://clerk.cvsu-bacoor.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
+          "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://*.clerk.accounts.dev https://clerk.cvsu.edu.ph https://clerk.cvsu-bacoor.com https://analytics.cvsu-bacoor.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://clerk.cvsu-bacoor.com; font-src 'self' data:; connect-src 'self' blob: https://*.clerk.accounts.dev https://*.clerk.com https://clerk.cvsu-bacoor.com https://analytics.cvsu-bacoor.com https://static.cloudflareinsights.com https://api.openweathermap.org; worker-src 'self' blob:; frame-src 'self' https://*.clerk.accounts.dev https://clerk.cvsu-bacoor.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
       },
       {
         key: "Strict-Transport-Security",
@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       {
         key: "Permissions-Policy",
-        value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+        value: "camera=(), microphone=(), geolocation=()",
       },
     ];
 
