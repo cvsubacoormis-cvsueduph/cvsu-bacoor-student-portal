@@ -62,7 +62,7 @@ export async function bulkCreateUsers(usersData: BulkUserPayload[]) {
 
   for (const [index, formData] of validUsers.entries()) {
     try {
-      const password = crypto.randomBytes(8).toString("hex").slice(0, 8);
+      const password = crypto.randomBytes(16).toString("hex");
 
       // Clerk requires an email identifier. When the user hasn't provided one,
       // use a placeholder so they can fill in their real email later.

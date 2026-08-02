@@ -18,7 +18,6 @@ const BULK_DELETE_ALLOWED_ROLES = [
   "superuser",
   "faculty",
   "registrar",
-  "csg",
 ] as const;
 
 type BulkDeleteRole = (typeof BULK_DELETE_ALLOWED_ROLES)[number];
@@ -279,7 +278,7 @@ export async function deleteByRole(
     return { success: true, deleted, skippedCurrentUser };
   } catch (error: any) {
     console.error("[deleteByRole] error:", error);
-    return { success: false, error: error.message ?? "Bulk deletion failed. Please try again." };
+    return { success: false, error: "Bulk deletion failed. Please try again." };
   }
 }
 
@@ -325,7 +324,7 @@ export async function deleteAdminOrUser(
     return { success: true };
   } catch (error: any) {
     console.error("[deleteAdminOrUser] error:", error);
-    return { success: false, error: error.message ?? "Deletion failed. Please try again." };
+    return { success: false, error: "Deletion failed. Please try again." };
   }
 }
 
@@ -412,7 +411,7 @@ export async function updateAdmin(
     return { success: true };
   } catch (error: any) {
     console.error("Failed to update admin:", error);
-    return { success: false, error: error.message ?? "Failed to update admin." };
+    return { success: false, error: "Failed to update admin. Please try again." };
   }
 }
 

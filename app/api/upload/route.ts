@@ -71,7 +71,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File not provided" }, { status: 400 });
     }
 
+    // File size cap — 5 MB (matches client-side limit in bulk-upload-users.tsx)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` },
+        { status: 413 }
+      );
+    }
+
     const buffer = await file.arrayBuffer();
+
+    // XLSX magic-byte check — xlsx files are ZIP archives, must start with PK\x03\x04
+    const view = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+    if (view.length < 4 || view[0] !== 0x50 || view[1] !== 0x4b || view[2] !== 0x03 || view[3] !== 0x04) {
+      return NextResponse.json(
+        { error: "Invalid file format. Only .xlsx files are accepted." },
+        { status: 400 }
+      );
+    }
+
     const workbook = XLSX.read(buffer, { type: "binary" });
     const sheetName = workbook.SheetNames[0];
     const workSheet = workbook.Sheets[sheetName];

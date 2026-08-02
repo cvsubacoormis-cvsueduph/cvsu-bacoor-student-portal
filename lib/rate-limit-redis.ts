@@ -100,29 +100,32 @@ export async function checkRateLimitRedis({
     if (error.code === "RATE_LIMIT_EXCEEDED") {
       throw error;
     }
-    // If Redis fails, fail closed (deny request) for security in production
-    // unless it's a connection error - then allow with stricter limit
+    // Distinguish between connection errors (Redis unreachable) and other failures.
+    // Connection errors get a stricter fallback (3 req/window).
+    // Other errors fail CLOSED (deny) — security-first posture.
     console.error("Redis rate limit error:", error.message);
-    
-    const isConnectionError = error.message?.includes("ECONNREFUSED") 
-        || error.message?.includes("ETIMEDOUT")
-        || error.message?.includes("Redis connection");
+
+    const isConnectionError = error.message?.includes("ECONNREFUSED")
+      || error.message?.includes("ETIMEDOUT")
+      || error.message?.includes("Redis connection");
 
     if (isConnectionError) {
-      // Redis is down - use stricter fallback limit (3 requests)
+      // Redis unreachable — use stricter fallback limit (3 requests)
       return {
         success: true,
         remaining: Math.max(0, 3 - 1),
         resetTime: now + windowSeconds * 1000,
       };
     }
-    
-    // Other errors - allow request but with minimal fallback
-    return {
-      success: true,
-      remaining: 1,
-      resetTime: now + windowSeconds * 1000,
-    };
+
+    // Non-connection error: fail closed. Do not allow the request.
+    const closedError: any = new Error(
+      "Service temporarily unavailable. Please try again shortly.",
+    );
+    closedError.code = "RATE_LIMIT_EXCEEDED";
+    closedError.remaining = 0;
+    closedError.resetTime = now + windowSeconds * 1000;
+    throw closedError;
   }
 }
 
