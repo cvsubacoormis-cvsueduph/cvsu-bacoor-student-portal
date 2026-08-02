@@ -85,7 +85,18 @@ export async function GET(request: Request) {
 
     const totalPages = Math.ceil(total / pageSize);
 
-    return NextResponse.json({ data: changes, total, page, pageSize, totalPages });
+    return NextResponse.json(
+      { data: changes, total, page, pageSize, totalPages },
+      {
+        // User-specific (registrar/admin) — cache privately in browser for 30s.
+        // The 60s polling in useGradeApprovals.ts fetches fresh data anyway.
+        // Vary: Accept-Encoding only — prevents cache key fragmentation.
+        headers: {
+          "Cache-Control": "private, max-age=30",
+          "Vary": "Accept-Encoding",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Error fetching pending changes:", error);
     return NextResponse.json(

@@ -85,14 +85,14 @@ export async function GET(req: Request) {
             }
         }, {
             headers: {
-                "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=3600",
+                "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
                 "Vary": "Accept-Encoding",
             },
         });
     } catch (err: any) {
-        console.error("❌ /api/schedules GET error:", err);
+        console.error("❌ /api/schedules DELETE error:", err);
         return NextResponse.json(
-            { error: err.message || "Internal Server Error" },
+            { error: "Internal Server Error" },
             { status: 500 }
         );
     }
@@ -154,7 +154,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "Schedule(s) set successfully", schedules: results });
     } catch (err: any) {
         console.error("❌ /api/schedules POST error:", err);
-        return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }
 
@@ -204,7 +204,7 @@ export async function PUT(req: Request) {
         return NextResponse.json({ message: "Schedule updated successfully", schedule });
     } catch (err: any) {
         console.error("❌ /api/schedules PUT error:", err);
-        return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }
 
@@ -243,6 +243,6 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ message: "Schedule deleted successfully", schedule });
     } catch (err: any) {
         console.error("❌ /api/schedules DELETE error:", err);
-        return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import fs from "fs";
 import path from "path";
 
@@ -17,6 +18,9 @@ export async function GET() {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkApiRateLimit("grade_change_form_download", 30, 60);
+  if (rl.error) return rl.error;
 
   const role = (sessionClaims?.metadata as { role?: string })?.role;
   const allowedRoles = [

@@ -24,7 +24,17 @@ export async function GET() {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ isApproved: student.isApproved });
+    return NextResponse.json(
+      { isApproved: student.isApproved },
+      {
+        // User-specific response — cache privately in browser for 30s.
+        // Vary: Accept-Encoding only — prevents cache key fragmentation.
+        headers: {
+          "Cache-Control": "private, max-age=30",
+          "Vary": "Accept-Encoding",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error checking approval:", error);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

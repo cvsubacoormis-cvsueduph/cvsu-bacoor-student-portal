@@ -316,7 +316,7 @@ export async function POST(request: Request) {
 
           results.push({ id, success: true });
         } catch (err: any) {
-          results.push({ id, success: false, error: err.message });
+          results.push({ id, success: false, error: "Operation failed" });
         }
       }
     } else {

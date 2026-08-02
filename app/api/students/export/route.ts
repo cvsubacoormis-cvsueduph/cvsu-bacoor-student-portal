@@ -161,6 +161,14 @@ export async function GET(request: NextRequest) {
       ...(truncated && {
         warning: `Results truncated. Showing ${MAX_EXPORT_LIMIT.toLocaleString()} of ${totalCount.toLocaleString()} matching students. Narrow your filters to export all.`,
       }),
+    }, {
+      // User-specific (admin/registrar only) — cache privately in browser for 60s.
+      // Data changes when students are added/updated, so 60s is a safe freshness window.
+      // Vary: Accept-Encoding only — prevents cache key fragmentation.
+      headers: {
+        "Cache-Control": "private, max-age=60",
+        "Vary": "Accept-Encoding",
+      },
     });
   } catch (error) {
     // Sanitized logging: don't leak raw Prisma errors into logs or response

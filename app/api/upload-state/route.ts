@@ -52,7 +52,18 @@ export async function GET() {
       return NextResponse.json({ state: null });
     }
 
-    return NextResponse.json({ state: data });
+    return NextResponse.json(
+      { state: data },
+      {
+        // User-specific upload state (Redis-backed) — cache privately for 60s.
+        // The hook already handles freshness via the persistence layer.
+        // Vary: Accept-Encoding only — prevents cache key fragmentation.
+        headers: {
+          "Cache-Control": "private, max-age=60",
+          "Vary": "Accept-Encoding",
+        },
+      }
+    );
   } catch (err: unknown) {
     console.error("❌ GET /api/upload-state error:", err);
     return NextResponse.json(
