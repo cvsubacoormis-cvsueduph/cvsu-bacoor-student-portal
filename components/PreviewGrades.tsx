@@ -289,7 +289,7 @@ export function PreviewGrades({
       } catch {
         // Ignore poll errors silently
       }
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [role, academicYear, semester, studentNumber]);

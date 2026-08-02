@@ -34,6 +34,17 @@ There is no `npm test` script defined. Use `npx vitest run` directly. Adding one
 - **`lib/redis.ts`**: Upstash Redis client — import as `import { redis } from "@/lib/redis"`.
 - **`middleware.ts`**: Clerk middleware that checks `routeAccessMap` from `lib/settings.ts` for role-based routing. Public routes `/sign-in` and `/sign-up` bypass auth.
 
+## Deployment
+
+- **Hosting**: Self-hosted on a VPS (NOT Vercel). Built with `next build`, run with `next start` behind a reverse proxy (nginx/Caddy) with HTTPS.
+- **Clerk**: Uses a custom proxy domain (`clerk.cvsu-bacoor.com`) — CSP must allow this domain. See `next.config.ts` security headers.
+- **Cron**: `vercel.json` cron does NOT work on VPS. The rate-limit cleanup endpoint `/api/cron/rate-limit-clean` must be triggered by a system crontab entry on the VPS. Example:
+  ```
+  0 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/rate-limit-clean
+  ```
+- **Billing implications**: No Vercel function-duration cost. The primary billing driver is **Neon compute** (CU-hours). Vercel-specific optimizations (Edge runtime, function duration profiling, Prisma Accelerate) do NOT apply.
+- **Timezone warning**: The access-scheduling math in `app/(dashboard)/layout.tsx` relies on the server being in UTC (see the TODO comment in that file). **On a VPS, verify the system timezone is set to UTC** (`timedatectl set-timezone UTC`) or the timezone math will produce wrong access-window decisions. To check: `date` should show `UTC`.
+
 ## Auth & Roles
 
 Clerk stores role in `publicMetadata.role`. Roles: `admin`, `superuser`, `faculty`, `registrar`, `student`, `csg`.
@@ -62,13 +73,13 @@ The dashboard layout (`app/(dashboard)/layout.tsx:16`) also does DB-level approv
 
 ## Rate Limiting
 
-Dual-layer: Redis-based (`rate-limiter-flexible` in `lib/rate-limit-redis.ts`) with PostgreSQL fallback (`lib/rate-limit-postgres.ts`). Both must work; test both paths. The cron endpoint `/api/cron/rate-limit-clean` runs daily via `vercel.json` cron to clean up PG rate limit entries.
+Dual-layer: Redis-based (`rate-limiter-flexible` in `lib/rate-limit-redis.ts`) with PostgreSQL fallback (`lib/rate-limit-postgres.ts`). Both must work; test both paths. The cron endpoint `/api/cron/rate-limit-clean` must be triggered by a system crontab entry on the VPS (see Deployment section above) — `vercel.json` cron does not apply to self-hosted deployments.
 
 ## Key Conventions
 
 - **ESLint**: `no-unused-vars`, `no-explicit-any`, and `no-empty-object-type` are **disabled** — don't add unused imports unless they cause runtime issues.
 - **Build ignores ESLint**: `next.config.ts` sets `eslint.ignoreDuringBuilds: true`. Lint errors won't block `npm run build`, but run `npm run lint` separately to catch issues.
 - **Import alias**: `@/*` maps to project root (configured in both `tsconfig.json` and `vitest.config.ts`).
-- **Date/time**: Student access scheduling uses `Asia/Manila` timezone. The dashboard layout converts UTC to Manila time manually. Be careful with timezone logic when touching access scheduling.
+- **Date/time**: Student access scheduling uses `Asia/Manila` timezone. The dashboard layout (`app/(dashboard)/layout.tsx`) converts UTC to Manila time manually. **On a VPS, ensure the system timezone is UTC** (`timedatectl set-timezone UTC`) — the access-window math silently depends on this. See the TODO comment in that file for the recommended `date-fns-tz` migration.
 - **SweetAlert2** and **sonner** are both used for toasts (sonner for server-side toasts via `<Toaster>`, SweetAlert2 for confirmation dialogs).
 - **Composite unique keys**: Grade uniqueness is `[studentNumber, courseCode, academicYear, semester]`. SubjectOffering is `[curriculumId, academicYear, semester]`. AcademicTerm is `[academicYear, semester]`.

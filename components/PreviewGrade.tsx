@@ -155,7 +155,7 @@ export default function PreviewGrade({
       } catch {
         // Silently ignore poll errors
       }
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [isStaff, academicYear, semester, studentNumber]);

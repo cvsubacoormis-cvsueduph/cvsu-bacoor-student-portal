@@ -202,9 +202,12 @@ export function useGradeApprovals({
   }, [fetchPending]);
 
   useEffect(() => {
+    // Only poll if there are pending changes — stops wasting queries when idle
+    if (total === 0) return;
+
     const interval = setInterval(silentPoll, 60000);
     return () => clearInterval(interval);
-  }, [silentPoll]);
+  }, [silentPoll, total]);
 
   const groupedChanges = useMemo(() => {
     const groups: Record<string, PendingChange[]> = {};

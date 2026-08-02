@@ -84,9 +84,12 @@ export default function MyGradeChangesPage() {
   }, [fetchChanges]);
 
   useEffect(() => {
+    // Only poll if there are pending changes — stops wasting queries when idle
+    if (changes.length === 0) return;
+
     const interval = setInterval(silentPoll, 60000);
     return () => clearInterval(interval);
-  }, [silentPoll]);
+  }, [silentPoll, changes.length]);
 
   const allowedRoles = [
     "admin",
