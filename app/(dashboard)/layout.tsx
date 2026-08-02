@@ -46,6 +46,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!student || !student.isApproved) redirect("/pending-approval");
 
+  // TODO(timezone): The block below uses a fragile `toLocaleString` + `new Date(string)`
+  // pattern that silently depends on the server running in UTC. It works on Vercel but
+  // will produce wrong access-window decisions on any non-UTC host. The `accessDate`
+  // comparison via `new Date(dateKey)` also parses the YYYY-MM-DD string as UTC midnight
+  // rather than Manila midnight, causing off-by-one issues near the day boundary.
+  //
+  // Recommended fix: replace the manual offset math with `date-fns-tz`:
+  //   import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+  //   const manilaNow = toZonedTime(new Date(), "Asia/Manila");
+  //   const dateKey = formatInTimeZone(new Date(), "Asia/Manila", "yyyy-MM-dd");
+  //   const currentManilaMinutes = manilaNow.getHours() * 60 + manilaNow.getMinutes();
+  //
+  // Revisit if: (a) you migrate off Vercel, (b) a student reports being locked out near
+  // midnight Manila time, or (c) you need to support multiple timezones.
   const nowUTC = new Date();
   const manilaDate = new Date(nowUTC.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
   const dateKey = manilaDate.toISOString().split("T")[0];
