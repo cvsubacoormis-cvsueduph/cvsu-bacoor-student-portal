@@ -414,7 +414,10 @@ export async function seedCurriculum(): Promise<SeedLog[]> {
       message: `❌ Seeding error: ${error.message}`,
     });
   } finally {
-    await prisma.$disconnect();
+    // NOTE: Do NOT call prisma.$disconnect() here.
+    // This is a server action in a persistent Node process, not a standalone script.
+    // Disconnecting would close the global Prisma client and break all subsequent
+    // database operations until the process restarts.
   }
 
   return logs;
