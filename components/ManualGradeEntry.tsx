@@ -157,7 +157,14 @@ const calculateRemarks = (gradeVal: string, reExamVal: string) => {
   return "";
 };
 
-export default function ManualGradeEntry() {
+export default function ManualGradeEntry({
+  activeTerm,
+}: {
+  activeTerm?: {
+    academicYear: string;
+    semester: "FIRST" | "SECOND" | "MIDYEAR";
+  } | null;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -248,6 +255,24 @@ export default function ManualGradeEntry() {
 
   // Auto-populate instructor on student select for faculty
   const isFaculty = role === "faculty";
+
+  // Faculty-only active-term lockdown
+  const termIsLocked = isFaculty && activeTerm != null;
+  const termIsMissing = isFaculty && activeTerm == null;
+
+  // Pre-fill the locked term for faculty when an active term is assigned.
+  useEffect(() => {
+    if (!termIsLocked || !activeTerm) return;
+    if (academicYear !== activeTerm.academicYear) {
+      setAcademicYear(activeTerm.academicYear);
+      updateUrl({ academicYear: activeTerm.academicYear });
+    }
+    if (semester !== activeTerm.semester) {
+      setSemester(activeTerm.semester);
+      updateUrl({ semester: activeTerm.semester });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTerm?.academicYear, activeTerm?.semester]);
 
   useEffect(() => {
     if (grade) {
@@ -578,6 +603,32 @@ export default function ManualGradeEntry() {
       toast.error("Please fill in all required fields.");
       return;
     }
+
+    // Defense-in-depth: faculty must respect the admin-assigned active term
+    if (isFaculty) {
+      if (termIsMissing || !activeTerm) {
+        Swal.fire({
+          icon: "warning",
+          title: "No upload term assigned",
+          text: "The registrar has not yet assigned an academic term for faculty uploads. Please contact the registrar or admin to enable uploads.",
+        });
+        return;
+      }
+      if (
+        academicYear !== activeTerm.academicYear ||
+        semester !== activeTerm.semester
+      ) {
+        const ay = String(activeTerm.academicYear)
+          .replace("AY_", "AY ")
+          .replace("_", "-");
+        Swal.fire({
+          icon: "warning",
+          title: "Wrong upload term",
+          text: `Manual entry is restricted to ${ay} / ${activeTerm.semester}. You are attempting to enter grades for ${academicYear} / ${semester}.`,
+        });
+        return;
+      }
+    }
     const alreadyHasGrade = await checkExsistingGrade({
       studentNumber: selectedStudent.studentNumber,
       courseCode: values.courseCode,
@@ -732,6 +783,22 @@ export default function ManualGradeEntry() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {termIsMissing && (
+            <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-medium text-amber-900">
+                  No upload term assigned
+                </h3>
+                <p className="text-amber-800 text-sm">
+                  The registrar has not yet assigned an academic term for
+                  faculty uploads. Please contact the registrar or admin to
+                  enable uploads.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="academic-year">
@@ -740,6 +807,7 @@ export default function ManualGradeEntry() {
               <Select
                 value={academicYear}
                 onValueChange={handleAcademicYearChange}
+                disabled={termIsLocked}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Academic Year" />
@@ -748,9 +816,11 @@ export default function ManualGradeEntry() {
                   {academicYears
                     .filter(
                       (year) =>
-                        role !== "faculty" ||
-                        year === `AY_${currentAyStartYear}_${currentAyStartYear + 1}` ||
-                        year === `AY_${currentAyStartYear - 1}_${currentAyStartYear}`,
+                        termIsLocked
+                          ? year === activeTerm?.academicYear
+                          : role !== "faculty" ||
+                            year === `AY_${currentAyStartYear}_${currentAyStartYear + 1}` ||
+                            year === `AY_${currentAyStartYear - 1}_${currentAyStartYear}`,
                     )
                     .map((year: string) => (
                       <SelectItem key={year} value={year}>
@@ -764,22 +834,73 @@ export default function ManualGradeEntry() {
               <Label htmlFor="semester">
                 Semester <span className="text-red-500">*</span>
               </Label>
-              <Select value={semester} onValueChange={handleSemesterChange}>
+              <Select
+                value={semester}
+                onValueChange={handleSemesterChange}
+                disabled={termIsLocked}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST" disabled={role === "faculty"}>
+                  <SelectItem
+                    value="FIRST"
+                    disabled={
+                      termIsLocked
+                        ? activeTerm?.semester !== "FIRST"
+                        : role === "faculty"
+                    }
+                  >
                     First Semester
                   </SelectItem>
-                  <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR" disabled={role === "faculty"}>
+                  <SelectItem
+                    value="SECOND"
+                    disabled={
+                      termIsLocked
+                        ? activeTerm?.semester !== "SECOND"
+                        : false
+                    }
+                  >
+                    Second Semester
+                  </SelectItem>
+                  <SelectItem
+                    value="MIDYEAR"
+                    disabled={
+                      termIsLocked
+                        ? activeTerm?.semester !== "MIDYEAR"
+                        : role === "faculty"
+                    }
+                  >
                     Midyear
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {termIsLocked && activeTerm && (
+            <div className="mt-4 flex items-start space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="grid gap-1 leading-none">
+                <p className="text-sm font-medium text-amber-900">
+                  Manual entry is restricted to the term assigned by the
+                  administration:{" "}
+                  {String(activeTerm.academicYear)
+                    .replace("AY_", "AY ")
+                    .replace("_", "-")}{" "}
+                  · {activeTerm.semester === "FIRST"
+                    ? "First Semester"
+                    : activeTerm.semester === "SECOND"
+                      ? "Second Semester"
+                      : "Midyear"}
+                </p>
+                <p className="text-xs text-amber-700">
+                  Contact the registrar or admin if you need to enter grades
+                  for a different term.
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

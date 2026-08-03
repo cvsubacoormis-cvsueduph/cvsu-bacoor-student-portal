@@ -254,6 +254,38 @@ export async function addManualGrade(
     );
   }
 
+  // Enforce the admin-assigned active upload term for faculty.
+  // Admin/superuser/registrar/registrar_staff can manually enter grades for any term.
+  if (userRole === "faculty") {
+    const [aySetting, semSetting] = await Promise.all([
+      prisma.systemSettings.findUnique({
+        where: { key: "ACTIVE_UPLOAD_TERM_AY" },
+      }),
+      prisma.systemSettings.findUnique({
+        where: { key: "ACTIVE_UPLOAD_TERM_SEM" },
+      }),
+    ]);
+    const activeAy = aySetting?.value || null;
+    const activeSem = semSetting?.value || null;
+
+    if (!activeAy || !activeSem) {
+      throw new Error(
+        "No upload term is currently assigned. Please contact the registrar or admin.",
+      );
+    }
+    if (
+      gradeData.academicYear !== activeAy ||
+      gradeData.semester !== activeSem
+    ) {
+      const friendlyAy = String(activeAy)
+        .replace("AY_", "AY ")
+        .replace("_", "-");
+      throw new Error(
+        `Manual entry is restricted to ${friendlyAy} / ${activeSem}. You are attempting to enter grades for ${gradeData.academicYear} / ${gradeData.semester}.`,
+      );
+    }
+  }
+
   // Validate required fields
   if (
     !gradeData.studentNumber ||

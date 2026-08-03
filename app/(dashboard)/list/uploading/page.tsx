@@ -107,7 +107,7 @@ export default async function GradeUploader() {
               </TabsContent>
               <TabsContent value="manual" className="mt-6">
                 <Suspense fallback={<ManualGradeEntrySkeleton />}>
-                  <ManualGradeEntry />
+                  <ManualGradeEntry activeTerm={activeTerm} />
                 </Suspense>
               </TabsContent>
             </Tabs>
