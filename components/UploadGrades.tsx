@@ -153,7 +153,14 @@ interface LogEntry {
   timestamp: Date;
 }
 
-export function UploadGrades() {
+export function UploadGrades({
+  activeTerm,
+}: {
+  activeTerm?: {
+    academicYear: string;
+    semester: "FIRST" | "SECOND" | "MIDYEAR";
+  } | null;
+} = {}) {
   const { user } = useUser();
   const role = user?.publicMetadata?.role as string | undefined;
   const canUseLegacyMode = [
@@ -162,6 +169,11 @@ export function UploadGrades() {
     "registrar",
     "registrar_staff",
   ].includes(role || "");
+
+  // Faculty-only active-term lockdown
+  const isFaculty = role === "faculty";
+  const termIsLocked = isFaculty && activeTerm != null;
+  const termIsMissing = isFaculty && activeTerm == null;
 
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -186,6 +198,20 @@ export function UploadGrades() {
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [academicYear, setAcademicYear] = useState<string>("");
   const [semester, setSemester] = useState<string>("");
+
+  // Pre-fill the locked term for faculty when an active term is assigned.
+  useEffect(() => {
+    if (termIsLocked && activeTerm) {
+      if (academicYear !== activeTerm.academicYear) {
+        setAcademicYear(activeTerm.academicYear);
+      }
+      if (semester !== activeTerm.semester) {
+        setSemester(activeTerm.semester);
+      }
+    }
+    // Run when the assigned term changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTerm?.academicYear, activeTerm?.semester]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -370,6 +396,32 @@ export function UploadGrades() {
   const handleUpload = async (isDryRun = false) => {
     if (!academicYear || !semester || !previewData || previewData.length === 0)
       return;
+
+    // Defense-in-depth: faculty must respect the admin-assigned active term
+    if (isFaculty) {
+      if (termIsMissing || !activeTerm) {
+        Swal.fire({
+          icon: "warning",
+          title: "No upload term assigned",
+          text: "The registrar has not yet assigned an academic term for faculty uploads. Please contact the registrar or admin to enable uploads.",
+        });
+        return;
+      }
+      if (
+        academicYear !== activeTerm.academicYear ||
+        semester !== activeTerm.semester
+      ) {
+        const ay = String(activeTerm.academicYear)
+          .replace("AY_", "AY ")
+          .replace("_", "-");
+        Swal.fire({
+          icon: "warning",
+          title: "Wrong upload term",
+          text: `Faculty uploads are restricted to ${ay} / ${activeTerm.semester}. You are attempting to upload to ${academicYear} / ${semester}.`,
+        });
+        return;
+      }
+    }
 
     // Validate change reason for faculty (required only when updating existing grades)
     if (role === "faculty" && !isDryRun && hasUpdates) {
@@ -674,10 +726,11 @@ export function UploadGrades() {
 
   // Reset selection if it becomes invalid
   useEffect(() => {
+    if (termIsLocked) return; // faculty with assigned term — keep the locked value
     if (academicYear && !academicYears.includes(academicYear)) {
       setAcademicYear("");
     }
-  }, [allowLegacy, academicYears, academicYear]);
+  }, [allowLegacy, academicYears, academicYear, termIsLocked]);
 
   // ── Restore persisted state on mount ───────────────────────────────────
   useEffect(() => {
@@ -688,8 +741,14 @@ export function UploadGrades() {
       size: recoveredState.fileSize,
     });
     setPreviewData(recoveredState.previewData);
-    setAcademicYear(recoveredState.academicYear);
-    setSemester(recoveredState.semester);
+    // For faculty, override any recovered term with the admin-assigned active term
+    if (termIsLocked && activeTerm) {
+      setAcademicYear(activeTerm.academicYear);
+      setSemester(activeTerm.semester);
+    } else {
+      setAcademicYear(recoveredState.academicYear);
+      setSemester(recoveredState.semester);
+    }
     setAllowLegacy(recoveredState.allowLegacy);
     setUploadResults(recoveredState.uploadResults);
     setLogs(
@@ -702,7 +761,7 @@ export function UploadGrades() {
     setProgress(recoveredState.progress);
     setProcessedCount(recoveredState.processedCount);
     setTotalRecords(recoveredState.totalRecords);
-  }, [recoveredState]);
+  }, [recoveredState, termIsLocked, activeTerm]);
 
   // ── Persist state on meaningful changes ───────────────────────────────
   useEffect(() => {
@@ -780,6 +839,20 @@ export function UploadGrades() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {termIsMissing && (
+            <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-900">
+                No upload term assigned
+              </AlertTitle>
+              <AlertDescription className="text-amber-700">
+                The registrar has not yet assigned an academic term for faculty
+                uploads. Please contact the registrar or admin to enable
+                uploads.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="academic-year">
@@ -788,7 +861,7 @@ export function UploadGrades() {
               <Select
                 value={academicYear}
                 onValueChange={setAcademicYear}
-                disabled={isUploading}
+                disabled={isUploading || termIsLocked}
               >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select Academic Year" />
@@ -809,23 +882,44 @@ export function UploadGrades() {
               <Select
                 value={semester}
                 onValueChange={setSemester}
-                disabled={isUploading}
+                disabled={isUploading || termIsLocked}
               >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select Semester" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIRST" disabled={role === "faculty"}>
-                    First Semester
-                  </SelectItem>
+                  <SelectItem value="FIRST">First Semester</SelectItem>
                   <SelectItem value="SECOND">Second Semester</SelectItem>
-                  <SelectItem value="MIDYEAR" disabled>
-                    Midyear
-                  </SelectItem>
+                  <SelectItem value="MIDYEAR">Midyear</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {termIsLocked && activeTerm && (
+            <div className="mt-4 flex items-start space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="grid gap-1 leading-none">
+                <p className="text-sm font-medium text-amber-900">
+                  Faculty uploads are restricted to the term assigned by the
+                  administration:{" "}
+                  {String(activeTerm.academicYear)
+                    .replace("AY_", "AY ")
+                    .replace("_", "-")}{" "}
+                  ·{" "}
+                  {activeTerm.semester === "FIRST"
+                    ? "First Semester"
+                    : activeTerm.semester === "SECOND"
+                      ? "Second Semester"
+                      : "Midyear"}
+                </p>
+                <p className="text-xs text-amber-700">
+                  Contact the registrar or admin if you need to upload for a
+                  different term.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Legacy Mode Checkbox - Only for authorized roles */}
           {canUseLegacyMode && (

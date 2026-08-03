@@ -5,11 +5,18 @@ import { Suspense } from "react";
 import UploadGradesSkeleton from "@/components/skeleton/UploadGradesSkeleton";
 import ManualGradeEntrySkeleton from "@/components/skeleton/ManualGradeEntrySkeleton";
 import { UploadGrades } from "@/components/UploadGrades";
-import { getSetting, getGradeVisibility } from "@/actions/settings";
+import {
+  getSetting,
+  getGradeVisibility,
+  getActiveUploadTerm,
+} from "@/actions/settings";
+import { getAllAcademicTerms } from "@/actions/academic-terms";
 import { auth } from "@clerk/nextjs/server";
+import { AcademicTerm } from "@prisma/client";
 import AdminUploadToggle from "@/components/AdminUploadToggle";
 import GradeVisibilityToggle from "@/components/GradeVisibilityToggle";
 import FacultyApprovalToggle from "@/components/FacultyApprovalToggle";
+import ActiveUploadTermSelector from "@/components/ActiveUploadTermSelector";
 import { UploadSystemDisabled } from "@/components/UploadSystemDisabled";
 
 export default async function GradeUploader() {
@@ -18,15 +25,39 @@ export default async function GradeUploader() {
   const isAdmin = role === "admin" || role === "superuser";
   const canToggleGradeVisibility = isAdmin || role === "registrar";
 
-  const settingValue = await getSetting("UPLOAD_GRADES_ENABLED");
+  const [
+    settingValue,
+    isGradesVisible,
+    facultyApprovalSetting,
+    activeTerm,
+    allTerms,
+  ] = await Promise.all([
+    getSetting("UPLOAD_GRADES_ENABLED"),
+    getGradeVisibility(),
+    getSetting("FACULTY_UPDATE_REQUIRES_APPROVAL"),
+    getActiveUploadTerm(),
+    getAllAcademicTerms(),
+  ]);
+
   const isUploadEnabled = settingValue !== "false";
-
-  const isGradesVisible = await getGradeVisibility();
-
-  const facultyApprovalSetting = await getSetting(
-    "FACULTY_UPDATE_REQUIRES_APPROVAL",
-  );
   const isFacultyApprovalEnabled = facultyApprovalSetting !== "false";
+
+  const availableTerms = ((allTerms as AcademicTerm[] | undefined) || []).map(
+    (t: AcademicTerm) => ({
+      academicYear: t.academicYear as string,
+      semester: t.semester as "FIRST" | "SECOND" | "MIDYEAR",
+    }),
+  );
+
+  const currentRole: "admin" | "superuser" | "registrar" | "registrar_staff" | "faculty" | "student" =
+    role === "admin" ||
+    role === "superuser" ||
+    role === "registrar" ||
+    role === "registrar_staff" ||
+    role === "faculty" ||
+    role === "student"
+      ? role
+      : "student";
 
   return (
     <div className="">
@@ -41,7 +72,12 @@ export default async function GradeUploader() {
                 Uploading of Student Grades
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              <ActiveUploadTermSelector
+                availableTerms={availableTerms}
+                currentActive={activeTerm}
+                currentRole={currentRole}
+              />
               {canToggleGradeVisibility && (
                 <GradeVisibilityToggle initialVisible={isGradesVisible} />
               )}
@@ -66,7 +102,7 @@ export default async function GradeUploader() {
               </TabsList>
               <TabsContent value="upload" className="mt-6">
                 <Suspense fallback={<UploadGradesSkeleton />}>
-                  <UploadGrades />
+                  <UploadGrades activeTerm={activeTerm} />
                 </Suspense>
               </TabsContent>
               <TabsContent value="manual" className="mt-6">

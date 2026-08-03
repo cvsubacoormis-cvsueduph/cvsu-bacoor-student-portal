@@ -301,6 +301,47 @@ export async function POST(req: Request) {
     );
   }
 
+  // Enforce the admin-assigned active upload term for non-admin/registrar roles.
+  // Admin/superuser/registrar/registrar_staff can upload to any term for corrections.
+  const isAdminOrRegistrarRole =
+    userRole === "admin" ||
+    userRole === "superuser" ||
+    userRole === "registrar" ||
+    userRole === "registrar_staff";
+  if (!isAdminOrRegistrarRole) {
+    const [aySetting, semSetting] = await Promise.all([
+      prisma.systemSettings.findUnique({
+        where: { key: "ACTIVE_UPLOAD_TERM_AY" },
+      }),
+      prisma.systemSettings.findUnique({
+        where: { key: "ACTIVE_UPLOAD_TERM_SEM" },
+      }),
+    ]);
+    const activeAy = aySetting?.value || null;
+    const activeSem = semSetting?.value || null;
+
+    if (!activeAy || !activeSem) {
+      return NextResponse.json(
+        {
+          error:
+            "No upload term is currently assigned. Please contact the registrar or admin.",
+        },
+        { status: 403 }
+      );
+    }
+    if (academicYear !== activeAy || semester !== activeSem) {
+      const friendlyAy = String(activeAy)
+        .replace("AY_", "AY ")
+        .replace("_", "-");
+      return NextResponse.json(
+        {
+          error: `Uploads are restricted to ${friendlyAy} / ${activeSem}. You are attempting to upload to ${academicYear} / ${semester}.`,
+        },
+        { status: 403 }
+      );
+    }
+  }
+
   // 1. Fetch students by Number AND by Name
   // We fetch all potential matches to cross-reference in memory
   const studentsByNumber = await prisma.student.findMany({
