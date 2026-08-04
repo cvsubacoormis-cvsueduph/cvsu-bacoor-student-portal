@@ -57,6 +57,115 @@ import {
   type PersistedUploadState,
 } from "@/hooks/use-upload-state-persistence";
 
+// ── Excel column name normalization ────────────────────────────────────────
+// Many users upload Excel files with human-readable column headers like
+// "Student Number", "First Name", "Last Name" (the wording shown in the
+// upload notice) instead of the canonical camelCase keys (studentNumber,
+// firstName, lastName). Without normalization, the parser produces objects
+// with non-matching keys and the server can't resolve any student —
+// surfacing as "Student not found in the database" even when the data is
+// perfectly correct.
+const COLUMN_NAME_ALIASES: Record<string, string> = {
+  // studentNumber
+  "student number": "studentNumber",
+  "student no": "studentNumber",
+  "studentno": "studentNumber",
+  "studentnumber": "studentNumber", // bare camelCase, no separator (e.g. legacy SIS exports)
+  "student id": "studentNumber",
+  "studentid": "studentNumber",
+  "id number": "studentNumber",
+  "id no": "studentNumber",
+  "stud no": "studentNumber",
+  // firstName
+  "first name": "firstName",
+  "firstname": "firstName",
+  "given name": "firstName",
+  "givenname": "firstName",
+  "fname": "firstName",
+  // lastName
+  "last name": "lastName",
+  "lastname": "lastName",
+  "surname": "lastName",
+  "family name": "lastName",
+  "familyname": "lastName",
+  "lname": "lastName",
+  // middleInit
+  "middle name": "middleInit",
+  "middle initial": "middleInit",
+  "middleinitial": "middleInit",
+  "middlename": "middleInit",
+  "middleinit": "middleInit",
+  "mi": "middleInit",
+  // courseCode
+  "course code": "courseCode",
+  "coursecode": "courseCode",
+  "subject code": "courseCode",
+  "subjectcode": "courseCode",
+  // courseTitle
+  "course title": "courseTitle",
+  "coursetitle": "courseTitle",
+  "subject title": "courseTitle",
+  "subjecttitle": "courseTitle",
+  "subject": "courseTitle",
+  // creditUnit
+  "credit unit": "creditUnit",
+  "credit units": "creditUnit",
+  "creditunit": "creditUnit",
+  "creditunits": "creditUnit",
+  "units": "creditUnit",
+  "credits": "creditUnit",
+  "credit": "creditUnit",
+  // grade
+  "final grade": "grade",
+  "finalgrade": "grade",
+  "rating": "grade",
+  "mark": "grade",
+  "marks": "grade",
+  // reExam
+  "re-exam": "reExam",
+  "re exam": "reExam",
+  "reexam": "reExam",
+  "re-examination": "reExam",
+  "reexamination": "reExam",
+  "re examination": "reExam",
+  // remarks
+  "comment": "remarks",
+  "comments": "remarks",
+  "note": "remarks",
+  "notes": "remarks",
+  // instructor
+  "teacher": "instructor",
+  "professor": "instructor",
+  "faculty": "instructor",
+};
+
+function normalizeKey(key: string): string {
+  return String(key ?? "")
+    // Split CamelCase run-together words: "StudentNumber" -> "Student Number"
+    // (only at lower→upper boundaries; preserves existing ACRONYMS)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .trim()
+    .replace(/[_\-./]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeRowKeys(row: Record<string, unknown>): Record<string, unknown> {
+  if (!row || typeof row !== "object") return row;
+  const mapped: Record<string, unknown> = { ...row };
+  for (const originalKey of Object.keys(row)) {
+    const normalized = normalizeKey(originalKey);
+    const canonical = COLUMN_NAME_ALIASES[normalized];
+    // Only remap if (a) we have a known alias and (b) the canonical key
+    // is not already present — never clobber an explicit camelCase column
+    // that the user may have included alongside the human-readable one.
+    if (canonical && !(canonical in mapped)) {
+      mapped[canonical] = row[originalKey];
+    }
+  }
+  return mapped;
+}
+
 // --- Validation Schema ---
 const gradeRowSchema = z
   .object({
@@ -333,7 +442,25 @@ export function UploadGrades({
       const data = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      const rawJsonData = XLSX.utils.sheet_to_json(worksheet, {
+        defval: "",
+        // `raw: false` forces SheetJS to return cell values as formatted
+        // strings rather than coerced JS types. This preserves leading
+        // zeros in course codes ("CS101" stays "CS101", not 101) and keeps
+        // student-number strings as strings. Matches the other bulk
+        // upload path in components/students/upload-students.tsx.
+        raw: false,
+      });
+      // Normalize column names so files with "Student Number" / "First Name" /
+      // "Last Name" headers (matching the upload notice wording) work the
+      // same as the canonical camelCase template.
+      const jsonData: any[] = Array.isArray(rawJsonData)
+        ? rawJsonData.map((row: any) =>
+            row && typeof row === "object"
+              ? (normalizeRowKeys(row) as Record<string, any>)
+              : row,
+          )
+        : rawJsonData;
 
       // Basic Validation of headers (optional, relying on row schema later)
       if (jsonData.length === 0) {

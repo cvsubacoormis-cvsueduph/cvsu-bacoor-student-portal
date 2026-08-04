@@ -358,8 +358,14 @@ export async function POST(req: Request) {
   const nameConditions = grades
     .map((g) => {
       const andConditions = [];
-      if (g.firstName) andConditions.push({ firstName: { equals: g.firstName, mode: 'insensitive' as const } });
-      if (g.lastName) andConditions.push({ lastName: { equals: g.lastName, mode: 'insensitive' as const } });
+      // Trim names before querying — Excel cells frequently contain stray
+      // leading/trailing whitespace, and the strict `equals` mode rejects
+      // any mismatch, so users get a "Student not found" error even when
+      // the data is visually identical.
+      const fn = typeof g.firstName === "string" ? g.firstName.trim() : g.firstName;
+      const ln = typeof g.lastName === "string" ? g.lastName.trim() : g.lastName;
+      if (fn) andConditions.push({ firstName: { equals: fn, mode: 'insensitive' as const } });
+      if (ln) andConditions.push({ lastName: { equals: ln, mode: 'insensitive' as const } });
       if (andConditions.length === 0) return null;
       return andConditions.length === 1 ? andConditions[0] : { AND: andConditions };
     })
@@ -379,6 +385,80 @@ export async function POST(req: Request) {
         major: true,
       }
     });
+  }
+
+  // BROAD FALLBACK: if the strict name query returned nothing, fetch a
+  // broader candidate set using partial / per-field matching so the
+  // fuzzy name recovery below has something to work with. This guards
+  // against minor formatting differences (extra spaces, accents, names
+  // split across columns, etc.) that `equals` mode rejects but a real
+  // user would consider "the same person".
+  if (studentsByName.length === 0) {
+    // NFD-strip + lowercase search terms so we can also build a 3-char
+    // prefix that survives accent differences (Postgres ILIKE is
+    // case-insensitive but NOT accent-insensitive — for full unaccent
+    // support, enable the `unaccent` extension and switch to
+    // `unaccent: true` on the column filter). The 3-char prefix matches
+    // "Jose" against "José" via substring ILIKE because the first three
+    // characters of "José" are "Jos" (the combining acute is at index 3).
+    const stripDiacritics = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const firstNames = [
+      ...new Set(
+        grades
+          .map((g) => (typeof g.firstName === "string" ? g.firstName.trim() : ""))
+          .filter((s) => s && s.length >= 2)
+      ),
+    ];
+    const lastNames = [
+      ...new Set(
+        grades
+          .map((g) => (typeof g.lastName === "string" ? g.lastName.trim() : ""))
+          .filter((s) => s && s.length >= 2)
+      ),
+    ];
+
+    if (firstNames.length > 0 || lastNames.length > 0) {
+      const broadConditions: any[] = [];
+      for (const fn of firstNames) {
+        const stripped = stripDiacritics(fn);
+        // Full NFD-stripped term (matches if DB stored the unaccented form)
+        broadConditions.push({ firstName: { contains: stripped, mode: 'insensitive' as const } });
+        // 3-char prefix — survives "José" vs "Jose" because "Jos" is a
+        // substring of both (the combining acute in "José" is at index 3).
+        // Skipped if the name itself is < 4 chars to avoid a redundant
+        // duplicate query.
+        if (stripped.length >= 4) {
+          const prefix = stripped.slice(0, 3);
+          broadConditions.push({ firstName: { contains: prefix, mode: 'insensitive' as const } });
+        }
+      }
+      for (const ln of lastNames) {
+        const stripped = stripDiacritics(ln);
+        broadConditions.push({ lastName: { contains: stripped, mode: 'insensitive' as const } });
+        if (stripped.length >= 4) {
+          const prefix = stripped.slice(0, 3);
+          broadConditions.push({ lastName: { contains: prefix, mode: 'insensitive' as const } });
+        }
+      }
+      // Cap the candidate set so a wide-net query on a large student table
+      // doesn't drag in thousands of irrelevant rows. orderBy makes the
+      // cap deterministic — without it, common names like "Juan" /
+      // "Maria" can fall outside the 200-row window for later students.
+      studentsByName = await prisma.student.findMany({
+        where: { OR: broadConditions },
+        select: {
+          studentNumber: true,
+          firstName: true,
+          lastName: true,
+          course: true,
+          major: true,
+        },
+        orderBy: { studentNumber: "asc" },
+        take: 200,
+      });
+    }
   }
 
   // Indexing

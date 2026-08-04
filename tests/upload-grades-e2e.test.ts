@@ -261,6 +261,59 @@ describe("POST /api/upload-grades — Student matching", () => {
     expect(data.results).toHaveLength(1);
     expect(data.results[0].status).toContain("\u274c");
   });
+
+  it("recovers student by name even when names have leading/trailing whitespace in the file", async () => {
+    // The strict name query uses `equals` which is sensitive to whitespace;
+    // the server trims firstName/lastName before querying so users with stray
+    // spaces in their Excel cells aren't blocked from uploading.
+    const req = buildRequest([
+      g({ studentNumber: "", firstName: "  Juan  ", lastName: " Dela Cruz ", courseCode: "IT 101", grade: "1.00", remarks: "PASSED" }),
+    ]);
+    const res = await POST(req);
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.results).toHaveLength(1);
+    expect(data.results[0].studentNumber).toBe("202100001");
+  });
+
+  it("recovers student by name when exact-match name query fails but broad fallback finds them", async () => {
+    // First call (studentsByNumber) returns empty — ID doesn't exist.
+    // Second call (strict name match) returns empty — name has minor diff.
+    // Third call (broad contains fallback) returns the real student.
+    vi.mocked(prisma.student.findMany)
+      .mockResolvedValueOnce([]) // studentsByNumber
+      .mockResolvedValueOnce([]) // studentsByName (strict equals)
+      .mockResolvedValueOnce([sampleStudent]); // studentsByName (broad contains fallback)
+    const req = buildRequest([
+      g({ studentNumber: "999999999", firstName: "Juan", lastName: "Dela Cruz", courseCode: "IT 101", grade: "1.00", remarks: "PASSED" }),
+    ]);
+    const res = await POST(req);
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.results).toHaveLength(1);
+    expect(data.results[0].studentNumber).toBe("202100001");
+  });
+
+  it("broad fallback uses orderBy for deterministic take:200 cap", async () => {
+    // Regression: common names (Juan, Maria) can return >200 matches and
+    // without orderBy the cap is non-deterministic — the target student
+    // may or may not be in the window. With orderBy studentNumber ASC,
+    // the cap is stable across requests.
+    vi.mocked(prisma.student.findMany)
+      .mockResolvedValueOnce([]) // studentsByNumber
+      .mockResolvedValueOnce([]) // studentsByName (strict)
+      .mockResolvedValueOnce([sampleStudent]); // studentsByName (broad)
+    const req = buildRequest([
+      g({ studentNumber: "999999999", firstName: "Juan", lastName: "Dela Cruz", courseCode: "IT 101", grade: "1.00", remarks: "PASSED" }),
+    ]);
+    await POST(req);
+    // Find the broad-fallback call (3rd prisma.student.findMany call)
+    const calls = vi.mocked(prisma.student.findMany).mock.calls;
+    const broadCall = calls[2]?.[0] as any;
+    expect(broadCall).toBeDefined();
+    expect(broadCall.orderBy).toEqual({ studentNumber: "asc" });
+    expect(broadCall.take).toBe(200);
+  });
 });
 
 describe("POST /api/upload-grades — Validation", () => {

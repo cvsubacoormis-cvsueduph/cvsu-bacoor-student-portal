@@ -49,7 +49,13 @@ export default async function GradeUploader() {
     }),
   );
 
-  const currentRole: "admin" | "superuser" | "registrar" | "registrar_staff" | "faculty" | "student" =
+  const currentRole:
+    | "admin"
+    | "superuser"
+    | "registrar"
+    | "registrar_staff"
+    | "faculty"
+    | "student" =
     role === "admin" ||
     role === "superuser" ||
     role === "registrar" ||

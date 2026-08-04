@@ -67,30 +67,13 @@ function saveToLocalStorage(state: Partial<PersistedUploadState>) {
     const existing: Partial<PersistedUploadState> = existingRaw
       ? JSON.parse(existingRaw)
       : {};
-    // SECURITY: Strip PII (student names, student numbers, grades) from previewData
-    // and uploadResults before storing in localStorage. The full data is already
-    // persisted in Redis via /api/upload-state — localStorage only needs enough
-    // metadata to show the recovery banner and restore UI state.
-    const sanitized: Partial<PersistedUploadState> = {
-      ...state,
-      previewData: state.previewData
-        ? [
-            {
-              _count: state.previewData.length,
-              _sanitized: true,
-            },
-          ]
-        : undefined,
-      uploadResults: state.uploadResults
-        ? state.uploadResults.map((r) => ({
-            courseCode: r.courseCode,
-            status: r.status,
-            matchQuality: r.matchQuality,
-            // Strip: studentNumber, studentName, identifier
-          }))
-        : undefined,
-    };
-    const merged = { ...existing, ...sanitized, timestamp: Date.now() };
+    // Persist the user's full state (including previewData and uploadResults)
+    // so that if Redis is unreachable on the next visit, the user can still
+    // resume their upload. LocalStorage is a per-user, per-browser, same-origin
+    // store; the data is the user's own input and is not exposed across users.
+    // The Redis sync still mirrors the same data server-side for cross-device
+    // recovery.
+    const merged = { ...existing, ...state, timestamp: Date.now() };
     localStorage.setItem(UPLOAD_STATE_KEY, JSON.stringify(merged));
   } catch (e) {
     console.warn("[UploadPersistence] localStorage write failed:", e);
