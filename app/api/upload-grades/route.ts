@@ -39,6 +39,59 @@ function normalizeGrade(value: any): string | undefined {
 const STRIP_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\u200B-\u200F\u2028-\u202F\uFEFF\u00AD\u2060\uD800-\uDFFF]/g;
 const MAX_STRING_LENGTH = 500;
 
+// ── Student-number normalization ──────────────────────────────────────────
+// Excel cells routinely contain invisible / lookalike characters that make
+// a student number visually identical to its DB counterpart but bytewise
+// different. Without aggressive normalization, `String(sn).trim()` returns
+// "2021‑12345" (with non-breaking hyphen) when the DB has "2021-12345"
+// and the lookup silently fails — "Student not found" for data that
+// actually matches. This helper covers the full space of cases that
+// survive JS's default String#trim:
+//   • All Unicode whitespace (NBSP, ideographic space, etc.)
+//   • All dash variants (en-dash, em-dash, non-breaking hyphen, minus sign)
+//   • All zero-width / invisible / formatting characters
+//   • All comma variants (Excel thousand-separator artifacts)
+//   • Fullwidth / compatibility digits via NFKC normalization
+function normalizeStudentNumber(value: any): string | null {
+  if (value == null) return null;
+  let str = String(value);
+  if (!str) return null;
+
+  // NFKC: decomposes compatibility characters (fullwidth digits,
+  // ligatures, superscripts) into their canonical equivalents.
+  str = str.normalize("NFKC");
+
+  // Strip zero-width / format / control characters (BOM, ZWS, ZWNJ,
+  // soft hyphen, word joiner, BOM, surrogate halves, etc.).
+  str = str.replace(
+    /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD\uD800-\uDFFF]/g,
+    "",
+  );
+
+  // Strip ALL Unicode whitespace (not just ASCII). trim() alone misses
+  // NBSP (\u00A0) in some engines, plus the whole Unicode whitespace block.
+  str = str.replace(/[\s\u00A0\u1680\u2000-\u200A\u205F\u3000]/g, "");
+
+  // Strip ALL dash / hyphen / minus variants. Excel auto-correct and
+  // paste-from-Word both substitute the ASCII hyphen-minus with a
+  // Unicode lookalike that looks identical but breaks equality.
+  str = str.replace(
+    /[-\u2010-\u2015\u2212\uFE58\uFE63\uFF0D\u2043\u207B\u208B]/g,
+    "",
+  );
+
+  // Strip stray quote / comma / apostrophe artifacts (Excel sometimes
+  // embeds these when a cell was originally typed as text with a
+  // thousands separator).
+  str = str.replace(/['"\u2018\u2019\u201C\u201D,]/g, "");
+
+  // Safety net: trim again in case any preceding step left edges.
+  str = str.trim();
+
+  if (!str) return null;
+  return str.slice(0, 100);
+}
+
 function sanitizeString(value: any): string | null {
   if (!value && value !== 0) return null;
   const str = String(value)
@@ -271,9 +324,8 @@ export async function POST(req: Request) {
   const uniqueStudentNumbers = [
     ...new Set(
       grades
-        .map((g) => g.studentNumber)
-        .filter(Boolean)
-        .map((sn) => String(sn).replace(/[-]/g, "").trim())
+        .map((g) => normalizeStudentNumber(g.studentNumber))
+        .filter((sn): sn is string => Boolean(sn))
     ),
   ];
 
@@ -589,9 +641,7 @@ export async function POST(req: Request) {
         instructor,
       } = entry;
 
-      const normalizedStudentNumber = studentNumber
-        ? String(studentNumber).replace(/[-]/g, "").trim()
-        : null;
+      const normalizedStudentNumber = normalizeStudentNumber(studentNumber);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedInstructor =
         sanitizeString(instructor)?.toUpperCase() ?? "";
@@ -1227,9 +1277,7 @@ reExam: standardizedReExam ?? null,
         instructor,
       } = entry;
 
-      const normalizedStudentNumber = studentNumber
-        ? String(studentNumber).replace(/[-]/g, "").trim()
-        : null;
+      const normalizedStudentNumber = normalizeStudentNumber(studentNumber);
       const sanitizedCourseCode = normalizeCourseCode(courseCode);
       const sanitizedCourseTitle = sanitizeString(courseTitle);
       const sanitizedInstructor = sanitizeString(instructor)?.toUpperCase() ?? "";

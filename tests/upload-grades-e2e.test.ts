@@ -314,6 +314,39 @@ describe("POST /api/upload-grades — Student matching", () => {
     expect(broadCall.orderBy).toEqual({ studentNumber: "asc" });
     expect(broadCall.take).toBe(200);
   });
+
+  it("matches student even when Excel student number has invisible / Unicode characters", async () => {
+    // Real-world failure: "2021-0001" in Excel cell actually contains a
+    // non-breaking hyphen (U+2011) or zero-width space (U+200B) that
+    // String#trim() doesn't strip. The batch-level query strips these
+    // out via normalizeStudentNumber so the DB lookup finds the student.
+    // sampleStudent.studentNumber is "202100001", so we use messy variants
+    // of THAT number so the post-normalization query key matches.
+    const messyIds = [
+      "2021\u201100001",  // non-breaking hyphen (most common Excel artifact)
+      "2021\u200B00001",  // zero-width space
+      "2021\u00A000001",  // non-breaking space
+      "  202100001  ",    // regular spaces (trim catches this)
+      "2021\u201300001",  // en-dash (Word paste)
+      "2021\u201400001",  // em-dash (Excel auto-correct)
+    ];
+    for (const messy of messyIds) {
+      vi.clearAllMocks();
+      rateLimiterConsume.mockResolvedValue(undefined);
+      setupBaseMocks();
+      setAuthAdmin();
+      const mod = await import("@/app/api/upload-grades/route");
+      POST = mod.POST;
+      const req = buildRequest([
+        g({ studentNumber: messy, firstName: "Juan", lastName: "Dela Cruz", courseCode: "IT 101", grade: "1.00", remarks: "PASSED" }),
+      ]);
+      const res = await POST(req);
+      const data = await res.json();
+      expect(res.status).toBe(200);
+      expect(data.results[0].matchQuality).toBe("exact");
+      expect(data.results[0].studentNumber).toBe("202100001");
+    }
+  });
 });
 
 describe("POST /api/upload-grades — Validation", () => {
