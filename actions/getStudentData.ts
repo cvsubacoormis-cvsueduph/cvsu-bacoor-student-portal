@@ -114,6 +114,7 @@ export async function getStudentData(): Promise<StudentData> {
         retakenAYSem: grade.retakenAYSem || "",
         creditUnit: grade.creditUnit,
         createdAt: grade.createdAt,
+        reassignedFromAYSem: grade.reassignedFromAYSem ?? null,
       })),
       gradesHidden,
       status: student.status,

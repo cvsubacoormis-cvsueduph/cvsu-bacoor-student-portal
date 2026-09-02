@@ -148,6 +148,7 @@ export type GetStudentWithGradesResult = {
       retakenAYSem: string | null;
       academicYear: string;
       semester: string;
+      reassignedFromAYSem: string | null;
     }[];
   } | null;
   hidden: boolean;
@@ -226,6 +227,7 @@ export async function getStudentGradesWithReExam(
           retakenAYSem: true,
           academicYear: true,
           semester: true,
+          reassignedFromAYSem: true,
         },
       },
     },

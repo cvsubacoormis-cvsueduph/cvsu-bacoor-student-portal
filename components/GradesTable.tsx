@@ -29,7 +29,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import GenerateCOG from "@/components/GenerateCOG";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert, ArrowLeftRight } from "lucide-react";
 
 interface Grade {
   id: string;
@@ -42,6 +42,7 @@ interface Grade {
   instructor: string;
   academicYear: string;
   semester: string;
+  reassignedFromAYSem?: string | null;
 }
 
 interface GradesProps {
@@ -318,7 +319,18 @@ export default function Grades({
                             isFailing ? "text-destructive" : "text-primary"
                           }`}
                         >
-                          {displayGrade}
+                          <div className="flex flex-col items-center gap-1">
+                            <span>{displayGrade}</span>
+                            {grade.reassignedFromAYSem && (
+                              <Badge
+                                className="gap-1 bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200 font-semibold"
+                                title={`Reassigned from ${grade.reassignedFromAYSem}`}
+                              >
+                                <ArrowLeftRight className="h-3 w-3" />
+                                Reassigned
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center font-bold">
                           {grade.reExam !== null &&

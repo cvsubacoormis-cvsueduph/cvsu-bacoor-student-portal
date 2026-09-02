@@ -30,6 +30,7 @@ import {
   BadgeCheck,
   ChevronLeft,
   ChevronRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import { Grade, Student } from "@/lib/types";
 import { useUser } from "@clerk/nextjs";
@@ -215,6 +216,28 @@ function GradesSection({ grades }: { grades: Grade[] }) {
   );
 }
 
+function ReassignedBadge({ value }: { value: string }) {
+  const [ay, sem] = value.split(" / ");
+  const label = `${ay ? ay.replace("AY_", "AY ").replace("_", "-") : ay} / ${
+    sem === "FIRST"
+      ? "First Sem"
+      : sem === "SECOND"
+        ? "Second Sem"
+        : sem === "MIDYEAR"
+          ? "Midyear"
+          : sem
+  }`;
+  return (
+    <Badge
+      className="gap-1 bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200 font-semibold"
+      title={`This grade was reassigned from ${label}`}
+    >
+      <ArrowLeftRight className="h-3 w-3" />
+      Reassigned from {label}
+    </Badge>
+  );
+}
+
 function MobileGradesList({ pagedGrades }: { pagedGrades: Grade[] }) {
   return (
     <ul className="md:hidden divide-y">
@@ -245,6 +268,11 @@ function MobileGradesList({ pagedGrades }: { pagedGrades: Grade[] }) {
               <div className="text-xs text-muted-foreground">
                 {g.instructor}
               </div>
+              {g.reassignedFromAYSem && (
+                <div className="mt-1.5 flex justify-end">
+                  <ReassignedBadge value={g.reassignedFromAYSem} />
+                </div>
+              )}
             </div>
           </div>
         </li>
@@ -290,7 +318,14 @@ function DesktopGradesTable({
                 {g.semester === "FIRST" ? "First Semester" : "Second Semester"}
               </TableCell>
               <TableCell className="text-right">{g.creditUnit}</TableCell>
-              <TableCell className="text-right">{g.grade}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex flex-col items-end gap-1">
+                  <span>{g.grade}</span>
+                  {g.reassignedFromAYSem && (
+                    <ReassignedBadge value={g.reassignedFromAYSem} />
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="text-right">{g.reExam}</TableCell>
               <TableCell className="text-right">{g.instructor}</TableCell>
             </TableRow>

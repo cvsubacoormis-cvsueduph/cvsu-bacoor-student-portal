@@ -765,6 +765,8 @@ export interface UploadedGradeRecord {
   createdAt: string;
   /** Action type from GradeLog: CREATED, UPDATED, FAILED, etc. */
   action: string;
+  /** Set when this record was moved here by faculty reassignment (source term, e.g. "AY_2024_2025 / FIRST"). */
+  reassignedFromAYSem: string | null;
 }
 
 export interface GetFacultyUploadedGradesParams {
@@ -986,6 +988,7 @@ export async function getFacultyUploadedGrades(
             instructor: true,
             uploadedBy: true,
             createdAt: true,
+            reassignedFromAYSem: true,
           },
           orderBy: [{ courseCode: "asc" }, { courseTitle: "asc" }],
           skip: (page - 1) * pageSize,
@@ -1057,6 +1060,7 @@ export async function getFacultyUploadedGrades(
           uploadedBy: g.uploadedBy ?? g.instructor,
           createdAt: g.createdAt.toISOString(),
           action: "CREATED",
+          reassignedFromAYSem: g.reassignedFromAYSem ?? null,
         })),
         total: gradeTotal,
         availableCourseCodes: [
@@ -1158,6 +1162,7 @@ export async function getFacultyUploadedGrades(
         uploadedBy: log.importedName ?? log.instructor,
         createdAt: log.performedAt.toISOString(),
         action: log.action,
+        reassignedFromAYSem: null,
       })),
       total: gradeLogCount,
       availableCourseCodes: distinctCodes.map((c) => c.courseCode),
@@ -1459,6 +1464,382 @@ export async function rollbackFacultyGrades(
     console.error("Failed to rollback faculty grades", error);
     throw new Error(
       `Rollback failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+}
+
+// ── Reassign: move a faculty's uploaded grades to a different term ──────────
+// Moves every Grade record attributed to the faculty in the source term into
+// the target term. Conflicts (same student + course already present in the
+// target term) are skipped and reported. GradeLog audit entries are written
+// to the source term documenting the move, and student grade caches are
+// invalidated.
+
+export interface ReassignFacultyGradesParams {
+  facultyId: string;
+  fromAcademicYear: AcademicYear;
+  fromSemester: Semester;
+  toAcademicYear: AcademicYear;
+  toSemester: Semester;
+}
+
+export interface ReassignFacultyGradesResult {
+  /** Number of Grade records moved into the target term. */
+  movedCount: number;
+  /** Number of records skipped because they already exist in the target term. */
+  skippedCount: number;
+  /** Total number of Grade records attributed to the faculty in the source term. */
+  totalCount: number;
+  /** The skipped (conflicting) student/course pairs, capped for payload size. */
+  conflicts: { studentNumber: string; courseCode: string }[];
+}
+
+const CONFLICT_REPORT_LIMIT = 50;
+
+function isAcademicYearValue(value: unknown): value is AcademicYear {
+  return (
+    typeof value === "string" &&
+    (Object.values(AcademicYear) as string[]).includes(value)
+  );
+}
+
+function isSemesterValue(value: unknown): value is Semester {
+  return (
+    typeof value === "string" &&
+    (Object.values(Semester) as string[]).includes(value)
+  );
+}
+
+export async function reassignFacultyGrades(
+  params: ReassignFacultyGradesParams,
+): Promise<ReassignFacultyGradesResult> {
+  const {
+    facultyId,
+    fromAcademicYear,
+    fromSemester,
+    toAcademicYear,
+    toSemester,
+  } = params;
+
+  // ── 1. Authentication & authorization (admin/superuser/registrar only) ──
+  await authorizeAccess();
+
+  const { sessionClaims } = await auth();
+  const userRole = (sessionClaims?.metadata as { role?: string })?.role;
+  if (
+    userRole !== "admin" &&
+    userRole !== "superuser" &&
+    userRole !== "registrar"
+  ) {
+    throw new Error(
+      "Forbidden: only admin, superuser, and registrar can reassign faculty grades.",
+    );
+  }
+
+  // ── 2. Validate input against Prisma enums ─────────────────────────────
+  if (!facultyId || typeof facultyId !== "string" || facultyId.length > 100) {
+    throw new Error("Invalid faculty id.");
+  }
+  if (
+    !isAcademicYearValue(fromAcademicYear) ||
+    !isAcademicYearValue(toAcademicYear) ||
+    !isSemesterValue(fromSemester) ||
+    !isSemesterValue(toSemester)
+  ) {
+    throw new Error("Invalid academic year or semester.");
+  }
+
+  if (
+    fromAcademicYear === toAcademicYear &&
+    fromSemester === toSemester
+  ) {
+    throw new Error("Source and target terms must be different.");
+  }
+
+  try {
+    // ── 3. Fetch faculty & build name permutations ──────────────────────
+    const faculty = await prisma.user.findUnique({
+      where: { id: facultyId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleInit: true,
+        username: true,
+      },
+    });
+
+    if (!faculty) {
+      throw new Error("Faculty not found.");
+    }
+
+    const perms = buildFacultyNamePermutations(faculty);
+
+    // ── 4. Find all Grade records attributed to this faculty in the
+    //       source term (broad Prisma filter + JS refine). ───────────────
+    const candidateGrades = await prisma.grade.findMany({
+      where: {
+        academicYear: fromAcademicYear,
+        semester: fromSemester,
+        OR: [
+          { instructor: { contains: faculty.lastName, mode: "insensitive" } },
+          { instructor: { contains: faculty.username, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.lastName, mode: "insensitive" } },
+          { uploadedBy: { contains: faculty.username, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        studentNumber: true,
+        courseCode: true,
+        courseTitle: true,
+        creditUnit: true,
+        grade: true,
+        remarks: true,
+        instructor: true,
+        uploadedBy: true,
+        subjectOfferingId: true,
+      },
+    });
+
+    const attributed = candidateGrades.filter(
+      (g) =>
+        nameMatchesFaculty(g.instructor, perms) ||
+        nameMatchesFaculty(g.uploadedBy ?? "", perms),
+    );
+
+    const totalCount = attributed.length;
+    if (totalCount === 0) {
+      return { movedCount: 0, skippedCount: 0, totalCount: 0, conflicts: [] };
+    }
+
+    // ── 5. Detect conflicts: unique key (student, course) in target term ─
+    //       Queries are independent → run in parallel.
+    const offeringIds = [
+      ...new Set(
+        attributed
+          .map((g) => g.subjectOfferingId)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    ];
+
+    const [existingTargetGrades, oldOfferings] = await Promise.all([
+      prisma.grade.findMany({
+        where: {
+          academicYear: toAcademicYear,
+          semester: toSemester,
+          studentNumber: {
+            in: [...new Set(attributed.map((g) => g.studentNumber))],
+          },
+        },
+        select: { studentNumber: true, courseCode: true },
+      }),
+      offeringIds.length > 0
+        ? prisma.subjectOffering.findMany({
+            where: { id: { in: offeringIds } },
+            select: { id: true, curriculumId: true },
+          })
+        : Promise.resolve([] as { id: string; curriculumId: string }[]),
+    ]);
+
+    const targetKeys = new Set(
+      existingTargetGrades.map((g) => `${g.studentNumber}::${g.courseCode}`),
+    );
+
+    const toMove = attributed.filter(
+      (g) => !targetKeys.has(`${g.studentNumber}::${g.courseCode}`),
+    );
+    const conflicts = attributed.filter(
+      (g) => targetKeys.has(`${g.studentNumber}::${g.courseCode}`),
+    );
+
+    if (toMove.length === 0) {
+      return {
+        movedCount: 0,
+        skippedCount: conflicts.length,
+        totalCount,
+        conflicts: conflicts.slice(0, CONFLICT_REPORT_LIMIT).map((g) => ({
+          studentNumber: g.studentNumber,
+          courseCode: g.courseCode,
+        })),
+      };
+    }
+
+    // ── 6. Remap subjectOfferings to the target term ─────────────────────
+    //       a) grades that already had an offering → match by curriculumId;
+    //       b) otherwise → match by courseCode (mirrors actions/grades.ts).
+    const offeringRemap = new Map<string, string>(); // grade.id -> new offering id
+
+    const oldByOfferingId = new Map(
+      oldOfferings.map((o) => [o.id, o.curriculumId]),
+    );
+    const oldCurriculumIds = [
+      ...new Set(
+        toMove
+          .map((g) => (g.subjectOfferingId ? oldByOfferingId.get(g.subjectOfferingId) : undefined))
+          .filter((v): v is string => Boolean(v)),
+      ),
+    ];
+    const missingCourseCodes = [
+      ...new Set(toMove.map((g) => g.courseCode)),
+    ];
+
+    const [newOfferingsByCurriculum, newOfferingsByCourse] = await Promise.all([
+      oldCurriculumIds.length > 0
+        ? prisma.subjectOffering.findMany({
+            where: {
+              academicYear: toAcademicYear,
+              semester: toSemester,
+              curriculumId: { in: oldCurriculumIds },
+            },
+            select: { id: true, curriculumId: true },
+          })
+        : Promise.resolve([] as { id: string; curriculumId: string }[]),
+      missingCourseCodes.length > 0
+        ? prisma.subjectOffering.findMany({
+            where: {
+              academicYear: toAcademicYear,
+              semester: toSemester,
+              curriculum: { courseCode: { in: missingCourseCodes } },
+            },
+            select: {
+              id: true,
+              curriculum: { select: { courseCode: true } },
+            },
+          })
+        : Promise.resolve(
+            [] as { id: string; curriculum: { courseCode: string } }[],
+          ),
+    ]);
+
+    const newByCurriculumId = new Map(
+      newOfferingsByCurriculum.map((o) => [o.curriculumId, o.id]),
+    );
+    const newByCourseCode = new Map(
+      newOfferingsByCourse.map((o) => [o.curriculum.courseCode, o.id]),
+    );
+
+    for (const g of toMove) {
+      if (g.subjectOfferingId) {
+        const curriculumId = oldByOfferingId.get(g.subjectOfferingId);
+        const remapped = curriculumId
+          ? newByCurriculumId.get(curriculumId)
+          : undefined;
+        if (remapped) {
+          offeringRemap.set(g.id, remapped);
+          continue;
+        }
+      }
+      const byCourse = newByCourseCode.get(g.courseCode);
+      if (byCourse) offeringRemap.set(g.id, byCourse);
+    }
+
+    // ── 7. Execute the move in a single transaction ──────────────────────
+    //       Uses the array form (not an interactive callback) — the same
+    //       pattern as rollbackFacultyGrades, which is reliable on the
+    //       pooled Neon connection used by this deployment. Audit logs are
+    //       written against the SOURCE term so its history documents that
+    //       the records were moved out.
+    const facultyFullName = [
+      `${faculty.firstName} ${faculty.lastName}`,
+      faculty.middleInit ? ` ${faculty.middleInit}.` : "",
+    ]
+      .join("")
+      .trim();
+
+    const logData = toMove.map((g) => ({
+      studentNumber: g.studentNumber,
+      courseCode: g.courseCode,
+      courseTitle: g.courseTitle,
+      creditUnit: g.creditUnit,
+      grade: g.grade,
+      remarks: g.remarks,
+      instructor: g.instructor,
+      academicYear: fromAcademicYear,
+      semester: fromSemester,
+      action: "REASSIGNED",
+      changeReason: `Reassigned to ${toAcademicYear} / ${toSemester}`,
+      isResolved: true,
+      importedName: facultyFullName,
+    }));
+
+    const transactionOps: Prisma.PrismaPromise<unknown>[] = [
+      prisma.academicTerm.upsert({
+        where: {
+          academicYear_semester: {
+            academicYear: toAcademicYear,
+            semester: toSemester,
+          },
+        },
+        create: {
+          academicYear: toAcademicYear,
+          semester: toSemester,
+        },
+        update: {},
+      }),
+      prisma.gradeLog.createMany({ data: logData }),
+      ...toMove.map((g) =>
+        prisma.grade.update({
+          where: { id: g.id },
+          data: {
+            academicYear: toAcademicYear,
+            semester: toSemester,
+            subjectOfferingId: offeringRemap.get(g.id) ?? null,
+            // Flag the record as reassigned, remembering where it came from.
+            reassignedFromAYSem: `${fromAcademicYear} / ${fromSemester}`,
+          },
+        }),
+      ),
+    ];
+
+    try {
+      await prisma.$transaction(transactionOps);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        (error as { code?: string }).code === "P2002"
+      ) {
+        throw new Error(
+          "A conflicting grade appeared in the target term during the move. No records were changed; please try again.",
+        );
+      }
+      throw error;
+    }
+
+    // ── 8. Invalidate grade caches for all affected students ─────────────
+    const affectedStudentNumbers = [
+      ...new Set(toMove.map((g) => g.studentNumber)),
+    ];
+    const affectedStudents = await prisma.student
+      .findMany({
+        where: { studentNumber: { in: affectedStudentNumbers } },
+        select: { id: true },
+      })
+      .catch(() => []);
+
+    await Promise.all(
+      affectedStudents.map(({ id: userId }) =>
+        Promise.all([
+          redis.del(`cache:student:${userId}:v1`),
+          invalidateByPattern(`cache:grades:${userId}:*`),
+        ]).catch(() => {}),
+      ),
+    ).catch(() => {});
+
+    return {
+      movedCount: toMove.length,
+      skippedCount: conflicts.length,
+      totalCount,
+      conflicts: conflicts.slice(0, CONFLICT_REPORT_LIMIT).map((g) => ({
+        studentNumber: g.studentNumber,
+        courseCode: g.courseCode,
+      })),
+    };
+  } catch (error) {
+    console.error("Failed to reassign faculty grades", error);
+    throw new Error(
+      `Reassign failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
 }

@@ -14,6 +14,8 @@ export interface Grade {
   creditUnit: number;
   reExam?: string;
   createdAt: Date;
+  /** Source term of a reassigned grade, e.g. "AY_2024_2025 / FIRST". Null/absent = not reassigned. */
+  reassignedFromAYSem?: string | null;
 }
 
 export interface GradeAttempt {

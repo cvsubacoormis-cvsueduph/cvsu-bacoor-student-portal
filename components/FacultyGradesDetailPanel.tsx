@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { useDebouncedCallback } from "use-debounce";
 import {
   AlertTriangle,
+  ArrowLeftRight,
   BookOpen,
   Check,
   CheckCircle2,
@@ -72,6 +73,23 @@ function formatDateTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** "AY_2024_2025 / FIRST" → "AY 2024-2025 / First Sem" */
+function formatReassignedFrom(value: string): string {
+  const [ay, sem] = value.split(" / ");
+  const ayLabel = ay
+    ? ay.replace("AY_", "AY ").replace("_", "-")
+    : (ay ?? "");
+  const semLabel =
+    sem === "FIRST"
+      ? "First Sem"
+      : sem === "SECOND"
+        ? "Second Sem"
+        : sem === "MIDYEAR"
+          ? "Midyear"
+          : (sem ?? "");
+  return `${ayLabel} / ${semLabel}`;
 }
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -1041,8 +1059,19 @@ export function FacultyGradesDetailPanel({
                           {g.grade}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-gray-500 max-w-[120px] truncate">
-                        {g.remarks ?? "-"}
+                      <TableCell className="text-xs text-gray-500 max-w-[140px]">
+                        <div className="flex flex-col gap-1">
+                          <span className="truncate">{g.remarks ?? "-"}</span>
+                          {g.reassignedFromAYSem && (
+                            <Badge
+                              className="w-fit bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200 text-[10px] font-semibold px-1.5 py-0 gap-1"
+                              title={`Reassigned from ${formatReassignedFrom(g.reassignedFromAYSem)}`}
+                            >
+                              <ArrowLeftRight className="h-3 w-3" />
+                              Reassigned
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {g.action === "FAILED" ? (

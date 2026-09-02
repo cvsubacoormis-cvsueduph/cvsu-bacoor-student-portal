@@ -58,6 +58,7 @@ import {
   type UploadSession,
 } from "@/actions/faculty-monitoring";
 import { FacultyGradesDetailPanel } from "@/components/FacultyGradesDetailPanel";
+import { FacultyReassignDialog } from "@/components/FacultyReassignDialog";
 import type { AcademicYear, Semester } from "@prisma/client";
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -776,9 +777,27 @@ export function FacultyMonitoringClient({
                               <TableRow className="bg-gray-50/70 hover:bg-gray-50/70">
                                 <TableCell colSpan={4} className="p-4">
                                   <div className="pl-6">
-                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                                      Upload History &mdash; {faculty.name}
-                                    </p>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        Upload History &mdash; {faculty.name}
+                                      </p>
+                                      {canRollback && !isFacultyView && (
+                                        <FacultyReassignDialog
+                                          facultyId={faculty.id}
+                                          facultyName={faculty.name}
+                                          fromAcademicYear={
+                                            academicYear as AcademicYear
+                                          }
+                                          fromSemester={semester as Semester}
+                                          gradeCount={
+                                            faculty.gradesUploadedCount
+                                          }
+                                          onComplete={function () {
+                                            router.refresh();
+                                          }}
+                                        />
+                                      )}
+                                    </div>
                                     <FacultyHistoryPanel
                                       facultyId={faculty.id}
                                       facultyName={faculty.name}

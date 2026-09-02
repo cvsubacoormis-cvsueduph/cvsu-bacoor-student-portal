@@ -128,6 +128,10 @@ model Grade {
   createdAt     DateTime     @default(now())
   uploadedBy    String
 
+  /// Set when this grade record was moved into this term via faculty reassignment.
+  /// Stores the source term as "AY_YYYY_YYYY / SEMESTER" (e.g. "AY_2024_2025 / FIRST").
+  reassignedFromAYSem String?
+
   subjectOfferingId String?
   subjectOffering   SubjectOffering? @relation(fields: [subjectOfferingId], references: [id])
 
