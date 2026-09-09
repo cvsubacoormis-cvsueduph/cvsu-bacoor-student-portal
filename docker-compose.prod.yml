@@ -1,0 +1,51 @@
+version: '3.9'
+
+name: cvsu-prod
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cvsu-portal-redis-prod
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data-prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+    networks:
+      - prod-network
+
+  app:
+    build: .
+    ports:
+      - "3002:3001"
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      REDIS_HOST: cvsu-portal-redis-prod
+      REDIS_PORT: 6379
+      HOST: 0.0.0.0
+      PORT: 3001
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - prod-network
+
+networks:
+  prod-network:
+    driver: bridge
+
+volumes:
+  redis-data-prod:

@@ -1,0 +1,37 @@
+version: '3.9'
+
+name: cvsu-local
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cvsu-portal-redis-local
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-local:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      REDIS_HOST: cvsu-portal-redis-local
+      REDIS_PORT: 6379
+      HOST: 0.0.0.0
+      PORT: 3001
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data-local:
