@@ -16,7 +16,7 @@ export async function checkChecklistRateLimit() {
 
     await checkRateLimitRedis({
       action: "generate_checklist",
-      limit: 5,
+      limit: 30,
       windowSeconds: 60,
     });
     return { success: true };
@@ -45,7 +45,7 @@ export async function checkCOGRateLimit() {
 
     await checkRateLimitRedis({
       action: "generate_cog",
-      limit: 5,
+      limit: 30,
       windowSeconds: 60,
     });
     return { success: true };
@@ -73,7 +73,7 @@ export async function checkCOGAdminRateLimit() {
 
     await checkRateLimitRedis({
       action: "generate_cog_admin",
-      limit: 10,
+      limit: 30,
       windowSeconds: 60,
     });
     return { success: true };
