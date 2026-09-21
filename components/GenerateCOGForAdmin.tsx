@@ -394,7 +394,7 @@ export default function GenerateCOGAdmin({
     doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
-    const fullName = `${student.firstName}, ${student.middleInit || ""} ${
+    const fullName = `${student.firstName} ${student.middleInit || ""}.${
       student.lastName
     }`;
     const studentNo = student.studentNumber;
