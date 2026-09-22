@@ -232,12 +232,22 @@ export function cogFileName(studentNumber: string): string {
   return `Certificate-of-Grades-${studentNumber}.pdf`;
 }
 
-/** Multi-layered blue wavy background used on every COG page. */
+/**
+ * Multi-layered blue wavy background used on every COG page.
+ *
+ * Written to a canvas and embedded as a PNG. This is safe for file size because
+ * the artwork is smooth gradient fills that deflate to a few KB — the real
+ * saving comes from {@link generateCOGPdf}'s `compress: true`, without which
+ * jsPDF stores the bitmap uncompressed.
+ */
 function drawWavyBackground(doc: jsPDF) {
+  // Rendered at 4x A4 (≈400 DPI) so the wave edges stay crisp in print. The
+  // PNG that results is small enough that this costs almost nothing once the
+  // PDF stream is compressed.
   const scale = 4;
   const canvas = document.createElement("canvas");
-  const w = 210 * scale;
-  const h = 297 * scale;
+  const w = Math.round(210 * scale);
+  const h = Math.round(297 * scale);
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d");
@@ -317,6 +327,9 @@ function drawWavyBackground(doc: jsPDF) {
     [-25, 20, -35, 15, -10, 30],
   );
 
+  // Keep PNG: this artwork deflates to a few KB losslessly (it is smooth
+  // gradient fills), so a lossy format would risk artifacts for no gain. The
+  // size win comes from `compress: true` on the document, not from here.
   doc.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 210, 297);
 }
 
@@ -774,6 +787,10 @@ export async function generateCOGPdf({
     orientation: "p",
     unit: "mm",
     format: "a4",
+    // Flate-compress the content streams. Without this jsPDF stores them
+    // uncompressed, which is what made a text-plus-background COG balloon to
+    // several megabytes.
+    compress: true,
     encryption: {
       ownerPassword,
       userPermissions: [...PDF_PERMISSIONS],
@@ -794,7 +811,10 @@ export async function generateCOGPdf({
     creator: "CvSU Bacoor Portal",
   });
 
-  // Invisible text — readable in the raw PDF source for registrar verification.
+  // Invisible text carrying the tamper-evident hash and the owner password.
+  // Note: the content stream is Flate-compressed and encrypted, so recovering
+  // this marker requires inflating/decrypting the stream rather than grepping
+  // the raw file bytes.
   doc.setFontSize(0.01);
   doc.setTextColor(255, 255, 255);
   doc.text(
