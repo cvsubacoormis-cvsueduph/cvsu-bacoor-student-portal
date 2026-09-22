@@ -21,5 +21,4 @@
 --     ON "Grade" ("academicYear", "semester", "studentNumber", "courseCode");
 -- then mark this migration as already applied with `prisma migrate resolve`.
 
-CREATE INDEX "Grade_academicYear_semester_studentNumber_courseCode_idx"
-  ON "Grade" ("academicYear", "semester", "studentNumber", "courseCode");
+CREATE INDEX "Grade_academicYear_semester_studentNumber_courseCode_idx" ON "Grade"("academicYear", "semester", "studentNumber", "courseCode");
