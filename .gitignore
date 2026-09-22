@@ -12,6 +12,10 @@
 
 .agents
 
+# Agent tooling (local only — permission allowlists and session metadata)
+.reasonix/
+reasonix.toml
+
 # testing
 /coverage
 
