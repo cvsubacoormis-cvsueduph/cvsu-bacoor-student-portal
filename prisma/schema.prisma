@@ -138,6 +138,10 @@ model Grade {
   @@unique([studentNumber, courseCode, academicYear, semester], map: "unique_grade_per_term")
   @@index([studentNumber])
   @@index([academicYear, semester])
+  /// Covers the term-scoped grades export, which filters on the term and then
+  /// pages with ORDER BY (studentNumber, courseCode). Without this the sort had
+  /// no supporting index, so every page re-sorted the entire term.
+  @@index([academicYear, semester, studentNumber, courseCode])
   @@index([instructor])
   @@index([courseCode])
 }

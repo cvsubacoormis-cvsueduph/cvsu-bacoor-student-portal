@@ -41,6 +41,99 @@ function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
 
+/**
+ * Row shape returned by the raw keyset query below.
+ * Column names are the database's, so they are quoted in SQL and aliased to
+ * the camelCase names the rest of the module expects.
+ */
+type RawExportRow = {
+  studentNumber: string;
+  courseCode: string;
+  courseTitle: string;
+  creditUnit: number;
+  grade: string;
+  reExam: string | null;
+  remarks: string | null;
+  instructor: string;
+  firstName: string;
+  lastName: string;
+  middleInit: string | null;
+};
+
+/**
+ * Fetches one page of a term's grades using a true keyset seek.
+ *
+ * This is raw SQL on purpose. Prisma's `cursor` does not generate a row
+ * comparison — its engine emits an OR-tree such as
+ *   (a = .. AND b = .. AND c >= ..) OR (a = .. AND b > ..) OR (a > ..)
+ * plus correlated subqueries that re-read the cursor row. PostgreSQL cannot
+ * turn that into a composite-index seek, so each page would still walk the
+ * index from the start and discard everything before the cursor.
+ *
+ * A row comparison — ("studentNumber", "courseCode") > ($1, $2) — *can* be
+ * served directly by the (academicYear, semester, studentNumber, courseCode)
+ * index, so the seek is O(log n) instead of O(page offset).
+ *
+ * Every value is a bound parameter ($1..$6); nothing is interpolated.
+ * The enums are cast explicitly because PostgreSQL will not compare a text
+ * parameter to an enum column.
+ */
+async function fetchGradePage(
+  academicYear: AcademicYear,
+  semester: Semester,
+  cursor: { studentNumber: string; courseCode: string } | null,
+  take: number,
+): Promise<RawExportRow[]> {
+  // Two variants rather than one query with a conditionally-null cursor, so the
+  // first page keeps a clean `Index Cond` on the term alone.
+  if (!cursor) {
+    return prisma.$queryRaw<RawExportRow[]>`
+      SELECT g."studentNumber", g."courseCode", g."courseTitle",
+             g."creditUnit", g."grade", g."reExam", g."remarks", g."instructor",
+             s."firstName", s."lastName", s."middleInit"
+      FROM "Grade" g
+      JOIN "Student" s ON s."studentNumber" = g."studentNumber"
+      WHERE g."academicYear" = ${academicYear}::"AcademicYear"
+        AND g."semester" = ${semester}::"Semester"
+      ORDER BY g."studentNumber" ASC, g."courseCode" ASC
+      LIMIT ${take}
+    `;
+  }
+
+  return prisma.$queryRaw<RawExportRow[]>`
+    SELECT g."studentNumber", g."courseCode", g."courseTitle",
+           g."creditUnit", g."grade", g."reExam", g."remarks", g."instructor",
+           s."firstName", s."lastName", s."middleInit"
+    FROM "Grade" g
+    JOIN "Student" s ON s."studentNumber" = g."studentNumber"
+    WHERE g."academicYear" = ${academicYear}::"AcademicYear"
+      AND g."semester" = ${semester}::"Semester"
+      AND (g."studentNumber", g."courseCode") > (${cursor.studentNumber}, ${cursor.courseCode})
+    ORDER BY g."studentNumber" ASC, g."courseCode" ASC
+    LIMIT ${take}
+  `;
+}
+
+/** Adapts a raw row to the shape the row mapper expects. */
+function toGradeWithStudent(row: RawExportRow): GradeWithStudent {
+  return {
+    studentNumber: row.studentNumber,
+    courseCode: row.courseCode,
+    courseTitle: row.courseTitle,
+    creditUnit: row.creditUnit,
+    grade: row.grade,
+    reExam: row.reExam,
+    remarks: row.remarks,
+    instructor: row.instructor,
+    student: {
+      studentNumber: row.studentNumber,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      middleInit: row.middleInit,
+    },
+  };
+}
+
 export async function GET(request: NextRequest) {
   // --- Authentication ---
   const { userId, sessionClaims } = await auth();
@@ -93,54 +186,31 @@ export async function GET(request: NextRequest) {
         { status: 404 },
       );
     }
-    // Page through the term with KEYSET (seek) pagination rather than OFFSET.
+    // Page through the term with a KEYSET (seek) pagination loop.
     //
     // The ordering key is (studentNumber, courseCode), which is a total order
     // within one (academicYear, semester) term because of the
     // @@unique([studentNumber, courseCode, academicYear, semester]) constraint.
-    // Seeking past the last row of the previous page therefore cannot duplicate
-    // or skip rows, whereas OFFSET would both re-scan everything before the
-    // offset and shift if rows were inserted mid-export.
+    // Seeking strictly past the last row of the previous page therefore cannot
+    // duplicate or skip rows, unlike OFFSET which both re-scans everything
+    // before the offset and shifts when rows change mid-export.
+    //
+    // The seek itself is issued as raw SQL (see fetchGradePage) because
+    // Prisma's query builder cannot emit a row comparison.
     const rows: ReturnType<typeof toGradeExportRows> = [];
     let cursor: { studentNumber: string; courseCode: string } | null = null;
 
     for (;;) {
-      // This annotation is required, not decorative: `cursor` is assigned from
-      // the previous page's last row, so omitting it makes TS report TS7022
-      // ('page' is referenced directly or indirectly in its own initializer) at
-      // both this line and the `last` assignment below.
-      const page: GradeWithStudent[] = await prisma.grade.findMany({
-        where: cursor
-          ? {
-              ...where,
-              // Strictly after the cursor: either a later studentNumber, or the
-              // same studentNumber with a later courseCode.
-              OR: [
-                { studentNumber: { gt: cursor.studentNumber } },
-                {
-                  studentNumber: cursor.studentNumber,
-                  courseCode: { gt: cursor.courseCode },
-                },
-              ],
-            }
-          : where,
-        include: {
-          student: {
-            select: {
-              studentNumber: true,
-              firstName: true,
-              lastName: true,
-              middleInit: true,
-            },
-          },
-        },
-        orderBy: [{ studentNumber: "asc" }, { courseCode: "asc" }],
-        take: EXPORT_PAGE_SIZE,
-      });
+      const page = await fetchGradePage(
+        where.academicYear,
+        where.semester,
+        cursor,
+        EXPORT_PAGE_SIZE,
+      );
 
       if (page.length === 0) break;
 
-      rows.push(...toGradeExportRows(page));
+      rows.push(...toGradeExportRows(page.map(toGradeWithStudent)));
 
       // A short page means the term is exhausted; stop without a further query.
       if (page.length < EXPORT_PAGE_SIZE) break;

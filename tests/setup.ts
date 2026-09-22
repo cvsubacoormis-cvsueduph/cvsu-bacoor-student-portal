@@ -152,6 +152,10 @@ vi.mock("@/lib/prisma", () => ({
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     $transaction: vi.fn().mockResolvedValue([]),
+    // Used by the term-grades export for its keyset seek (Prisma's query
+    // builder cannot emit a row comparison). Tagged-template calls pass an
+    // array of SQL fragments as the first argument.
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $disconnect: vi.fn(),
   },
 }));

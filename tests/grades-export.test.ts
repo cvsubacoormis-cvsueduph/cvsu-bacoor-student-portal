@@ -37,6 +37,24 @@ const sampleGrade = {
   },
 };
 
+/**
+ * Shape returned by the route's raw keyset query: flat columns, because the
+ * SQL joins Grade and Student into one row rather than nesting a relation.
+ */
+const sampleRawRow = {
+  studentNumber: "20210010",
+  courseCode: "CS101",
+  courseTitle: "Intro to Computing",
+  creditUnit: 3,
+  grade: "1.75",
+  reExam: null,
+  remarks: "PASSED",
+  instructor: "DR. SMITH",
+  firstName: "John",
+  lastName: "Doe",
+  middleInit: "A",
+};
+
 describe("GET /api/grades/export", () => {
   let GET: (req: Request) => Promise<Response>;
 
@@ -128,7 +146,6 @@ describe("GET /api/grades/export", () => {
 
     it("404s when the term has no grades", async () => {
       (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 0 } });
-      (prisma.grade.findMany as any).mockResolvedValue([]);
       const res = await GET(createMockRequest("GET", EXPORT_URL));
       expect(res.status).toBe(404);
     });
@@ -138,17 +155,16 @@ describe("GET /api/grades/export", () => {
     beforeEach(() => {
       setAuthRegistrar();
       (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 1 } });
-      (prisma.grade.findMany as any).mockResolvedValue([sampleGrade]);
+      (prisma.$queryRaw as any).mockResolvedValue([sampleRawRow]);
     });
 
     it("queries only the requested term", async () => {
       await GET(createMockRequest("GET", EXPORT_URL));
 
-      expect(prisma.grade.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { academicYear: "AY_2024_2025", semester: "FIRST" },
-        }),
-      );
+      // The term is passed as a bound parameter to the raw query.
+      const params = (prisma.$queryRaw as any).mock.calls[0].slice(1);
+      expect(params).toContain("AY_2024_2025");
+      expect(params).toContain("FIRST");
     });
 
     it("returns an xlsx attachment with the template filename", async () => {
@@ -224,15 +240,16 @@ describe("GET /api/grades/export — pagination and compression", () => {
 
   /**
    * Rows must have UNIQUE (studentNumber, courseCode) pairs — that is the real
-   * @@unique constraint keyset paging relies on. Deriving both columns from `i`
-   * with modular arithmetic would alias different rows onto the same key and
-   * make the cursor ambiguous.
+   * @@unique constraint the keyset seek relies on. Deriving both columns from
+   * `i` with modular arithmetic would alias different rows onto the same key
+   * and make the cursor ambiguous.
    */
-  function fakeGrade(i: number) {
+  function fakeRow(i: number) {
     const studentIndex = Math.floor(i / 50); // 50 subjects per student
     const subjectIndex = i % 50;
+    const studentNumber = `2021${String(studentIndex).padStart(5, "0")}`;
     return {
-      studentNumber: `2021${String(studentIndex).padStart(5, "0")}`,
+      studentNumber,
       courseCode: `CS${100 + subjectIndex}`,
       courseTitle: "Intro to Computing",
       creditUnit: 3,
@@ -240,39 +257,50 @@ describe("GET /api/grades/export — pagination and compression", () => {
       reExam: null,
       remarks: "PASSED",
       instructor: "DR. SMITH",
-      student: {
-        studentNumber: `2021${String(studentIndex).padStart(5, "0")}`,
-        firstName: "John",
-        lastName: "Doe",
-        middleInit: "A",
-      },
+      firstName: "John",
+      lastName: "Doe",
+      middleInit: "A",
     };
   }
 
   /**
-   * Emulates keyset paging over the fixture: a genuine seek strictly after the
-   * cursor, so a wrong cursor comparator shows up as duplicated or lost rows.
+   * Emulates the raw keyset query.
+   *
+   * `$queryRaw` is called as a tagged template, so the mock receives
+   * (sqlFragmentsArray, ...params) — NOT a query object. The cursor values and
+   * page size arrive as bound parameters, in the order they appear in the SQL.
+   *
+   * The mock deliberately keys off the parameter count to distinguish the first
+   * page (2 params: year, semester) from a seeking page (4 params: year,
+   * semester, cursor studentNumber, cursor courseCode). If the seek is ever
+   * lost, the mock returns the same page forever and the loop spins — which
+   * vitest surfaces as a worker crash rather than a silent pass.
    */
-  function keysetMock(total: number, onRows?: (n: number) => void) {
-    return async ({ where, take }: any) => {
-      const all = Array.from({ length: total }, (_, i) => fakeGrade(i)).sort(
+  function queryRawMock(total: number, onRows?: (n: number) => void) {
+    return async (strings: TemplateStringsArray, ...params: unknown[]) => {
+      const all = Array.from({ length: total }, (_, i) => fakeRow(i)).sort(
         (a, b) =>
           a.studentNumber.localeCompare(b.studentNumber) ||
           a.courseCode.localeCompare(b.courseCode),
       );
 
-      let after = all;
-      if (where?.OR) {
-        const [byNumber, byCourse] = where.OR;
-        after = all.filter(
-          (g) =>
-            g.studentNumber > byNumber.studentNumber.gt ||
-            (g.studentNumber === byCourse.studentNumber &&
-              g.courseCode > byCourse.courseCode.gt),
+      // First page passes [academicYear, semester, take].
+      // Seeking page passes [academicYear, semester, sn, cc, take].
+      let start = 0;
+      let take: number;
+      if (params.length >= 5) {
+        const [sn, cc] = params.slice(2, 4) as [string, string];
+        take = params[params.length - 1] as number;
+        const idx = all.findIndex(
+          (r) => r.studentNumber === sn && r.courseCode === cc,
         );
+        if (idx === -1) throw new Error("cursor row not found");
+        start = idx + 1; // strictly after the cursor
+      } else {
+        take = params[params.length - 1] as number;
       }
 
-      const page = after.slice(0, take);
+      const page = all.slice(start, start + take);
       onRows?.(page.length);
       return page;
     };
@@ -288,7 +316,7 @@ describe("GET /api/grades/export — pagination and compression", () => {
   it("exports a term larger than one page without truncating", async () => {
     const total = 12_345;
     (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
-    (prisma.grade.findMany as any).mockImplementation(keysetMock(total));
+    (prisma.$queryRaw as any).mockImplementation(queryRawMock(total));
 
     const res = await GET(createMockRequest("GET", EXPORT_URL));
 
@@ -299,39 +327,35 @@ describe("GET /api/grades/export — pagination and compression", () => {
     expect(res.headers.get("X-Export-Truncated")).toBeNull();
   });
 
-  it("pages by seeking on (studentNumber, courseCode) instead of OFFSET", async () => {
+  it("seeks with a row comparison rather than Prisma cursors or OFFSET", async () => {
     const total = 12_345;
     (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
-    (prisma.grade.findMany as any).mockImplementation(keysetMock(total));
+    (prisma.$queryRaw as any).mockImplementation(queryRawMock(total));
 
     await GET(createMockRequest("GET", EXPORT_URL));
 
-    const calls = (prisma.grade.findMany as any).mock.calls.map((c: any[]) => c[0]);
+    // The Prisma query builder is no longer used for paging at all: it cannot
+    // emit a row comparison, so the seek must not go through findMany.
+    expect(prisma.grade.findMany).not.toHaveBeenCalled();
 
-    // First page is unpaged; every later page seeks, and NO page uses OFFSET.
+    const calls = (prisma.$queryRaw as any).mock.calls;
     expect(calls.length).toBeGreaterThan(1);
-    expect(calls[0].OR).toBeUndefined();
-    for (const c of calls) {
-      expect(c).not.toHaveProperty("skip");
-      expect(c.take).toBe(PAGE);
-      // Every page stays scoped to the requested term.
-      expect(c.where.academicYear).toBe("AY_2024_2025");
-      expect(c.where.semester).toBe("FIRST");
-    }
 
-    // Seeking pages are a compound cursor: later studentNumber, or same
-    // studentNumber with a later courseCode. The final call is the exhaustion
-    // probe (empty page) and carries no cursor, so exclude trailing empties.
-    const seeking = calls.slice(1).filter((c: any) => c.where.OR !== undefined);
+    const sqlOf = (call: any[]) => (call[0] as string[]).join("?");
+
+    // First page: term filter only, no cursor predicate.
+    expect(sqlOf(calls[0])).not.toMatch(/\)\s*>\s*\(/);
+    expect(sqlOf(calls[0])).toMatch(/ORDER BY/i);
+    expect(sqlOf(calls[0])).toMatch(/LIMIT/i);
+
+    // Seeking pages use a genuine row comparison, which PostgreSQL can serve
+    // from the composite index. This is the whole point of using raw SQL.
+    const seeking = calls.filter((c) => c.length >= 5);
     expect(seeking.length).toBeGreaterThan(0);
     for (const c of seeking) {
-      expect(c.where.OR).toHaveLength(2);
-      expect(c.where.OR[0]).toEqual({
-        studentNumber: { gt: expect.any(String) },
-      });
-      expect(c.where.OR[1].courseCode).toEqual({ gt: expect.any(String) });
-      // The second clause must pin the same studentNumber as the first.
-      expect(c.where.OR[1].studentNumber).toBe(c.where.OR[0].studentNumber.gt);
+      expect(sqlOf(c)).toMatch(
+        /\(\s*\w+\."studentNumber"\s*,\s*\w+\."courseCode"\s*\)\s*>\s*\(/,
+      );
     }
   });
 
@@ -340,56 +364,39 @@ describe("GET /api/grades/export — pagination and compression", () => {
     (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
 
     let fetched = 0;
-    (prisma.grade.findMany as any).mockImplementation(
-      keysetMock(total, (n) => {
+    (prisma.$queryRaw as any).mockImplementation(
+      queryRawMock(total, (n) => {
         fetched += n;
       }),
     );
 
     const res = await GET(createMockRequest("GET", EXPORT_URL));
 
-    // 5000 + 5000 + 2000 rows, plus one empty page to confirm exhaustion.
+    // 5000 + 5000 + 2000 rows, then one empty page to confirm exhaustion.
     expect(fetched).toBe(total);
     expect(Number(res.headers.get("X-Export-Row-Count"))).toBe(total);
   });
 
-  it("breaks out of paging on an empty page rather than relying on the count", async () => {
-    // totalForTerm says 10,000 (two pages), but the term shrinks between the
-    // count and the reads. Returning an empty FIRST page distinguishes the
-    // explicit `break` from the loop-bound alone: without the break the loop
-    // would still issue a second call, so 1 call proves termination came from
-    // the guard and not from the arithmetic.
-    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 10_000 } });
-    (prisma.grade.findMany as any).mockResolvedValue([]);
+  it("binds the term and cursor as parameters, never interpolated", async () => {
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 1 } });
+    (prisma.$queryRaw as any).mockResolvedValue([fakeRow(0)]);
 
-    const res = await GET(createMockRequest("GET", EXPORT_URL));
+    await GET(createMockRequest("GET", EXPORT_URL));
 
-    expect(res.status).toBe(200);
-    expect((prisma.grade.findMany as any).mock.calls).toHaveLength(1);
-    expect(res.headers.get("X-Export-Row-Count")).toBe("0");
-  });
+    const params = (prisma.$queryRaw as any).mock.calls[0].slice(1);
+    // academicYear, semester, take — passed as bound values, so the SQL text
+    // contains no literal term values.
+    expect(params).toContain("AY_2024_2025");
+    expect(params).toContain("FIRST");
 
-  it("terminates when a later page comes back empty", async () => {
-    // Same guard, but exercised mid-loop: page 1 is full, page 2 is empty.
-    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 20_000 } });
-    let call = 0;
-    (prisma.grade.findMany as any).mockImplementation(async () => {
-      call++;
-      return call === 1
-        ? Array.from({ length: PAGE }, (_, i) => fakeGrade(i))
-        : [];
-    });
-
-    const res = await GET(createMockRequest("GET", EXPORT_URL));
-
-    expect(res.status).toBe(200);
-    expect((prisma.grade.findMany as any).mock.calls).toHaveLength(2);
-    expect(res.headers.get("X-Export-Row-Count")).toBe(String(PAGE));
+    const sql = ((prisma.$queryRaw as any).mock.calls[0][0] as string[]).join("?");
+    expect(sql).not.toContain("AY_2024_2025");
+    expect(sql).not.toContain("FIRST");
   });
 
   it("enables DEFLATE and a shared string table so the workbook stays small", async () => {
     (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 1 } });
-    (prisma.grade.findMany as any).mockResolvedValue([fakeGrade(0)]);
+    (prisma.$queryRaw as any).mockResolvedValue([fakeRow(0)]);
 
     await GET(createMockRequest("GET", EXPORT_URL));
 
@@ -403,14 +410,44 @@ describe("GET /api/grades/export — pagination and compression", () => {
     expect(opts.bookSST).toBe(true);
   });
 
+  it("breaks out of paging on an empty page rather than relying on the count", async () => {
+    // totalForTerm says 10,000 (two pages), but the term shrinks between the
+    // count and the reads. Returning an empty FIRST page distinguishes the
+    // explicit `break` from the loop-bound alone: without the break the loop
+    // would still issue a second query.
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 10_000 } });
+    (prisma.$queryRaw as any).mockResolvedValue([]);
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(200);
+    expect((prisma.$queryRaw as any).mock.calls).toHaveLength(1);
+    expect(res.headers.get("X-Export-Row-Count")).toBe("0");
+  });
+
+  it("terminates when a later page comes back empty", async () => {
+    // Same guard, exercised mid-loop: page 1 is full, page 2 is empty.
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 20_000 } });
+    let call = 0;
+    (prisma.$queryRaw as any).mockImplementation(async () => {
+      call++;
+      return call === 1 ? Array.from({ length: PAGE }, (_, i) => fakeRow(i)) : [];
+    });
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(200);
+    expect((prisma.$queryRaw as any).mock.calls).toHaveLength(2);
+    expect(res.headers.get("X-Export-Row-Count")).toBe(String(PAGE));
+  });
+
   it("404s (not a truncated 200) when the term is empty", async () => {
     (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 0 } });
-    (prisma.grade.findMany as any).mockResolvedValue([]);
 
     const res = await GET(createMockRequest("GET", EXPORT_URL));
 
     expect(res.status).toBe(404);
     // The count short-circuits before any page is read.
-    expect(prisma.grade.findMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });
