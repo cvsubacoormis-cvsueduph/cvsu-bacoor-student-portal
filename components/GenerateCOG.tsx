@@ -130,6 +130,10 @@ export default function GenerateCOG() {
         // Students never receive the official stamp.
         includeStamp: false,
         variant: "student",
+        // No signatory is passed on purpose: a student generating their own
+        // copy is not authorising it, so the document carries the registrar
+        // assigned to their program (the shared builder's default) rather than
+        // the student's own name.
       });
       setIsDialogOpen(false);
 } catch (error) {

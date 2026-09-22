@@ -48,6 +48,20 @@ export type CogStudent = {
 
 export type CogVariant = "admin" | "student";
 
+/**
+ * Name + position printed on the signature line.
+ *
+ * Resolved by the caller because it depends on *who* is generating:
+ * staff sign as themselves, while a student-generated COG carries the
+ * registrar assigned to the student's program.
+ */
+export interface CogSignatory {
+  /** Printed above the signature line. */
+  name: string;
+  /** Printed beneath the signature line; omitted when blank. */
+  position: string;
+}
+
 export interface CogPdfOptions {
   student: CogStudent;
   grades: CogGrade[];
@@ -57,10 +71,94 @@ export interface CogPdfOptions {
   purpose: string;
   includeStamp: boolean;
   variant: CogVariant;
+  /**
+   * Who signs the document. When omitted, falls back to the registrar assigned
+   * to the student's program via {@link resolveDefaultSignatory} — the correct
+   * behaviour for a student generating their own copy.
+   */
+  signatory?: CogSignatory;
+}
+
+/**
+ * Fallback signatory: the registrar clerk/campus registrar assigned to a
+ * program. Used when no staff member is signing as themselves.
+ */
+export function resolveDefaultSignatory(course: string): CogSignatory {
+  return {
+    name: courseClerkshipMap(course).trim(),
+    position: coursePositionMap(course).trim(),
+  };
+}
+
+/**
+ * Resolves who signs a COG, given the acting user's role and name.
+ *
+ * - `admin` / `registrar` sign as themselves.
+ * - anyone else (notably a student generating their own copy) falls back to the
+ *   registrar assigned to the student's program.
+ *
+ * A staff member whose Clerk name is missing also falls back, so the signature
+ * line is never rendered empty for want of a profile field.
+ */
+export function resolveSignatory({
+  role,
+  firstName,
+  lastName,
+  course,
+}: {
+  role?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  course: string;
+}): CogSignatory {
+  if (!COG_SIGNING_ROLES.includes(role as CogSigningRole)) {
+    return resolveDefaultSignatory(course);
+  }
+
+  const staffName = [firstName, lastName]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  if (!staffName) {
+    return resolveDefaultSignatory(course);
+  }
+
+  return {
+    name: staffName,
+    position: coursePositionForRole(role as CogSigningRole),
+  };
 }
 
 /** Only printing is permitted — prevents grade tampering by recipients. */
 const PDF_PERMISSIONS: ["print"] = ["print"];
+
+/**
+ * Roles that sign a COG as themselves rather than deferring to the program's
+ * assigned registrar.
+ *
+ * This mirrors {@link COG_GENERATION_ROLES} in `lib/cog-roles.ts` exactly —
+ * `registrar_staff` is deliberately excluded there and therefore never reaches
+ * a COG surface, so it must not be listed here either. Keeping the two in step
+ * means the signing branch can only run for a role that is allowed to generate
+ * the document in the first place.
+ */
+const COG_SIGNING_ROLES = ["admin", "registrar"] as const;
+
+type CogSigningRole = (typeof COG_SIGNING_ROLES)[number];
+
+/**
+ * Position printed beneath a staff signatory's name.
+ *
+ * Both permitted roles sign in the capacity of the campus registrar.
+ */
+function coursePositionForRole(role: CogSigningRole): string {
+  switch (role) {
+    case "registrar":
+    case "admin":
+      return "Campus Registrar";
+  }
+}
 
 /**
  * Grades that earn no credit and are excluded from the enrolled-unit total.
@@ -119,7 +217,10 @@ export async function generateIntegrityHash(
     })),
   );
   const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data));
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(data),
+  );
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
@@ -262,7 +363,8 @@ function drawStudentBlock(
   }`;
   const studentNo = student.studentNumber;
   const course = student.course;
-  const major = student.major !== "NONE" && student.major ? student.major : "NONE";
+  const major =
+    student.major !== "NONE" && student.major ? student.major : "NONE";
 
   doc.setFontSize(7);
   doc.setTextColor(139, 0, 0);
@@ -356,7 +458,17 @@ function drawGradesTable(doc: jsPDF, grades: CogGrade[]) {
       6: { halign: "center" },
     },
     theme: "grid",
-    head: [["CODE", "UNITS", "COURSE TITLE", "GRADE", "RE-EXAM", "REMARKS", "FACULTY"]],
+    head: [
+      [
+        "CODE",
+        "UNITS",
+        "COURSE TITLE",
+        "GRADE",
+        "RE-EXAM",
+        "REMARKS",
+        "FACULTY",
+      ],
+    ],
     body: grades.map((g) => [
       g.courseCode,
       FAILING_GRADES.includes(g.grade) ? "0" : g.creditUnit.toString(),
@@ -429,14 +541,34 @@ function drawTotals(doc: jsPDF, grades: CogGrade[], purpose: string) {
   return { gpa, totalSubjectsEnrolled, totalUnitsEnrolled, totalCreditsEarned };
 }
 
-/** Registrar signature block. */
-function drawSignature(doc: jsPDF, course: string) {
+/**
+ * Registrar signature block.
+ *
+ * Renders the supplied signatory's name above a ruled signature line, with the
+ * position beneath. Vertical placement is unchanged from the original
+ * implementation; the position is now printed at the same x as the name (it
+ * previously sat 5mm to the right, breaking the left alignment).
+ */
+function drawSignature(doc: jsPDF, signatory: CogSignatory) {
   const lastY = (doc as any).lastAutoTable.finalY;
+  const { name, position } = signatory;
+
+  if (!name && !position) return;
+
   doc.setFont("helvetica", "bold");
-  doc.text(courseClerkshipMap(course), 153, lastY + 38);
-  const registrarWidth = doc.getTextWidth(courseClerkshipMap(course));
-  doc.line(153, lastY + 39, 153 + registrarWidth, lastY + 39);
-  doc.text(coursePositionMap(course), 158, lastY + 42);
+
+  if (name) {
+    doc.text(name, 153, lastY + 38);
+    const nameWidth = doc.getTextWidth(name);
+    doc.line(153, lastY + 39, 153 + nameWidth, lastY + 39);
+  } else {
+    // No name to measure — still rule a line so the document can be signed.
+    doc.line(153, lastY + 39, 203, lastY + 39);
+  }
+
+  if (position) {
+    doc.text(position, 153, lastY + 42);
+  }
 }
 
 /** Grading-system reference table plus the dry-seal note. */
@@ -597,7 +729,14 @@ export function addWatermark(
 
       const xPos = (pageWidth - imgWidth) / 2;
       const yPos = (pageHeight - imgHeight) / 2;
-      doc.addImage(options.backgroundImage, "PNG", xPos, yPos, imgWidth, imgHeight);
+      doc.addImage(
+        options.backgroundImage,
+        "PNG",
+        xPos,
+        yPos,
+        imgWidth,
+        imgHeight,
+      );
 
       (doc as any).setGState(new (doc as any).GState({ opacity: 1 }));
       if (originalFillStyle) (doc as any).setFillColor?.(originalFillStyle);
@@ -627,6 +766,7 @@ export async function generateCOGPdf({
   purpose,
   includeStamp,
   variant,
+  signatory,
 }: CogPdfOptions): Promise<void> {
   const ownerPassword = crypto.randomUUID();
 
@@ -665,7 +805,9 @@ export async function generateCOGPdf({
   );
 
   const totals = drawTotals(doc, grades, purpose);
-  drawSignature(doc, student.course);
+  // Explicit signatory wins; otherwise defer to the program's registrar, which
+  // is the correct default for a student-generated copy.
+  drawSignature(doc, signatory ?? resolveDefaultSignatory(student.course));
   drawGradingSystem(doc);
 
   await drawVerificationQr(doc, {

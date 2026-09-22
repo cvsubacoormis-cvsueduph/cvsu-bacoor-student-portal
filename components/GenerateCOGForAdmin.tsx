@@ -19,7 +19,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { getStudentGradesWithReExam } from "@/actions/student-grades/student-grades";
 import { generateCOGAdminWithRateLimit } from "@/actions/document-generation";
-import { generateCOGPdf, type CogGrade } from "@/lib/cog-pdf";
+import { generateCOGPdf, resolveSignatory, type CogGrade } from "@/lib/cog-pdf";
+import { useUser } from "@clerk/nextjs";
 import toast from "react-hot-toast";
 import { PrinterIcon, AlertCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -80,6 +81,9 @@ export default function GenerateCOGAdmin({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: GenerateCOGAdminProps) {
+  const { user } = useUser();
+  const role = user?.publicMetadata?.role as string | undefined;
+
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const isDialogOpen = isControlled ? controlledOpen : internalOpen;
@@ -174,6 +178,13 @@ export default function GenerateCOGAdmin({
         purpose,
         includeStamp,
         variant: "admin",
+        // Staff sign as themselves; students never reach this dialog.
+        signatory: resolveSignatory({
+          role,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          course: student.course,
+        }),
       });
       handleOpenChange(false);
     } catch (error) {

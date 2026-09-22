@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircleIcon, Loader2, PrinterIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import { generateCOGAdminWithRateLimit } from "@/actions/document-generation";
-import { generateCOGPdf, type CogGrade } from "@/lib/cog-pdf";
+import { generateCOGPdf, resolveSignatory, type CogGrade } from "@/lib/cog-pdf";
 import { COG_GENERATION_ROLES } from "@/lib/cog-roles";
 import { formatAcademicYear } from "@/lib/grade-utils";
 import { semesterMap } from "@/lib/utils";
@@ -104,6 +104,13 @@ export function GenerateCOGTerm({
         purpose,
         includeStamp,
         variant: "admin",
+        // Staff sign as themselves.
+        signatory: resolveSignatory({
+          role,
+          firstName: user?.firstName,
+          lastName: user?.lastName,
+          course: student.course,
+        }),
       });
 
       setOpen(false);
