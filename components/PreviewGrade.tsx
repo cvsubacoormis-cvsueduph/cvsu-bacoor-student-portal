@@ -25,6 +25,8 @@ import toast from "react-hot-toast";
 import { GradeFilters } from "@/components/grades/GradeFilters";
 import { GradeEditRow } from "@/components/grades/GradeEditRow";
 import { GradeChangeHistory } from "@/components/grades/GradeChangeHistory";
+import { GenerateCOGTerm } from "@/components/grades/GenerateCOGTerm";
+import { getStudentIdByNumber } from "@/actions/student-grades/student-grades";
 import type {
   GradeRecord,
   SubjectOption,
@@ -61,6 +63,8 @@ export default function PreviewGrade({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [availableSubjects, setAvailableSubjects] = useState<SubjectOption[]>([]);
+  // Internal id of the viewed student, needed by the COG generator.
+  const [studentId, setStudentId] = useState<string | null>(null);
 
   // Track pending submissions so we only auto-refresh when changes are outstanding
   const pendingRef = useRef(false);
@@ -76,6 +80,24 @@ export default function PreviewGrade({
         console.error(err);
       }
     })();
+  }, [studentNumber]);
+
+  // Resolve the student id once per student — the COG generator keys off it.
+  useEffect(() => {
+    let cancelled = false;
+    setStudentId(null);
+
+    getStudentIdByNumber(studentNumber)
+      .then((id) => {
+        if (!cancelled) setStudentId(id);
+      })
+      .catch(() => {
+        if (!cancelled) setStudentId(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [studentNumber]);
 
   const uniqueAcademicYears = Array.from(
@@ -384,6 +406,16 @@ export default function PreviewGrade({
               : studentNumber}
           </h1>
           <p className="text-sm text-gray-500">Student Number: {studentNumber}</p>
+        </div>
+        {/* Prints a COG for the term currently selected below. */}
+        <div className="ml-auto">
+          {studentId && (
+            <GenerateCOGTerm
+              studentId={studentId}
+              academicYear={academicYear}
+              semester={semester}
+            />
+          )}
         </div>
       </div>
 

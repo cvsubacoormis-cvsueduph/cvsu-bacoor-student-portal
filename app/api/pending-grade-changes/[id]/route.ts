@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { AcademicYear, Semester } from "@prisma/client";
 import { z } from "zod";
@@ -184,10 +185,7 @@ export async function PATCH(
             .catch(() => null);
 
           if (affectedStudent) {
-            await Promise.all([
-              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-            ]).catch(() => {});
+            await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
           }
           break;
         }
@@ -246,10 +244,7 @@ export async function PATCH(
             .catch(() => null);
 
           if (affectedStudent) {
-            await Promise.all([
-              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-            ]).catch(() => {});
+            await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
           }
           break;
         }
@@ -306,10 +301,7 @@ export async function PATCH(
             .catch(() => null);
 
           if (affectedStudent) {
-            await Promise.all([
-              redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-              invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-            ]).catch(() => {});
+            await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
           }
           break;
         }

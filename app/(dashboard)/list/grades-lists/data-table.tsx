@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { Input } from "@/components/ui/input";
+import { ExportTermGrades } from "@/components/grades/ExportTermGrades";
 import {
   Select,
   SelectContent,
@@ -166,6 +167,7 @@ export function DataTable<TData, TValue>({
               ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <ExportTermGrades />
       </div>
 
       <div className="relative rounded-md border overflow-x-auto">

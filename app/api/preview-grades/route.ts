@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -355,10 +356,7 @@ export async function PATCH(request: Request) {
       .catch(() => null);
 
     if (affectedStudent) {
-      await Promise.all([
-        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-      ]).catch(() => {});
+      await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
     }
 
     return NextResponse.json(updatedGrade);
@@ -533,10 +531,7 @@ export async function POST(request: Request) {
       .catch(() => null);
 
     if (affectedStudent) {
-      await Promise.all([
-        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-      ]).catch(() => {});
+      await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
     }
 
     return NextResponse.json(newGrade, { status: 201 });
@@ -672,10 +667,7 @@ export async function DELETE(request: Request) {
       .catch(() => null);
 
     if (affectedStudent) {
-      await Promise.all([
-        redis.del(`cache:student:${affectedStudent.id}:v1`).catch(() => {}),
-        invalidateByPattern(`cache:grades:${affectedStudent.id}:*`).catch(() => {}),
-      ]).catch(() => {});
+      await invalidateStudentGradeCaches(affectedStudent.id, redis, invalidateByPattern);
     }
 
     return NextResponse.json({ message: "Grade deleted successfully" });

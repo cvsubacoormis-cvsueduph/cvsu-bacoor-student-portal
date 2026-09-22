@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { AcademicYear, Major, Semester } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth-helpers";
@@ -550,10 +551,7 @@ export async function addManualGrade(
     .catch(() => null);
 
   if (student) {
-    await Promise.all([
-      redis.del(`cache:student:${student.id}:v1`).catch(() => {}),
-      invalidateByPattern(`cache:grades:${student.id}:*`).catch(() => {}),
-    ]).catch(() => {});
+    await invalidateStudentGradeCaches(student.id, redis, invalidateByPattern);
   }
 
   return {

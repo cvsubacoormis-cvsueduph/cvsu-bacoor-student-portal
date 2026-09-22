@@ -5,6 +5,7 @@ import { GradeData } from "./grades";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 
 export type FailedLog = {
     id: string;
@@ -220,10 +221,7 @@ export async function resolveGradeLog(
             });
 
             // Invalidate grade caches for this student
-            await Promise.all([
-                redis.del(`cache:student:${student.id}:v1`).catch(() => {}),
-                invalidateByPattern(`cache:grades:${student.id}:*`).catch(() => {}),
-            ]).catch(() => {});
+            await invalidateStudentGradeCaches(student.id, redis, invalidateByPattern);
         } else {
             await prisma.grade.upsert({
                 where: {
@@ -247,10 +245,7 @@ export async function resolveGradeLog(
             });
 
             // Invalidate grade caches for this student
-            await Promise.all([
-                redis.del(`cache:student:${student.id}:v1`).catch(() => {}),
-                invalidateByPattern(`cache:grades:${student.id}:*`).catch(() => {}),
-            ]).catch(() => {});
+            await invalidateStudentGradeCaches(student.id, redis, invalidateByPattern);
         }
 
         // 5. Update the original log to resolved

@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { canGenerateCOG } from "@/lib/cog-roles";
 import crypto from "crypto";
 
 export type GradeRecord = {
@@ -20,7 +21,8 @@ export type CogVerificationInput = {
   lastName: string;
   middleInit?: string;
   course: string;
-  major: string;
+  /** Student's major, or null when the program has none. */
+  major: string | null;
   grades: GradeRecord[];
   academicYear: string;
   semester: string;
@@ -35,7 +37,11 @@ export type CogVerificationInput = {
 /**
  * Stores a COG verification record and returns the integrity hash.
  * The hash is used in the QR code URL: /verify/[hash]
- * Only the authenticated student (for their own) or admin/registrar can create records.
+ *
+ * Permitted callers are a student (for their own record) or a COG-generation
+ * role. The role list is the shared {@link canGenerateCOG} gate, so a QR-
+ * verifiable COG cannot be minted by a role that is not allowed to generate the
+ * document itself.
  */
 export async function storeCogVerification(input: CogVerificationInput) {
   const { userId } = await auth();
@@ -45,10 +51,7 @@ export async function storeCogVerification(input: CogVerificationInput) {
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role as string | undefined;
 
-  if (
-    !role ||
-    !["admin", "registrar", "registrar_staff", "superuser", "student"].includes(role)
-  ) {
+  if (!canGenerateCOG(role) && role !== "student") {
     throw new Error(
       "Forbidden: You do not have permission to generate COG verifications",
     );

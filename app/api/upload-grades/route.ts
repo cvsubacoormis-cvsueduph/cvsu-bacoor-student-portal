@@ -7,6 +7,7 @@ import { GRADE_HIERARCHY } from "@/lib/utils";
 import { computeFinalRemarks } from "@/lib/grade-utils";
 import { fuzzy } from "fast-fuzzy";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 
 export const runtime = "nodejs";
@@ -1370,10 +1371,7 @@ reExam: standardizedReExam ?? null,
 
       await Promise.all(
         affectedStudents.map(({ id: userId }) =>
-          Promise.all([
-            redis.del(`cache:student:${userId}:v1`),
-            invalidateByPattern(`cache:grades:${userId}:*`),
-          ]).catch(() => {})
+            invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
         )
       ).catch(() => {});
     } catch (txError) {

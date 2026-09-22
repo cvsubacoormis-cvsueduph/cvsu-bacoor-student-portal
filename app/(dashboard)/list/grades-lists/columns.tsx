@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import GenerateCOGAdmin from "@/components/GenerateCOGForAdmin";
+import { canGenerateCOG } from "@/lib/cog-roles";
 import { useState } from "react";
 
 export type Grades = {
@@ -29,6 +30,9 @@ export type Grades = {
 
 function ActionsCell({ student, role }: { student: Grades; role?: string }) {
   const [cogOpen, setCogOpen] = useState(false);
+  // COG generation is admin + registrar only; hide the control from roles that
+  // the server action would reject anyway.
+  const canGenerate = canGenerateCOG(role);
 
   const params = new URLSearchParams({
     firstName: student.firstName,
@@ -58,7 +62,7 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
               View Grades
             </Link>
           </DropdownMenuItem>
-          {role !== "faculty" && (
+          {canGenerate && (
             <DropdownMenuItem
               onSelect={(e) => {
                 e.preventDefault();
@@ -72,7 +76,7 @@ function ActionsCell({ student, role }: { student: Grades; role?: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {role !== "faculty" && (
+      {canGenerate && (
         <GenerateCOGAdmin
           studentId={student.id}
           open={cogOpen}

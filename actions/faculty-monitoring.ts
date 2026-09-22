@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { AcademicYear, Semester, Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 
@@ -1343,10 +1344,7 @@ export async function rollbackFacultyGrades(
 
       await Promise.all(
         affectedStudents1.map(({ id: userId }) =>
-          Promise.all([
-            redis.del(`cache:student:${userId}:v1`),
-            invalidateByPattern(`cache:grades:${userId}:*`),
-          ]).catch(() => {}),
+          invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
         ),
       ).catch(() => {});
 
@@ -1449,10 +1447,7 @@ export async function rollbackFacultyGrades(
 
     await Promise.all(
       affectedStudents2.map(({ id: userId }) =>
-        Promise.all([
-          redis.del(`cache:student:${userId}:v1`),
-          invalidateByPattern(`cache:grades:${userId}:*`),
-        ]).catch(() => {}),
+        invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
       ),
     ).catch(() => {});
 
@@ -1820,10 +1815,7 @@ export async function reassignFacultyGrades(
 
     await Promise.all(
       affectedStudents.map(({ id: userId }) =>
-        Promise.all([
-          redis.del(`cache:student:${userId}:v1`),
-          invalidateByPattern(`cache:grades:${userId}:*`),
-        ]).catch(() => {}),
+        invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
       ),
     ).catch(() => {});
 

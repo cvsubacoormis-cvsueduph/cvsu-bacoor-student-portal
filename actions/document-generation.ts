@@ -1,8 +1,9 @@
 "use server";
 
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
-import { getStudentGradesWithReExam } from "@/actions/student-grades/student-grades";
+import { getStudentGradesForTerm } from "@/actions/student-grades/student-grades";
 import { getStudentCurriculum } from "@/actions/getStudentCurriculum";
+import { canGenerateCOG, COG_FORBIDDEN_MESSAGE } from "@/lib/cog-roles";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
 // Rate limit configuration for document generation
@@ -30,8 +31,19 @@ export async function generateCOGWithRateLimit(
       windowSeconds: RATE_LIMITS.generate_cog.windowSeconds,
     });
 
-    // Fetch student grades (this also has its own rate limiting)
-    const result = await getStudentGradesWithReExam();
+    // Fetch this term's grades for the calling student.
+    // getStudentGradesForTerm resolves a student caller to their own record, so
+    // no id needs to be passed — and the term filter is applied in the query.
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
+    const result = await getStudentGradesForTerm(
+      userId,
+      academicYear,
+      semester,
+    );
     if (result.hidden) {
       throw new Error("Grades are currently hidden by the faculty");
     }
@@ -40,12 +52,7 @@ export async function generateCOGWithRateLimit(
     }
     const student = result.student;
 
-    // Filter grades by academic year and semester
-    const filteredGrades = student.grades.filter(
-      (g) => g.academicYear === academicYear && g.semester === semester,
-    );
-
-    if (filteredGrades.length === 0) {
+    if (student.grades.length === 0) {
       throw new Error("No grades found for this academic term");
     }
 
@@ -57,7 +64,7 @@ export async function generateCOGWithRateLimit(
         lastName: student.lastName,
         course: student.course,
         major: student.major,
-        grades: filteredGrades,
+        grades: student.grades,
       },
     };
   } catch (error) {
@@ -77,7 +84,12 @@ export async function generateCOGWithRateLimit(
 }
 
 /**
- * Rate-limited action for admin/faculty to generate COG for a student
+ * Rate-limited action for admin/registrar to generate COG for a student.
+ *
+ * Access is intentionally narrow: only `admin` and `registrar` may generate a
+ * COG. This is the authoritative gate — the UI hides the control for other
+ * roles, but the action re-checks so it cannot be invoked directly.
+ *
  * @param studentId - The student ID to generate COG for
  * @param academicYear - Academic year to filter grades
  * @param semester - Semester to filter grades
@@ -93,15 +105,17 @@ export async function generateCOGAdminWithRateLimit(
     throw new Error("Unauthorized");
   }
 
-  // Check user role
+  // Check user role against the shared COG gate.
   const clerk = await clerkClient();
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
 
-  if (role !== "admin" && role !== "faculty" && role !== "registrar" && role !== "registrar_staff") {
-    throw new Error(
-      "Forbidden: Only admins, faculty, registrar, and registrar staff can generate COG",
-    );
+  if (!canGenerateCOG(role)) {
+    throw new Error(COG_FORBIDDEN_MESSAGE);
+  }
+
+  if (!academicYear || !semester) {
+    throw new Error("An academic year and semester are required");
   }
 
   // Check rate limit using Redis
@@ -111,19 +125,22 @@ export async function generateCOGAdminWithRateLimit(
     windowSeconds: RATE_LIMITS.generate_cog_admin.windowSeconds,
   });
 
-  // Fetch student grades for the specific student
-  const admResult = await getStudentGradesWithReExam(studentId);
+  // Fetch grades for exactly this student and term. Pushing the term filter
+  // into the query is what guarantees a COG never carries another term's grades.
+  const admResult = await getStudentGradesForTerm(
+    studentId,
+    academicYear,
+    semester,
+  );
+  if (admResult.hidden) {
+    throw new Error("Grades are currently hidden by the faculty");
+  }
   if (!admResult.student) {
     throw new Error(admResult.error || "Student data not found");
   }
   const student = admResult.student;
 
-  // Filter grades by academic year and semester
-  const filteredGrades = student.grades.filter(
-    (g) => g.academicYear === academicYear && g.semester === semester,
-  );
-
-  if (filteredGrades.length === 0) {
+  if (student.grades.length === 0) {
     throw new Error("No grades found for this academic term");
   }
 
@@ -135,7 +152,7 @@ export async function generateCOGAdminWithRateLimit(
       lastName: student.lastName,
       course: student.course,
       major: student.major,
-      grades: filteredGrades,
+      grades: student.grades,
     },
   };
 }

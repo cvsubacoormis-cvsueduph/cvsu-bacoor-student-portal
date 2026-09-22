@@ -3,6 +3,7 @@
 
 import prisma from "@/lib/prisma";
 import { redis, withRedisFallback } from "@/lib/redis";
+import { studentCacheKey } from "@/lib/cache-keys";
 import { StudentData } from "@/lib/types";
 import { auth } from "@clerk/nextjs/server";
 import { getSetting } from "@/actions/settings";
@@ -17,7 +18,7 @@ export async function getStudentData(): Promise<StudentData> {
 
     // Cache key: per-user student data (grades, retake info, profile)
     // TTL: 300s (5 minutes) — quick convergence when grades are updated
-    const cacheKey = `cache:student:${userId}:v1`;
+    const cacheKey = studentCacheKey(userId);
 
     const cached = await withRedisFallback(async () => {
       const raw = await redis.get(cacheKey);

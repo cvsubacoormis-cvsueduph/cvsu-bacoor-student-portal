@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { redis, invalidateByPattern } from "@/lib/redis";
+import { invalidateStudentGradeCaches } from "@/lib/cache-keys";
 import { auth } from "@clerk/nextjs/server";
 import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { getCurrentUser } from "@/lib/auth-helpers";
@@ -103,10 +104,7 @@ async function applyApprove(pendingChange: {
 
       await Promise.all(
         affectedStudents.map(({ id: userId }) =>
-          Promise.all([
-            redis.del(`cache:student:${userId}:v1`),
-            invalidateByPattern(`cache:grades:${userId}:*`),
-          ]).catch(() => {})
+            invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
         )
       ).catch(() => {});
       break;
@@ -161,10 +159,7 @@ async function applyApprove(pendingChange: {
 
       await Promise.all(
         affectedStudents.map(({ id: userId }) =>
-          Promise.all([
-            redis.del(`cache:student:${userId}:v1`),
-            invalidateByPattern(`cache:grades:${userId}:*`),
-          ]).catch(() => {})
+            invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
         )
       ).catch(() => {});
       break;
@@ -217,10 +212,7 @@ async function applyApprove(pendingChange: {
 
         await Promise.all(
           affectedStudents.map(({ id: userId }) =>
-            Promise.all([
-              redis.del(`cache:student:${userId}:v1`),
-              invalidateByPattern(`cache:grades:${userId}:*`),
-            ]).catch(() => {})
+              invalidateStudentGradeCaches(userId, redis, invalidateByPattern),
           )
         ).catch(() => {});
       }

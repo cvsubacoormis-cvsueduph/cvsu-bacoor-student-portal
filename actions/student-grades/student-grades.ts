@@ -6,6 +6,11 @@ import { checkRateLimitRedis } from "@/lib/rate-limit-redis";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { AcademicYear, Semester, type Grade } from "@prisma/client";
 import { getSetting } from "@/actions/settings";
+import {
+  studentGradesCacheKey,
+  studentTermGradesCacheKey,
+  studentGetGradesCacheKey,
+} from "@/lib/cache-keys";
 
 const clerk = await clerkClient();
 
@@ -74,9 +79,7 @@ export async function getGrades(
     });
 
     // Cache key scoped to userId + year + semester to avoid collisions with other cached entities
-    const yearPart = year ?? "ALL";
-    const semPart = semester ?? "ALL";
-    const cacheKey = `cache:grades:${userId}:${yearPart}:${semPart}:v1`;
+    const cacheKey = studentGetGradesCacheKey(userId, year, semester);
 
     // Try Redis cache first (gracefully falls through on Redis failure)
     const cached = await withRedisFallback(async () => {
@@ -155,28 +158,71 @@ export type GetStudentWithGradesResult = {
   error: string | null;
 };
 
+/**
+ * Roles permitted to read a student's grade history.
+ * Kept as a module constant so every grade-reading action agrees on one list.
+ */
+const GRADE_READER_ROLES = [
+  "student",
+  "admin",
+  "faculty",
+  "registrar",
+  "registrar_staff",
+] as const;
+
+type GradeReaderRole = (typeof GRADE_READER_ROLES)[number];
+
+function isGradeReaderRole(role: unknown): role is GradeReaderRole {
+  return GRADE_READER_ROLES.includes(role as GradeReaderRole);
+}
+
 export async function getStudentGradesWithReExam(
   studentId?: string,
 ): Promise<GetStudentWithGradesResult> {
+  return resolveStudentGrades({ studentId });
+}
+
+/**
+ * Reads one student's grades for exactly one academic term.
+ *
+ * Always hits the database for the requested (student, term) pair and caches
+ * the result under a key that names *both*. This is the path used by COG
+ * generation, where serving another term's grades is a correctness bug rather
+ * than a mere cache miss.
+ */
+export async function getStudentGradesForTerm(
+  studentId: string,
+  academicYear: string,
+  semester: string,
+): Promise<GetStudentWithGradesResult> {
+  return resolveStudentGrades({ studentId, term: { academicYear, semester } });
+}
+
+/**
+ * Shared, role-gated grade resolver.
+ *
+ * Every cache key is derived from the *resolved* student id, so a request for
+ * student B can never be answered from student A's cached payload.
+ */
+async function resolveStudentGrades({
+  studentId,
+  term,
+}: {
+  studentId?: string;
+  term?: { academicYear: string; semester: string };
+}): Promise<GetStudentWithGradesResult> {
   const { userId } = await auth();
-  if (!userId)
-    return { student: null, hidden: false, error: "Unauthorized" };
+  if (!userId) return { student: null, hidden: false, error: "Unauthorized" };
 
   const user = await clerk.users.getUser(userId);
   const role = user.publicMetadata?.role;
 
-  if (
-    role !== "student" &&
-    role !== "admin" &&
-    role !== "faculty" &&
-    role !== "registrar" &&
-    role !== "registrar_staff"
-  ) {
+  if (!isGradeReaderRole(role)) {
     return { student: null, hidden: false, error: "Forbidden" };
   }
 
-  // Block students from viewing grades if faculty has hidden them
-  // Admin/faculty/registrar always bypass this check
+  // Block students from viewing grades if faculty has hidden them.
+  // Admin/faculty/registrar always bypass this check.
   if (role === "student") {
     const isVisible = await getSetting("GRADES_VISIBLE_TO_STUDENTS");
     if (isVisible === "false") {
@@ -184,21 +230,32 @@ export async function getStudentGradesWithReExam(
     }
   }
 
-  // ── Redis cache (separate key from getStudentData — different shape) ─────
-  const cacheKey = `cache:student:${userId}:gradesWithReExam:v1`;
+  // A student may only ever read their own record. Staff must name the student
+  // they are acting on; falling back to the calling user would silently read
+  // the wrong (staff) record and cache it under the staff id.
+  const isStudent = role === "student";
+  if (!isStudent && !studentId) {
+    return { student: null, hidden: false, error: "Student id is required" };
+  }
+  const resolvedStudentId = isStudent ? userId : (studentId as string);
+
+  const termFilter = term
+    ? { academicYear: term.academicYear as AcademicYear, semester: term.semester as Semester }
+    : undefined;
+
+  const cacheKey = term
+    ? studentTermGradesCacheKey(resolvedStudentId, term.academicYear, term.semester)
+    : studentGradesCacheKey(resolvedStudentId);
 
   const cached = await withRedisFallback(async () => {
     const raw = await redis.get(cacheKey);
     return raw ? (JSON.parse(raw) as GetStudentWithGradesResult) : null;
   });
 
-  if (cached) {
-    return cached;
-  }
-  // ──────────────────────────────────────────────────────────────────────────
+  if (cached) return cached;
 
   const student = await prisma.student.findUnique({
-    where: { id: studentId || userId },
+    where: { id: resolvedStudentId },
     select: {
       studentNumber: true,
       firstName: true,
@@ -209,6 +266,7 @@ export async function getStudentGradesWithReExam(
       address: true,
       phone: true,
       grades: {
+        where: termFilter,
         orderBy: [
           { academicYear: "asc" },
           { semester: "asc" },
@@ -242,7 +300,7 @@ export async function getStudentGradesWithReExam(
     error: null,
   };
 
-  // Populate cache (fire-and-forget; Redis failure won't block)
+  // Fire-and-forget; a Redis failure must not block the response.
   await withRedisFallback(async () => {
     await redis.set(cacheKey, JSON.stringify(result), "EX", 300);
   });
@@ -283,4 +341,41 @@ export async function getAvailableAcademicOptions() {
   }
 
   throw new Error("Unauthorized role");
+}
+
+/**
+ * Resolves a student number to the internal student id.
+ *
+ * Server actions and the COG flow key off the student id, while the View Grades
+ * screen only knows the student number from its route. Resolving here keeps ids
+ * out of the URL and out of client props.
+ *
+ * Only staff roles may look up an arbitrary student; a student caller always
+ * resolves to their own record.
+ */
+export async function getStudentIdByNumber(
+  studentNumber: string,
+): Promise<string | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const user = await clerk.users.getUser(userId);
+  const role = user.publicMetadata?.role;
+
+  if (!isGradeReaderRole(role)) return null;
+
+  // A student can only ever resolve themselves.
+  if (role === "student") {
+    const self = await prisma.student.findUnique({
+      where: { id: userId },
+      select: { id: true, studentNumber: true },
+    });
+    return self && self.studentNumber === studentNumber ? self.id : null;
+  }
+
+  const student = await prisma.student.findUnique({
+    where: { studentNumber },
+    select: { id: true },
+  });
+  return student?.id ?? null;
 }

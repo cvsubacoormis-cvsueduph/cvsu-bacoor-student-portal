@@ -1,10 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import QRCode from "qrcode";
-import { storeCogVerification } from "@/actions/cog-verification";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -23,12 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { getStudentGradesWithReExam } from "@/actions/student-grades/student-grades";
 import { generateCOGAdminWithRateLimit } from "@/actions/document-generation";
-import {
-  courseClerkshipMap,
-  courseMap,
-  coursePositionMap,
-  formatMajor,
-} from "@/lib/courses";
+import { generateCOGPdf, type CogGrade } from "@/lib/cog-pdf";
 import toast from "react-hot-toast";
 import { PrinterIcon, AlertCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -38,30 +29,43 @@ import { semesterMap } from "@/lib/utils";
 const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = ["Enrollment/Evaluation Purposes Only", "Personal Copy"];
 
+/**
+ * Derives the selectable academic terms from a student's grade history,
+ * preserving first-seen order and de-duplicating on (academicYear, semester).
+ */
+function buildAcademicOptions(grades: Grade[]): AcademicOption[] {
+  const options = new Map<string, AcademicOption>();
+  for (const g of grades) {
+    const key = `${g.academicYear}-${g.semester}`;
+    if (!options.has(key)) {
+      options.set(key, {
+        academicYear: g.academicYear,
+        semester: g.semester,
+      });
+    }
+  }
+  return Array.from(options.values());
+}
+
 type AcademicOption = {
   academicYear: string;
   semester: string;
 };
 
-type Grade = {
-  courseCode: string;
-  courseTitle: string;
-  creditUnit: number;
-  grade: string;
-  reExam: string | null;
-  remarks: string;
-  instructor: string;
-  academicYear: string;
-  semester: string;
-};
+/**
+ * Local alias for the shared grade shape. Kept as an alias (rather than a
+ * second structural definition) so the component and the PDF builder cannot
+ * drift apart.
+ */
+type Grade = CogGrade;
 
 type StudentData = {
   studentNumber: string;
   firstName: string;
-  middleInit?: string;
+  middleInit?: string | null;
   lastName: string;
   course: string;
-  major: string;
+  major: string | null;
   grades: Grade[];
 };
 
@@ -97,74 +101,46 @@ export default function GenerateCOGAdmin({
   const [includeStamp, setIncludeStamp] = useState(false);
 
   useEffect(() => {
-    if (isDialogOpen && !studentData) {
-      const fetchData = async () => {
-        try {
-          const result = await getStudentGradesWithReExam(studentId);
-          if (!result.student) {
-            throw new Error(result.error || "Student data not found");
-          }
-          const data = result.student as StudentData;
-          const formattedData = {
-            ...data,
-            grades: data.grades.map((grade) => ({
-              ...grade,
-              remarks: grade.remarks || "",
-            })),
-            major: data.major || "",
-            middleInit: data.middleInit || "",
-          };
-          setStudentData(formattedData);
+    // Refetch whenever a *different* student is targeted. Keying only on
+    // `!studentData` meant a stale grade set (and therefore stale academic-term
+    // options) survived a change of studentId, which is how a COG could be
+    // generated against the previous student's terms.
+    if (!isDialogOpen) return;
 
-          const optionsMap = new Map<string, AcademicOption>();
-          formattedData.grades.forEach((g) => {
-            const key = `${g.academicYear}-${g.semester}`;
-            if (!optionsMap.has(key)) {
-              optionsMap.set(key, {
-                academicYear: g.academicYear,
-                semester: g.semester,
-              });
-            }
-          });
-          setAcademicOptions(Array.from(optionsMap.values()));
-        } catch (error) {
-          toast.error("Failed to load student data.");
+    let cancelled = false;
+
+    const fetchData = async () => {
+      setStudentData(null);
+      setAcademicOptions([]);
+      try {
+        const result = await getStudentGradesWithReExam(studentId);
+        if (cancelled) return;
+        if (!result.student) {
+          throw new Error(result.error || "Student data not found");
         }
-      };
-      fetchData();
-    }
-  }, [isDialogOpen, studentId, studentData]);
-
-  const getFinalGradeToUse = (grade: Grade): number | null => {
-    if (["INC", "DRP"].includes(grade.grade)) {
-      if (
-        grade.reExam === null ||
-        ["INC", "DRP"].includes(grade.reExam || "")
-      ) {
-        return null;
+        const data = result.student as StudentData;
+        const formattedData = {
+          ...data,
+          grades: data.grades.map((grade) => ({
+            ...grade,
+            remarks: grade.remarks || "",
+          })),
+          major: data.major || "",
+          middleInit: data.middleInit || "",
+        };
+        setStudentData(formattedData);
+        setAcademicOptions(buildAcademicOptions(formattedData.grades));
+      } catch (error) {
+        if (cancelled) return;
+        toast.error("Failed to load student data.");
       }
-      return parseFloat(grade.reExam);
-    }
+    };
+    fetchData();
 
-    const originalGrade = !isNaN(parseFloat(grade.grade))
-      ? parseFloat(grade.grade)
-      : null;
-    const reExamGrade =
-      grade.reExam && !isNaN(parseFloat(grade.reExam))
-        ? parseFloat(grade.reExam)
-        : null;
-
-    if (originalGrade === null && reExamGrade === null) {
-      return null;
-    }
-    if (originalGrade === null) {
-      return reExamGrade;
-    }
-    if (reExamGrade === null) {
-      return originalGrade;
-    }
-    return Math.min(originalGrade, reExamGrade);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [isDialogOpen, studentId]);
 
   const handleGenerate = async () => {
     if (!academicYear || !semester || !purpose.trim()) {
@@ -181,21 +157,24 @@ export default function GenerateCOGAdmin({
         semester,
       );
 
-      const data = {
-        studentNumber: student.studentNumber,
-        firstName: student.firstName,
-        middleInit: student.middleInit,
-        lastName: student.lastName,
-        course: student.course,
-        major: student.major,
-        grades: student.grades,
-      };
-
-      await generatePDF(
-        data as StudentData,
-        student.grades as Grade[],
+      await generateCOGPdf({
+        student: {
+          studentNumber: student.studentNumber,
+          firstName: student.firstName,
+          middleInit: student.middleInit,
+          lastName: student.lastName,
+          course: student.course,
+          major: student.major,
+          grades: student.grades as CogGrade[],
+        },
+        grades: student.grades as CogGrade[],
+        academicYear,
+        semester,
+        yearLevel,
+        purpose,
         includeStamp,
-      );
+        variant: "admin",
+      });
       handleOpenChange(false);
     } catch (error) {
       console.error("PDF Generate Error:", error);
@@ -218,618 +197,20 @@ export default function GenerateCOGAdmin({
     }
   };
 
-  /**
-   * Generates a SHA-256 hash of the grade data for tamper detection.
-   * The hash is embedded in the PDF so the registrar can verify
-   * that the grades have not been altered after generation.
-   */
-  const generateIntegrityHash = async (grades: Grade[]): Promise<string> => {
-    const data = JSON.stringify(
-      grades.map((g) => ({
-        c: g.courseCode,
-        g: g.grade,
-        r: g.reExam,
-        u: g.creditUnit,
-        rm: g.remarks,
-      })),
-    );
-    const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest(
-      "SHA-256",
-      encoder.encode(data),
-    );
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .toUpperCase();
-  };
-
-  const generatePDF = async (
-    student: StudentData,
-    grades: Grade[],
-    includeStamp: boolean,
-  ) => {
-    // Generate a unique owner password per document
-    const ownerPassword = crypto.randomUUID();
-
-    const doc = new jsPDF({
-      orientation: "p",
-      unit: "mm",
-      format: "a4",
-      encryption: {
-        ownerPassword,
-        // Only printing allowed — NO modify, copy, or annot-forms
-        // Prevents grade tampering by recipients
-        userPermissions: ["print"],
-      },
-    });
-
-    // === BLUISH WAVY BACKGROUND ===
-    // Multi-layered business-style blue waves — top half wavy, bottom half plain
-    (() => {
-      const scale = 4;
-      const canvas = document.createElement("canvas");
-      const w = 210 * scale;
-      const h = 297 * scale;
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      /**
-       * Draws a filled wavy shape from the top down to a curved bottom edge.
-       * Uses cubic bezier control points for smooth, professional-looking waves.
-       */
-      const drawWaveLayer = (
-        colorStops: [number, string][],
-        maxY: number,
-        cpOffsets: number[],
-      ) => {
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(w, 0);
-        ctx.lineTo(w, maxY);
-        // Smooth wave using alternating bezier curves
-        const segments = 6;
-        const segW = w / segments;
-        for (let i = segments - 1; i >= 0; i--) {
-          const x1 = (i + 1) * segW;
-          const x2 = i * segW;
-          const cp1x = x1 - segW * 0.5;
-          const cp1y = maxY + cpOffsets[i % cpOffsets.length] * scale;
-          const cp2x = x2 + segW * 0.5;
-          const cp2y = maxY + cpOffsets[(i + 1) % cpOffsets.length] * scale;
-          ctx.bezierCurveTo(
-            cp1x,
-            cp1y,
-            cp2x,
-            cp2y,
-            x2,
-            maxY + cpOffsets[(i + 2) % cpOffsets.length] * scale * 0.3,
-          );
-        }
-        ctx.closePath();
-
-        const grad = ctx.createLinearGradient(0, 0, 0, maxY + 40 * scale);
-        for (const [stop, color] of colorStops) {
-          grad.addColorStop(stop, color);
-        }
-        ctx.fillStyle = grad;
-        ctx.fill();
-      };
-
-      // Layer 1 — deepest blue, smallest reach
-      drawWaveLayer(
-        [
-          [0, "rgba(100, 160, 220, 0.12)"],
-          [0.6, "rgba(130, 185, 235, 0.06)"],
-          [1, "rgba(180, 210, 245, 0.01)"],
-        ],
-        h * 0.25,
-        [50, -20, 35, -10, 45, 0],
-      );
-
-      // Layer 2 — mid blue, extends further
-      drawWaveLayer(
-        [
-          [0, "rgba(140, 195, 240, 0.10)"],
-          [0.5, "rgba(160, 210, 242, 0.05)"],
-          [1, "rgba(200, 225, 250, 0.01)"],
-        ],
-        h * 0.38,
-        [-15, 45, -30, 25, -5, 40],
-      );
-
-      // Layer 3 — lighter blue, main visible wave
-      drawWaveLayer(
-        [
-          [0, "rgba(170, 215, 245, 0.09)"],
-          [0.4, "rgba(185, 222, 248, 0.05)"],
-          [1, "rgba(215, 235, 252, 0.01)"],
-        ],
-        h * 0.52,
-        [30, -40, 20, -25, 50, -10],
-      );
-
-      // Layer 4 — very light, subtle, deep reach for smooth fade
-      drawWaveLayer(
-        [
-          [0, "rgba(195, 228, 250, 0.05)"],
-          [0.3, "rgba(210, 235, 252, 0.03)"],
-          [1, "rgba(235, 245, 255, 0.005)"],
-        ],
-        h * 0.62,
-        [-25, 20, -35, 15, -10, 30],
-      );
-
-      const dataUrl = canvas.toDataURL("image/png");
-      doc.addImage(dataUrl, "PNG", 0, 0, 210, 297);
-    })();
-
-    const logoWidth = 18;
-    const logoHeight = 15;
-    const logoX = 40;
-    const logoY = 5;
-
-    doc.addImage("/printlogo.png", "PNG", logoX, logoY, logoWidth, logoHeight);
-    doc.setFontSize(9);
-    doc.text("Republic of the Philippines", 105, 11, { align: "center" });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text("CAVITE STATE UNIVERSITY", 105, 16, { align: "center" });
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Bacoor City Campus", 105, 20, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text("SHIV, Molino VI City of Bacoor", 105, 25, { align: "center" });
-    doc.addImage("/phone.png", "PNG", 91, 28, 2, 2);
-    doc.text("(046) 476-5029", 105, 30, { align: "center" });
-    doc.text("cvsubacoor@cvsu.edu.ph", 105, 35, { align: "center" });
-    doc.setFont("helvetica", "bold");
-    doc.text("OFFICE OF THE CAMPUS REGISTRAR", 105, 45, { align: "center" });
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 139);
-    doc.text("CERTIFICATE OF GRADES", 105, 50, { align: "center" });
-    doc.setTextColor(0, 0, 0);
-
-    const fullName = `${student.firstName} ${student.middleInit || ""}. ${
-      student.lastName
-    }`;
-    const studentNo = student.studentNumber;
-    const course = student.course;
-    const major =
-      student.major !== "NONE" && student.major ? student.major : "NONE";
-
-    doc.setFontSize(7);
-    doc.setTextColor(139, 0, 0);
-    doc.text("Fullname:", 20, 60);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text(fullName, 35, 60);
-    const textWidth = doc.getTextWidth(fullName);
-    doc.line(35, 61, 35 + textWidth, 61);
-    doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Student No.:", 120, 60);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "bold");
-    doc.text(studentNo, 140, 60);
-    const studentNoWidth = doc.getTextWidth(studentNo);
-    doc.line(140, 61, 140 + studentNoWidth, 61);
-
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(139, 0, 0);
-    doc.text("Year Level:", 20, 65);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
-    doc.text(yearLevel, 35, 65);
-    doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Academic Year:", 120, 65);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
-    doc.text(
-      `${semester ? semesterMap(semester).toUpperCase() : ""} ${academicYear ? academicYear.replace(/_/g, "-") : ""}`,
-      140,
-      65,
-    );
-
-    doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Degree:", 20, 70);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
-    doc.text(courseMap(course).toUpperCase(), 35, 70);
-
-    doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Major:", 20, 75);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
-    doc.text(formatMajor(major) || "", 35, 75);
-    doc.setTextColor(139, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Date:", 120, 70);
-    doc.setTextColor(0, 0, 139);
-    doc.setFont("helvetica", "italic");
-    doc.text(
-      new Date().toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
-      130,
-      70,
-    );
-
-    autoTable(doc, {
-      startY: 85,
-      styles: { font: "helvetica", fontSize: 7, cellPadding: 1 },
-      headStyles: {
-        fillColor: [254, 240, 138],
-        textColor: 0,
-        halign: "center",
-        lineWidth: 0.3,
-        lineColor: 0,
-      },
-      bodyStyles: {
-        lineWidth: 0.3,
-        lineColor: 0,
-        textColor: 0,
-      },
-      columnStyles: {
-        2: { halign: "left", fontStyle: "italic" },
-        0: { halign: "center" },
-        1: { halign: "center" },
-        3: { halign: "center" },
-        4: { halign: "center" },
-        5: { halign: "center" },
-        6: { halign: "center" },
-      },
-      theme: "grid",
-      head: [
-        [
-          "CODE",
-          "UNITS",
-          "COURSE TITLE",
-          "GRADE",
-          "RE-EXAM",
-          "REMARKS",
-          "FACULTY",
-        ],
-      ],
-      body: grades.map((g) => [
-        g.courseCode,
-        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
-          ? "0"
-          : g.creditUnit.toString(),
-        g.courseTitle,
-        ["DRP", "INC", "4.00", "5.00", "US"].includes(g.grade)
-          ? { content: g.grade || "-", styles: { textColor: [255, 0, 0] } }
-          : { content: g.grade || "-", styles: { textColor: [0, 0, 0] } },
-        g.reExam || "",
-        ["FAILED", "CON. FAILURE", "LACK OF REQ", "DROPPED"].includes(g.remarks)
-          ? { content: g.remarks || "", styles: { textColor: [255, 0, 0] } }
-          : { content: g.remarks || "", styles: { textColor: [0, 0, 0] } },
-        g.instructor || "",
-      ]),
-    });
-
-    // Embed a tamper-evident integrity hash in PDF metadata
-    const integrityHash = await generateIntegrityHash(grades);
-    doc.setProperties({
-      title: "Certificate of Grades",
-      subject: `COG - ${student.studentNumber}`,
-      author: "Cavite State University - Bacoor Campus Registrar",
-      keywords: `COG,${student.studentNumber},${academicYear},${semester}`,
-      creator: "CvSU Bacoor Portal",
-    });
-
-    // Write the integrity hash as invisible text in the PDF
-    // (visible in raw PDF source — used by registrar for verification)
-    doc.setFontSize(0.01);
-    doc.setTextColor(255, 255, 255);
-    doc.text(
-      `INTEGRITY_HASH:${integrityHash}|OWNER_PW:${ownerPassword}`,
-      0.1,
-      (doc as any).lastAutoTable.finalY + 70,
-      { charSpace: -2 },
-    );
-
-    const totalSubjectsEnrolled = grades.length;
-
-    // Total units enrolled - includes ALL courses (even with S, P, etc.)
-    // BUT treats DRP, INC, 4.00, 5.00, US as 0 units
-    const totalUnitsEnrolled = grades.reduce((acc, g) => {
-      const gradeStr = String(g.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
-        return acc;
-      return acc + g.creditUnit;
-    }, 0);
-
-    // Separate calculation for GPA Denominator (only items that contribute to GPA)
-    const totalGPAUnits = grades.reduce((acc, cur) => {
-      const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
-        return acc;
-
-      // Include CVSU 101 "S" in the GPA denominator
-      if (cur.courseCode === "CVSU 101" && cur.grade === "S") {
-        return acc + cur.creditUnit;
-      }
-
-      const finalGrade = getFinalGradeToUse(cur);
-      if (finalGrade === null || isNaN(finalGrade)) return acc;
-
-      return acc + cur.creditUnit;
-    }, 0);
-
-    const totalCreditsEarned = grades.reduce((acc, cur) => {
-      // Earned points for GPA Numerator
-      const gradeStr = String(cur.grade);
-      if (["DRP", "INC", "FAILED", "4.00", "5.00", "US"].includes(gradeStr))
-        return acc;
-      if (cur.courseCode === "CVSU 101") return acc; // "S" has no numeric value for multiplication
-
-      const finalGrade = getFinalGradeToUse(cur);
-      if (finalGrade === null || isNaN(finalGrade)) return acc;
-      return acc + cur.creditUnit * finalGrade;
-    }, 0);
-
-    const gpa =
-      totalGPAUnits > 0 && !isNaN(totalCreditsEarned)
-        ? (totalCreditsEarned / totalGPAUnits).toFixed(2)
-        : "0.00";
-
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
-    doc.text(
-      `Total Subjects Enrolled: ${totalSubjectsEnrolled}`,
-      20,
-      (doc as any).lastAutoTable.finalY + 10,
-    );
-    doc.text(
-      `Total Credits Enrolled: ${totalUnitsEnrolled}`,
-      150,
-      (doc as any).lastAutoTable.finalY + 10,
-    );
-    doc.text(
-      `Total Credits Earned: ${totalCreditsEarned.toFixed(2)}`,
-      20,
-      (doc as any).lastAutoTable.finalY + 16,
-    );
-    doc.text(
-      `Grade Point Average: ${gpa}`,
-      150,
-      (doc as any).lastAutoTable.finalY + 16,
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.text(
-      `PURPOSE: ${purpose.toUpperCase()}`,
-      20,
-      (doc as any).lastAutoTable.finalY + 38,
-    );
-
-    doc.text(
-      courseClerkshipMap(course),
-      153,
-      (doc as any).lastAutoTable.finalY + 38,
-    );
-    const registrarWidth = doc.getTextWidth(courseClerkshipMap(course));
-    doc.line(
-      153,
-      (doc as any).lastAutoTable.finalY + 39,
-      153 + registrarWidth,
-      (doc as any).lastAutoTable.finalY + 39,
-    );
-    doc.text(
-      coursePositionMap(course),
-      158,
-      (doc as any).lastAutoTable.finalY + 42,
-    );
-
-    autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 55,
-      styles: {
-        font: "helvetica",
-        fontSize: 6,
-        cellPadding: 1,
-        halign: "center",
-        lineWidth: 0.1,
-        lineColor: 0,
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: 0,
-      },
-      bodyStyles: {
-        fillColor: [255, 255, 255],
-        textColor: 0,
-        lineWidth: 0.1,
-        lineColor: 0,
-      },
-      theme: "striped",
-      tableLineWidth: 0.1,
-      tableLineColor: 0,
-      body: [
-        ["Grading System", "", "", "", "", ""],
-        [
-          "1.00",
-          "Marked Excellent",
-          "96.7 - 100",
-          "2.75",
-          "Fair",
-          "73.4 - 76.6",
-        ],
-        ["1.25", "Excellent", "93.4 - 96.6", "3.00", "Passed", "70.0 - 73.3"],
-        [
-          "1.50",
-          "Very Superior",
-          "90.1 - 93.3",
-          "4.00",
-          "Conditional Failure",
-          "50.0 - 69.9",
-        ],
-        ["1.75", "Superior", "86.7 - 90.0", "5.00", "Failed", "below 50"],
-        ["2.00", "Very Good", "83.4 - 86.6", "INC", "Incomplete", ""],
-        ["2.25", "Good", "80.1 - 83.3", "DRP", "Dropped Subject", ""],
-        ["2.50", "Satisfactory", "76.7 - 80.0", "", "", ""],
-      ],
-    });
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text(
-      "Note: Not Valid without school dry seal.",
-      20,
-      (doc as any).lastAutoTable.finalY + 8,
-    );
-
-    // === QR CODE VERIFICATION ===
-    try {
-      const { hash } = await storeCogVerification({
-        studentNumber: student.studentNumber,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        middleInit: student.middleInit,
-        course: student.course,
-        major: student.major,
-        grades: grades.map((g) => ({
-          courseCode: g.courseCode,
-          courseTitle: g.courseTitle,
-          creditUnit: g.creditUnit,
-          grade: g.grade,
-          reExam: g.reExam,
-          remarks: g.remarks,
-          instructor: g.instructor,
-        })),
-        academicYear: academicYear || "",
-        semester: semester || "",
-        yearLevel,
-        gpa,
-        totalSubjects: totalSubjectsEnrolled,
-        totalCredits: totalUnitsEnrolled,
-        totalCreditsEarned: parseFloat(totalCreditsEarned.toFixed(2)),
-        purpose,
-      });
-
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (typeof window !== "undefined" ? window.location.origin : "");
-      const verifyUrl = `${baseUrl}/verify/${hash}`;
-      const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-        width: 200,
-        margin: 2,
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
-
-      const qrY = (doc as any).lastAutoTable.finalY + 8;
-      doc.addImage(qrDataUrl, "PNG", 165, qrY, 22, 22);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(5);
-      doc.setTextColor(100, 100, 100);
-      doc.text("Scan to verify", 165, qrY + 24, { align: "left" });
-      doc.setTextColor(0, 0, 0);
-    } catch (err) {
-      console.warn("Failed to generate verification QR code:", err);
-    }
-
-    // === OFFICIAL STAMP (registrar/admin only) ===
-    if (includeStamp) {
-      const stampWidth = 40;
-      const stampHeight = 20;
-      const stampX = 15; // centered-ish on the page
-      const stampY = (doc as any).lastAutoTable.finalY + 15;
-      doc.addImage(
-        "/stamp.png",
-        "PNG",
-        stampX,
-        stampY,
-        stampWidth,
-        stampHeight,
-      );
-    }
-
-    doc.save("Certificate-of-Grades.pdf");
-  };
-
-  const addWatermark = (
-    doc: jsPDF,
-    watermarkText: string,
-    options?: {
-      backgroundImage?: string;
-      imageOpacity?: number;
-      imageWidth?: number;
-      imageHeight?: number;
-      centered?: boolean;
-    },
-  ) => {
-    const totalPages = (doc as any).internal.getNumberOfPages();
-    const pageWidth = (doc as any).internal.pageSize.width;
-    const pageHeight = (doc as any).internal.pageSize.height;
-
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-
-      // Add background image watermark if provided
-      if (options?.backgroundImage) {
-        const opacity = options.imageOpacity ?? 0.1;
-        const imgWidth = options.imageWidth ?? 406;
-        const imgHeight = options.imageHeight ?? 100;
-
-        // Set opacity for the background image
-        doc.setGState(new (doc as any).GState({ opacity }));
-
-        if (options.centered) {
-          // Centered watermark
-          const xPos = (pageWidth - imgWidth) / 2;
-          const yPos = (pageHeight - imgHeight) / 2;
-          doc.addImage(
-            options.backgroundImage,
-            "PNG",
-            xPos,
-            yPos,
-            imgWidth,
-            imgHeight,
-          );
-        } else {
-          // Tiled background (optional - can be removed if not needed)
-          const xPos = (pageWidth - imgWidth) / 2;
-          const yPos = (pageHeight - imgHeight) / 2;
-          doc.addImage(
-            options.backgroundImage,
-            "PNG",
-            xPos,
-            yPos,
-            imgWidth,
-            imgHeight,
-          );
-        }
-
-        // Reset opacity for text watermark
-        doc.setGState(new (doc as any).GState({ opacity: 1 }));
-      }
-    }
-
-    // Reset opacity back to normal for any subsequent content
-    doc.setGState(new (doc as any).GState({ opacity: 1 }));
-    return doc;
-  };
-
   return (
     <Dialog
       open={isDialogOpen}
       onOpenChange={(open) => {
         handleOpenChange(open);
         if (!open) {
+          // Clear every piece of per-student state so reopening for another
+          // student cannot reuse the previous student's term selection.
           setStudentData(null);
+          setAcademicOptions([]);
           setAcademicYear(undefined);
           setSemester(undefined);
+          setPurpose("");
+          setYearLevel("FIRST YEAR");
           setIncludeStamp(false);
         }
       }}
