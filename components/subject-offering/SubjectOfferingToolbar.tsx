@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDebounce } from "use-debounce";
 import {
     Select,
     SelectContent,
@@ -29,19 +30,27 @@ export function SubjectOfferingToolbar({
 }: SubjectOfferingToolbarProps) {
     const [value, setValue] = useState(searchTerm);
 
+    // Debounce the raw input value so navigation fires once per typing pause
+    // rather than on every keystroke.
+    const [debouncedValue] = useDebounce(value, 500);
+
+    // Keep the latest callback in a ref: the parent re-renders on every
+    // navigation, and depending on its identity would reset the debounce timer
+    // (so the search would appear to lag or fire repeatedly).
+    const onSearchChangeRef = useRef(onSearchChange);
+    onSearchChangeRef.current = onSearchChange;
+
+    // Sync the input only when the URL changes from outside (back/forward).
     useEffect(() => {
         setValue(searchTerm);
     }, [searchTerm]);
 
+    // Commit the debounced term exactly once per pause.
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (value !== searchTerm) {
-                onSearchChange(value);
-            }
-        }, 500);
-
-        return () => clearTimeout(timeoutId);
-    }, [value, onSearchChange, searchTerm]);
+        if (debouncedValue !== searchTerm) {
+            onSearchChangeRef.current(debouncedValue);
+        }
+    }, [debouncedValue, searchTerm]);
 
     return (
         <div className="flex flex-col sm:flex-row gap-4 justify-between">

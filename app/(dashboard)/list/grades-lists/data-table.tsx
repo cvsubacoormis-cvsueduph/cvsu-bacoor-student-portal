@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEffect, useRef, useState } from "react";
+import { useDebounce } from "use-debounce";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50] as const;
 
@@ -77,33 +78,33 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [searchValue, setSearchValue] = useState(initialSearch);
-  const committedSearchRef = useRef(initialSearch);
-  const isFirstMount = useRef(true);
+  const lastCommittedRef = useRef(initialSearch);
+  const onSearchChangeRef = useRef(onSearchChange);
+  onSearchChangeRef.current = onSearchChange;
+
+  // Debounce the raw input so we navigate once per typing pause, not on every
+  // keystroke. Keeping the callback in a ref means the timer is not reset by
+  // the re-render that follows each navigation.
+  const [debouncedSearch] = useDebounce(searchValue, 400);
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
 
+  // Only sync the input from the URL when the change did not originate here, so
+  // a slower navigation can't clobber what the user is currently typing.
   useEffect(() => {
-    setSearchValue(initialSearch);
-    committedSearchRef.current = initialSearch;
+    if (initialSearch !== lastCommittedRef.current) {
+      lastCommittedRef.current = initialSearch;
+      setSearchValue(initialSearch);
+    }
   }, [initialSearch]);
 
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      if (searchValue !== committedSearchRef.current) {
-        committedSearchRef.current = searchValue;
-        onSearchChange(searchValue);
-      }
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [searchValue, onSearchChange]);
+    if (debouncedSearch === lastCommittedRef.current) return;
+    lastCommittedRef.current = debouncedSearch;
+    onSearchChangeRef.current(debouncedSearch);
+  }, [debouncedSearch]);
 
   const table = useReactTable({
     data,

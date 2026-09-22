@@ -5,6 +5,7 @@ import { CurriculumStats } from "./curriculum/CurriculumStats";
 import { CurriculumToolbar } from "./curriculum/CurriculumToolbar";
 import { CurriculumTable } from "./curriculum/CurriculumTable";
 import { CurriculumChecklist, CurriculumFormData } from "./curriculum/types";
+import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -79,27 +80,36 @@ export function CurriculumDataTable({
     }
   };
 
-  const handleSearchChange = (value: string) => {
-    const params = new URLSearchParams(window.location.search);
-    if (value) {
-      params.set("search", value);
-    } else {
-      params.delete("search");
-    }
-    params.set("page", "1");
-    router.push(`?${params.toString()}`);
-  };
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(window.location.search);
+      if ((params.get("search") ?? "") === value) return;
+      if (value) {
+        params.set("search", value);
+      } else {
+        params.delete("search");
+      }
+      params.set("page", "1");
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
 
-  const handleCourseFilterChange = (value: string) => {
-    const params = new URLSearchParams(window.location.search);
-    if (value && value !== "ALL") {
-      params.set("course", value);
-    } else {
-      params.delete("course");
-    }
-    params.set("page", "1");
-    router.push(`?${params.toString()}`);
-  };
+  const handleCourseFilterChange = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(window.location.search);
+      const next = value && value !== "ALL" ? value : "";
+      if ((params.get("course") ?? "") === next) return;
+      if (next) {
+        params.set("course", next);
+      } else {
+        params.delete("course");
+      }
+      params.set("page", "1");
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
 
   return (
     <div className="space-y-6 h-screen">

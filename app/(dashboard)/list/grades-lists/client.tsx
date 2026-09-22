@@ -4,7 +4,7 @@ import { useUser } from "@clerk/nextjs";
 import { createColumns, Grades } from "./columns";
 import { DataTable } from "./data-table";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useCallback, useRef, useTransition } from "react";
 
 interface GradesListClientProps {
   data: Grades[];
@@ -30,9 +30,15 @@ export function GradesListClient({
 
   const initialSearch = searchParams.get("search") ?? "";
 
+  // Read the newest params through a ref so updateURL stays stable and doesn't
+  // re-navigate whenever the URL itself changes.
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+
   const updateURL = useCallback(
     (updates: { page?: number; pageSize?: number; search?: string }) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const current = searchParamsRef.current;
+      const params = new URLSearchParams(current.toString());
 
       if (updates.page !== undefined) {
         params.set("page", String(updates.page));
@@ -49,11 +55,22 @@ export function GradesListClient({
         }
       }
 
+      // Nothing changed — don't fire a redundant navigation.
+      if (params.toString() === current.toString()) return;
+
+      const isSearchOnly =
+        updates.search !== undefined &&
+        updates.page === undefined &&
+        updates.pageSize === undefined;
+      const url = `${pathname}?${params.toString()}`;
+
       startTransition(() => {
-        router.push(`${pathname}?${params.toString()}`);
+        // Search keystrokes replace (no history spam); pagination pushes.
+        if (isSearchOnly) router.replace(url, { scroll: false });
+        else router.push(url, { scroll: false });
       });
     },
-    [pathname, router, searchParams],
+    [pathname, router],
   );
 
   const handlePageChange = useCallback(

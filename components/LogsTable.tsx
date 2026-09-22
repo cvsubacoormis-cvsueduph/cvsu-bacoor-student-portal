@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FailedLog, resolveGradeLog, LogsMetadata } from "@/actions/logs";
 import { AcademicTerm } from "@prisma/client";
 import { formatDate } from "@/lib/date-utils";
@@ -117,11 +117,17 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
     const [semester, setSemester] = useState(searchParams.get("semester") || "ALL");
     const [page, setPage] = useState(metadata.page);
 
+    // Keep a ref to the newest searchParams so this effect does not re-run every
+    // time the URL changes (which would trigger another navigation each time).
+    const searchParamsRef = useRef(searchParams);
+    searchParamsRef.current = searchParams;
+
     useEffect(() => {
-        const params = new URLSearchParams(searchParams);
+        const current = searchParamsRef.current;
+        const params = new URLSearchParams(current.toString());
 
         // Reset to page 1 on filter change
-        if (debouncedSearch !== (searchParams.get("search") || "")) {
+        if (debouncedSearch !== (current.get("search") || "")) {
             params.set("page", "1");
         }
 
@@ -140,13 +146,17 @@ export function LogsTable({ initialLogs, metadata, initialTerms }: LogsTableProp
         } else {
             params.delete("semester");
         }
-        router.replace(`${pathname}?${params.toString()}`);
-    }, [debouncedSearch, academicYear, semester, pathname, router, searchParams]);
+
+        // Skip the navigation entirely when nothing actually changed.
+        if (params.toString() === current.toString()) return;
+
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }, [debouncedSearch, academicYear, semester, pathname, router]);
 
     const handlePageChange = (newPage: number) => {
         const params = new URLSearchParams(searchParams);
         params.set("page", newPage.toString());
-        router.replace(`${pathname}?${params.toString()}`);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
     useEffect(() => {

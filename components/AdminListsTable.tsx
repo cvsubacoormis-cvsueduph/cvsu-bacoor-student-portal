@@ -103,18 +103,21 @@ export default function AdminListsTable() {
     fetchData();
   }, [fetchData]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, roleFilter]);
-
-  // Debounce search input — only update searchQuery after 300ms of no typing
+  // Debounce search input — commit the term and reset to page 1 together after
+  // 300ms of no typing. Batching both updates into one effect avoids the extra
+  // fetch (and flicker) a separate "reset page" effect would cause.
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(localSearchQuery);
+      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [localSearchQuery]);
+
+  const handleRoleFilterChange = (value: string) => {
+    setRoleFilter(value);
+    setPage(1);
+  };
 
   const showActions = callerRole === "admin" || callerRole === "superuser";
   const isRoleFilterActive = roleFilter !== "ALL";
@@ -169,7 +172,7 @@ export default function AdminListsTable() {
           </div>
 
           {/* Role Filter */}
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <Select value={roleFilter} onValueChange={handleRoleFilterChange}>
             <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Filter by role" />
             </SelectTrigger>

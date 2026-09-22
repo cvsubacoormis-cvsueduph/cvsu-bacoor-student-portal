@@ -3,6 +3,7 @@
 import { useUser } from "@clerk/nextjs";
 import { SubjectOfferingToolbar } from "./subject-offering/SubjectOfferingToolbar";
 import { SubjectOfferingTable } from "./subject-offering/SubjectOfferingTable";
+import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SubjectOffering, CurriculumChecklist } from "@prisma/client";
 
@@ -34,51 +35,71 @@ export function SubjectOfferingDataTable({
     const startIndex = (page - 1) * limit;
     const endIndex = Math.min(startIndex + limit, count);
 
-    const handleSearchChange = (value: string) => {
-        const params = new URLSearchParams(window.location.search);
-        if (value) {
-            params.set("search", value);
-        } else {
-            params.delete("search");
-        }
-        params.set("page", "1");
-        router.push(`?${params.toString()}`);
-    };
+    const handleSearchChange = useCallback(
+        (value: string) => {
+            const params = new URLSearchParams(window.location.search);
+            if ((params.get("search") ?? "") === value) return;
+            if (value) {
+                params.set("search", value);
+            } else {
+                params.delete("search");
+            }
+            params.set("page", "1");
+            router.replace(`?${params.toString()}`, { scroll: false });
+        },
+        [router],
+    );
 
-    const handleAcademicYearFilterChange = (value: string) => {
-        const params = new URLSearchParams(window.location.search);
-        if (value && value !== "ALL") {
-            params.set("academicYear", value);
-        } else {
-            params.delete("academicYear");
-        }
-        params.set("page", "1");
-        router.push(`?${params.toString()}`);
-    };
+    const handleAcademicYearFilterChange = useCallback(
+        (value: string) => {
+            const params = new URLSearchParams(window.location.search);
+            const next = value && value !== "ALL" ? value : "";
+            if ((params.get("academicYear") ?? "") === next) return;
+            if (next) {
+                params.set("academicYear", next);
+            } else {
+                params.delete("academicYear");
+            }
+            params.set("page", "1");
+            router.replace(`?${params.toString()}`, { scroll: false });
+        },
+        [router],
+    );
 
-    const handleSemesterFilterChange = (value: string) => {
-        const params = new URLSearchParams(window.location.search);
-        if (value && value !== "ALL") {
-            params.set("semester", value);
-        } else {
-            params.delete("semester");
-        }
-        params.set("page", "1");
-        router.push(`?${params.toString()}`);
-    };
+    const handleSemesterFilterChange = useCallback(
+        (value: string) => {
+            const params = new URLSearchParams(window.location.search);
+            const next = value && value !== "ALL" ? value : "";
+            if ((params.get("semester") ?? "") === next) return;
+            if (next) {
+                params.set("semester", next);
+            } else {
+                params.delete("semester");
+            }
+            params.set("page", "1");
+            router.replace(`?${params.toString()}`, { scroll: false });
+        },
+        [router],
+    );
 
-    const handlePageChange = (page: number) => {
-        const params = new URLSearchParams(window.location.search);
-        params.set("page", page.toString());
-        router.push(`?${params.toString()}`);
-    };
+    const handlePageChange = useCallback(
+        (page: number) => {
+            const params = new URLSearchParams(window.location.search);
+            params.set("page", page.toString());
+            router.push(`?${params.toString()}`, { scroll: false });
+        },
+        [router],
+    );
 
-    const handleItemsPerPageChange = (value: string) => {
-        const params = new URLSearchParams(window.location.search);
-        params.set("limit", value);
-        params.set("page", "1");
-        router.push(`?${params.toString()}`);
-    };
+    const handleItemsPerPageChange = useCallback(
+        (value: string) => {
+            const params = new URLSearchParams(window.location.search);
+            params.set("limit", value);
+            params.set("page", "1");
+            router.push(`?${params.toString()}`, { scroll: false });
+        },
+        [router],
+    );
 
     return (
         <div className="space-y-4 h-screen">

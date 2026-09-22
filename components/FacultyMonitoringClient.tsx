@@ -484,8 +484,12 @@ export function FacultyMonitoringClient({
         }
       }
 
+      // Skip the navigation when the URL already matches — prevents the page
+      // from re-navigating on every keystroke settle.
+      if (params.toString() === searchParams.toString()) return;
+
       startTransition(function () {
-        router.push(pathname + "?" + params.toString());
+        router.push(pathname + "?" + params.toString(), { scroll: false });
       });
     },
     [pathname, router, searchParams],
