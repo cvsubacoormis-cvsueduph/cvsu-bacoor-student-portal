@@ -210,3 +210,207 @@ describe("toGradeExportRow", () => {
     expect(row.middleInit).toBe("A");
   });
 });
+
+/**
+ * The export used to stop at 5,000 rows because I mistakenly copied the upload
+ * parser's *per-batch* limit, which is not a property of a term. A term can hold
+ * far more grades, so the route now pages through all of them and compresses the
+ * workbook. These tests pin both behaviours down.
+ */
+describe("GET /api/grades/export — pagination and compression", () => {
+  let GET: (req: Request) => Promise<Response>;
+
+  const PAGE = 5000;
+
+  /**
+   * Rows must have UNIQUE (studentNumber, courseCode) pairs — that is the real
+   * @@unique constraint keyset paging relies on. Deriving both columns from `i`
+   * with modular arithmetic would alias different rows onto the same key and
+   * make the cursor ambiguous.
+   */
+  function fakeGrade(i: number) {
+    const studentIndex = Math.floor(i / 50); // 50 subjects per student
+    const subjectIndex = i % 50;
+    return {
+      studentNumber: `2021${String(studentIndex).padStart(5, "0")}`,
+      courseCode: `CS${100 + subjectIndex}`,
+      courseTitle: "Intro to Computing",
+      creditUnit: 3,
+      grade: "1.75",
+      reExam: null,
+      remarks: "PASSED",
+      instructor: "DR. SMITH",
+      student: {
+        studentNumber: `2021${String(studentIndex).padStart(5, "0")}`,
+        firstName: "John",
+        lastName: "Doe",
+        middleInit: "A",
+      },
+    };
+  }
+
+  /**
+   * Emulates keyset paging over the fixture: a genuine seek strictly after the
+   * cursor, so a wrong cursor comparator shows up as duplicated or lost rows.
+   */
+  function keysetMock(total: number, onRows?: (n: number) => void) {
+    return async ({ where, take }: any) => {
+      const all = Array.from({ length: total }, (_, i) => fakeGrade(i)).sort(
+        (a, b) =>
+          a.studentNumber.localeCompare(b.studentNumber) ||
+          a.courseCode.localeCompare(b.courseCode),
+      );
+
+      let after = all;
+      if (where?.OR) {
+        const [byNumber, byCourse] = where.OR;
+        after = all.filter(
+          (g) =>
+            g.studentNumber > byNumber.studentNumber.gt ||
+            (g.studentNumber === byCourse.studentNumber &&
+              g.courseCode > byCourse.courseCode.gt),
+        );
+      }
+
+      const page = after.slice(0, take);
+      onRows?.(page.length);
+      return page;
+    };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    setAuthRegistrar();
+    const mod = await import("@/app/api/grades/export/route");
+    GET = mod.GET as (req: Request) => Promise<Response>;
+  });
+
+  it("exports a term larger than one page without truncating", async () => {
+    const total = 12_345;
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
+    (prisma.grade.findMany as any).mockImplementation(keysetMock(total));
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(200);
+    // Every row for the term, not just the first page.
+    expect(res.headers.get("X-Export-Row-Count")).toBe(String(total));
+    // The old truncation signal is gone because nothing is truncated.
+    expect(res.headers.get("X-Export-Truncated")).toBeNull();
+  });
+
+  it("pages by seeking on (studentNumber, courseCode) instead of OFFSET", async () => {
+    const total = 12_345;
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
+    (prisma.grade.findMany as any).mockImplementation(keysetMock(total));
+
+    await GET(createMockRequest("GET", EXPORT_URL));
+
+    const calls = (prisma.grade.findMany as any).mock.calls.map((c: any[]) => c[0]);
+
+    // First page is unpaged; every later page seeks, and NO page uses OFFSET.
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls[0].OR).toBeUndefined();
+    for (const c of calls) {
+      expect(c).not.toHaveProperty("skip");
+      expect(c.take).toBe(PAGE);
+      // Every page stays scoped to the requested term.
+      expect(c.where.academicYear).toBe("AY_2024_2025");
+      expect(c.where.semester).toBe("FIRST");
+    }
+
+    // Seeking pages are a compound cursor: later studentNumber, or same
+    // studentNumber with a later courseCode. The final call is the exhaustion
+    // probe (empty page) and carries no cursor, so exclude trailing empties.
+    const seeking = calls.slice(1).filter((c: any) => c.where.OR !== undefined);
+    expect(seeking.length).toBeGreaterThan(0);
+    for (const c of seeking) {
+      expect(c.where.OR).toHaveLength(2);
+      expect(c.where.OR[0]).toEqual({
+        studentNumber: { gt: expect.any(String) },
+      });
+      expect(c.where.OR[1].courseCode).toEqual({ gt: expect.any(String) });
+      // The second clause must pin the same studentNumber as the first.
+      expect(c.where.OR[1].studentNumber).toBe(c.where.OR[0].studentNumber.gt);
+    }
+  });
+
+  it("fetches each row exactly once (no duplicates, no drops)", async () => {
+    const total = 12_000;
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: total } });
+
+    let fetched = 0;
+    (prisma.grade.findMany as any).mockImplementation(
+      keysetMock(total, (n) => {
+        fetched += n;
+      }),
+    );
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    // 5000 + 5000 + 2000 rows, plus one empty page to confirm exhaustion.
+    expect(fetched).toBe(total);
+    expect(Number(res.headers.get("X-Export-Row-Count"))).toBe(total);
+  });
+
+  it("breaks out of paging on an empty page rather than relying on the count", async () => {
+    // totalForTerm says 10,000 (two pages), but the term shrinks between the
+    // count and the reads. Returning an empty FIRST page distinguishes the
+    // explicit `break` from the loop-bound alone: without the break the loop
+    // would still issue a second call, so 1 call proves termination came from
+    // the guard and not from the arithmetic.
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 10_000 } });
+    (prisma.grade.findMany as any).mockResolvedValue([]);
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(200);
+    expect((prisma.grade.findMany as any).mock.calls).toHaveLength(1);
+    expect(res.headers.get("X-Export-Row-Count")).toBe("0");
+  });
+
+  it("terminates when a later page comes back empty", async () => {
+    // Same guard, but exercised mid-loop: page 1 is full, page 2 is empty.
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 20_000 } });
+    let call = 0;
+    (prisma.grade.findMany as any).mockImplementation(async () => {
+      call++;
+      return call === 1
+        ? Array.from({ length: PAGE }, (_, i) => fakeGrade(i))
+        : [];
+    });
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(200);
+    expect((prisma.grade.findMany as any).mock.calls).toHaveLength(2);
+    expect(res.headers.get("X-Export-Row-Count")).toBe(String(PAGE));
+  });
+
+  it("enables DEFLATE and a shared string table so the workbook stays small", async () => {
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 1 } });
+    (prisma.grade.findMany as any).mockResolvedValue([fakeGrade(0)]);
+
+    await GET(createMockRequest("GET", EXPORT_URL));
+
+    const write = XLSX.write as unknown as ReturnType<typeof vi.fn>;
+    expect(write).toHaveBeenCalled();
+    // Called as XLSX.write(workbook, opts) — the options object is index 1.
+    const opts = write.mock.calls.at(-1)![1];
+    // SheetJS defaults compression OFF; omitting it is what made the file huge.
+    expect(opts.compression).toBe(true);
+    // Repeated course titles / instructors are stored once, not per row.
+    expect(opts.bookSST).toBe(true);
+  });
+
+  it("404s (not a truncated 200) when the term is empty", async () => {
+    (prisma.grade.aggregate as any).mockResolvedValue({ _count: { _all: 0 } });
+    (prisma.grade.findMany as any).mockResolvedValue([]);
+
+    const res = await GET(createMockRequest("GET", EXPORT_URL));
+
+    expect(res.status).toBe(404);
+    // The count short-circuits before any page is read.
+    expect(prisma.grade.findMany).not.toHaveBeenCalled();
+  });
+});

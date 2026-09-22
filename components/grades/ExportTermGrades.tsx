@@ -124,15 +124,6 @@ export function ExportTermGrades() {
         throw new Error(body?.error || "Failed to export grades.");
       }
 
-      // Surface a partial export rather than silently handing over a
-      // truncated workbook.
-      if (res.headers.get("X-Export-Truncated") === "true") {
-        toast(
-          "This term has more grades than fit in one file. Only the first 5,000 rows were exported.",
-          { icon: "⚠️", duration: 8000 },
-        );
-      }
-
       const blob = await res.blob();
 
       // Prefer the server-provided filename so it stays in sync with the API.
@@ -150,7 +141,14 @@ export function ExportTermGrades() {
       anchor.remove();
       URL.revokeObjectURL(url);
 
-      toast.success("Grades exported successfully.");
+      // Confirm the row count so a complete export is distinguishable from a
+      // partial one at a glance.
+      const rowCount = res.headers.get("X-Export-Row-Count");
+      toast.success(
+        rowCount
+          ? `${Number(rowCount).toLocaleString()} grade rows exported.`
+          : "Grades exported successfully.",
+      );
       setOpen(false);
       resetSelections();
     } catch (error) {

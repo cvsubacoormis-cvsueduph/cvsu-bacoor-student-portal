@@ -9,6 +9,7 @@ import {
   GRADE_EXPORT_SHEET_NAME,
   gradeExportFileName,
   toGradeExportRows,
+  type GradeWithStudent,
 } from "@/lib/grades-export";
 import { AcademicYear, Semester } from "@prisma/client";
 import * as XLSX from "xlsx";
@@ -25,8 +26,13 @@ export const runtime = "nodejs";
  * Access is restricted to `admin` and `registrar` only.
  */
 
-/** Hard cap mirroring the upload parser's 5,000-row batch limit. */
-const MAX_EXPORT_ROWS = 5_000;
+/**
+ * Rows are fetched in pages of this size and appended to the workbook, so a
+ * whole term can be exported regardless of how many grades it holds. Paging
+ * keeps the peak memory of the Prisma query bounded rather than loading the
+ * entire term in one shot.
+ */
+const EXPORT_PAGE_SIZE = 5_000;
 
 const VALID_ACADEMIC_YEARS = new Set<string>(Object.values(AcademicYear));
 const VALID_SEMESTERS = new Set<string>(Object.values(Semester));
@@ -70,39 +76,78 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const where = {
+      academicYear: academicYear as AcademicYear,
+      semester: semester as Semester,
+    };
+
     const { _count } = await prisma.grade.aggregate({
-      where: { academicYear: academicYear as AcademicYear, semester: semester as Semester },
+      where,
       _count: { _all: true },
     });
     const totalForTerm = _count._all;
 
-    const grades = await prisma.grade.findMany({
-      where: {
-        academicYear: academicYear as AcademicYear,
-        semester: semester as Semester,
-      },
-      include: {
-        student: {
-          select: {
-            studentNumber: true,
-            firstName: true,
-            lastName: true,
-            middleInit: true,
-          },
-        },
-      },
-      orderBy: [{ studentNumber: "asc" }, { courseCode: "asc" }],
-      take: MAX_EXPORT_ROWS,
-    });
-
-    if (grades.length === 0) {
+    if (totalForTerm === 0) {
       return NextResponse.json(
         { error: "No grades found for the selected academic year and semester." },
         { status: 404 },
       );
     }
+    // Page through the term with KEYSET (seek) pagination rather than OFFSET.
+    //
+    // The ordering key is (studentNumber, courseCode), which is a total order
+    // within one (academicYear, semester) term because of the
+    // @@unique([studentNumber, courseCode, academicYear, semester]) constraint.
+    // Seeking past the last row of the previous page therefore cannot duplicate
+    // or skip rows, whereas OFFSET would both re-scan everything before the
+    // offset and shift if rows were inserted mid-export.
+    const rows: ReturnType<typeof toGradeExportRows> = [];
+    let cursor: { studentNumber: string; courseCode: string } | null = null;
 
-    const rows = toGradeExportRows(grades);
+    for (;;) {
+      // This annotation is required, not decorative: `cursor` is assigned from
+      // the previous page's last row, so omitting it makes TS report TS7022
+      // ('page' is referenced directly or indirectly in its own initializer) at
+      // both this line and the `last` assignment below.
+      const page: GradeWithStudent[] = await prisma.grade.findMany({
+        where: cursor
+          ? {
+              ...where,
+              // Strictly after the cursor: either a later studentNumber, or the
+              // same studentNumber with a later courseCode.
+              OR: [
+                { studentNumber: { gt: cursor.studentNumber } },
+                {
+                  studentNumber: cursor.studentNumber,
+                  courseCode: { gt: cursor.courseCode },
+                },
+              ],
+            }
+          : where,
+        include: {
+          student: {
+            select: {
+              studentNumber: true,
+              firstName: true,
+              lastName: true,
+              middleInit: true,
+            },
+          },
+        },
+        orderBy: [{ studentNumber: "asc" }, { courseCode: "asc" }],
+        take: EXPORT_PAGE_SIZE,
+      });
+
+      if (page.length === 0) break;
+
+      rows.push(...toGradeExportRows(page));
+
+      // A short page means the term is exhausted; stop without a further query.
+      if (page.length < EXPORT_PAGE_SIZE) break;
+
+      const last = page[page.length - 1];
+      cursor = { studentNumber: last.studentNumber, courseCode: last.courseCode };
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(rows, {
       header: [...GRADE_EXPORT_HEADERS],
@@ -115,9 +160,14 @@ export async function GET(request: NextRequest) {
     const buffer = XLSX.write(workbook, {
       type: "buffer",
       bookType: "xlsx",
+      // Both of these matter for size:
+      //  - `compression` DEFLATEs the sheet XML. SheetJS defaults it OFF, which
+      //    is why the file used to weigh ~500 KB per 1,000 rows.
+      //  - `bookSST` writes a shared string table, so repeated values (course
+      //    titles, instructors, remarks) are stored once instead of per row.
+      compression: true,
+      bookSST: true,
     }) as Buffer;
-
-    const truncated = totalForTerm > MAX_EXPORT_ROWS;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
@@ -131,8 +181,6 @@ export async function GET(request: NextRequest) {
         "Content-Length": String(buffer.length),
         // Per-user export data must never be shared by a CDN or browser cache.
         "Cache-Control": "private, no-store",
-        // Surfaced so the UI can warn rather than silently emitting a partial file.
-        "X-Export-Truncated": String(truncated),
         "X-Export-Row-Count": String(rows.length),
         "Vary": "Accept-Encoding",
       },
