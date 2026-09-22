@@ -27,12 +27,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
@@ -43,6 +45,8 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
+  ChevronsUpDown,
+  Search,
 } from "lucide-react";
 import {
   getCreditedSubjects,
@@ -62,6 +66,9 @@ type CreditedSubjectRecord = {
   creditUnits: number;
   schoolName: string | null;
   notes: string | null;
+  grade: string | null;
+  remarks: string | null;
+  instructor: string | null;
   creditedAt: Date;
 };
 
@@ -70,6 +77,18 @@ type CurriculumSubject = {
   courseTitle: string;
   creditLec: number;
   creditLab: number;
+};
+
+/**
+ * A curriculum subject selected in bulk mode, together with the details of how
+ * it was taken at the previous school. These differ per subject — a transferee
+ * earns a different grade in each course — so they live on the entry rather
+ * than in shared form state.
+ */
+type BulkEntry = CurriculumSubject & {
+  grade: string;
+  remarks: string;
+  instructor: string;
 };
 
 interface CreditedSubjectsManagerProps {
@@ -103,14 +122,17 @@ export default function CreditedSubjectsManager({
   const [manualCreditUnits, setManualCreditUnits] = useState(3);
   const [schoolName, setSchoolName] = useState("");
   const [notes, setNotes] = useState("");
+  // Single-entry details of how the subject was taken at the previous school.
+  const [grade, setGrade] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [instructor, setInstructor] = useState("");
   const [entryMode, setEntryMode] = useState<"curriculum" | "manual">(
     "curriculum",
   );
 
   // Bulk state
-  const [bulkSubjects, setBulkSubjects] = useState<
-    CurriculumSubject[]
-  >([]);
+  const [bulkSubjects, setBulkSubjects] = useState<BulkEntry[]>([]);
+  const [bulkSearch, setBulkSearch] = useState("");
   const [bulkMode, setBulkMode] = useState(false);
 
   const isAuthorized =
@@ -181,6 +203,21 @@ export default function CreditedSubjectsManager({
     (s) => !creditedCodes.has(s.courseCode),
   );
 
+  // Searchbar for the bulk list. The single-entry picker filters itself through
+  // the combobox, but the bulk list is plain markup, so it filters here.
+  const bulkSearchTerm = bulkSearch.trim().toLowerCase();
+  const visibleBulkSubjects = bulkSearchTerm
+    ? uncreditedCurriculumSubjects.filter(
+        (s) =>
+          s.courseCode.toLowerCase().includes(bulkSearchTerm) ||
+          s.courseTitle.toLowerCase().includes(bulkSearchTerm),
+      )
+    : uncreditedCurriculumSubjects;
+
+  const selectedCurriculumSubjectRecord = curriculumSubjects.find(
+    (s) => s.courseCode === selectedCurriculumSubject,
+  );
+
   // ─── Handlers ───────────────────────────────────────────────────────
 
   const handleAddSingle = async () => {
@@ -223,6 +260,9 @@ export default function CreditedSubjectsManager({
         creditUnits: units,
         schoolName: schoolName || undefined,
         notes: notes || undefined,
+        grade: grade || undefined,
+        remarks: remarks || undefined,
+        instructor: instructor || undefined,
       });
 
       if (result.success) {
@@ -234,6 +274,9 @@ export default function CreditedSubjectsManager({
         setManualCreditUnits(3);
         setSchoolName("");
         setNotes("");
+        setGrade("");
+        setRemarks("");
+        setInstructor("");
         await fetchCreditedSubjects();
       } else {
         toast.error(result.message);
@@ -274,8 +317,30 @@ export default function CreditedSubjectsManager({
       if (exists) {
         return prev.filter((s) => s.courseCode !== subject.courseCode);
       }
-      return [...prev, subject];
+      return [
+        ...prev,
+        { ...subject, grade: "", remarks: "", instructor: "" },
+      ];
     });
+  };
+
+  /**
+   * Updates one previous-school detail for one subject in the bulk selection.
+   *
+   * Grade, remarks and instructor are per subject: a transferee earns a
+   * different grade in each credited course, so a single shared input would be
+   * wrong.
+   */
+  const handleBulkFieldChange = (
+    courseCode: string,
+    field: "grade" | "remarks" | "instructor",
+    value: string,
+  ) => {
+    setBulkSubjects((prev) =>
+      prev.map((s) =>
+        s.courseCode === courseCode ? { ...s, [field]: value } : s,
+      ),
+    );
   };
 
   const handleBulkAdd = async () => {
@@ -294,12 +359,16 @@ export default function CreditedSubjectsManager({
           creditUnits: s.creditLec + s.creditLab,
           schoolName: schoolName || undefined,
           notes: notes || undefined,
+          grade: s.grade || undefined,
+          remarks: s.remarks || undefined,
+          instructor: s.instructor || undefined,
         })),
       });
 
       if (result.success) {
         toast.success(result.message);
         setBulkSubjects([]);
+        setBulkSearch("");
         setSchoolName("");
         setNotes("");
         await fetchCreditedSubjects();
@@ -392,6 +461,9 @@ export default function CreditedSubjectsManager({
                     Units
                   </TableHead>
                   <TableHead className="w-[150px]">School</TableHead>
+                  <TableHead className="w-[80px] text-center">Grade</TableHead>
+                  <TableHead className="w-[110px]">Remarks</TableHead>
+                  <TableHead className="w-[150px]">Instructor</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead className="w-[80px] text-center">
                     Actions
@@ -412,6 +484,21 @@ export default function CreditedSubjectsManager({
                       {subject.schoolName || (
                         <span className="text-xs italic text-muted-foreground">
                           Not specified
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center font-mono">
+                      {subject.grade || (
+                        <span className="text-xs italic text-muted-foreground">
+                          —
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{subject.remarks || "—"}</TableCell>
+                    <TableCell>
+                      {subject.instructor || (
+                        <span className="text-xs italic text-muted-foreground">
+                          —
                         </span>
                       )}
                     </TableCell>
@@ -482,6 +569,7 @@ export default function CreditedSubjectsManager({
             onClick={() => {
               setBulkMode(!bulkMode);
               setBulkSubjects([]);
+              setBulkSearch("");
             }}
           >
             {bulkMode ? "Single Entry Mode" : "Bulk Select Mode"}
@@ -529,31 +617,48 @@ export default function CreditedSubjectsManager({
                   <Label htmlFor="curriculum-subject">
                     Select Subject from Curriculum
                   </Label>
-                  <Select
-                    value={selectedCurriculumSubject}
-                    onValueChange={setSelectedCurriculumSubject}
-                  >
-                    <SelectTrigger id="curriculum-subject" className="w-full">
-                      <SelectValue placeholder="Search for a subject..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {uncreditedCurriculumSubjects.length === 0 ? (
-                        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                          All curriculum subjects are already credited.
-                        </div>
-                      ) : (
-                        uncreditedCurriculumSubjects.map((s) => (
-                          <SelectItem
-                            key={s.courseCode}
-                            value={s.courseCode}
-                          >
-                            {s.courseCode} — {s.courseTitle} (
-                            {s.creditLec + s.creditLab}u)
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  {uncreditedCurriculumSubjects.length === 0 ? (
+                    <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                      All curriculum subjects are already credited.
+                    </p>
+                  ) : (
+                    <Combobox
+                      value={selectedCurriculumSubject}
+                      onValueChange={setSelectedCurriculumSubject}
+                    >
+                      <ComboboxTrigger asChild>
+                        {/* Radix injects aria-expanded/aria-controls here. */}
+                        <Button
+                          id="curriculum-subject"
+                          variant="outline"
+                          className="w-full justify-between font-normal"
+                        >
+                          <span className="truncate">
+                            {selectedCurriculumSubjectRecord
+                              ? `${selectedCurriculumSubjectRecord.courseCode} — ${selectedCurriculumSubjectRecord.courseTitle}`
+                              : "Search for a subject..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </ComboboxTrigger>
+                      <ComboboxContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                        <ComboboxInput placeholder="Search by code or title..." />
+                        <ComboboxList className="max-h-72">
+                          <ComboboxEmpty>No subject found.</ComboboxEmpty>
+                          {uncreditedCurriculumSubjects.map((s) => (
+                            <ComboboxItem
+                              key={s.courseCode}
+                              value={s.courseCode}
+                              keywords={[s.courseTitle]}
+                            >
+                              {s.courseCode} — {s.courseTitle} (
+                              {s.creditLec + s.creditLab}u)
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                  )}
                 </div>
               </div>
             ) : (
@@ -612,6 +717,38 @@ export default function CreditedSubjectsManager({
               </div>
             </div>
 
+            {/* How the subject was taken at the previous school. Free text:
+                other institutions use grade scales that differ from 1.00–5.00. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="credited-grade">Grade</Label>
+                <Input
+                  id="credited-grade"
+                  value={grade}
+                  onChange={(e) => setGrade(e.target.value)}
+                  placeholder="e.g., 1.75"
+                />
+              </div>
+              <div>
+                <Label htmlFor="credited-remarks">Remarks</Label>
+                <Input
+                  id="credited-remarks"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="e.g., PASSED"
+                />
+              </div>
+              <div>
+                <Label htmlFor="credited-instructor">Instructor</Label>
+                <Input
+                  id="credited-instructor"
+                  value={instructor}
+                  onChange={(e) => setInstructor(e.target.value)}
+                  placeholder="e.g., Prof. Dela Cruz"
+                />
+              </div>
+            </div>
+
             <div className="flex justify-end">
               <Button
                 onClick={handleAddSingle}
@@ -641,45 +778,64 @@ export default function CreditedSubjectsManager({
                 All curriculum subjects are already credited.
               </p>
             ) : (
-              <div className="max-h-60 overflow-y-auto space-y-1">
-                {uncreditedCurriculumSubjects.map((s) => {
-                  const isSelected = bulkSubjects.some(
-                    (bs) => bs.courseCode === s.courseCode,
-                  );
-                  return (
-                    <div
-                      key={s.courseCode}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleBulkAddToggle(s)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          handleBulkAddToggle(s);
-                        }
-                      }}
-                      className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
-                        isSelected
-                          ? "bg-blue-100 text-blue-800"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {isSelected ? (
-                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                        ) : (
-                          <div className="h-4 w-4 rounded-full border" />
-                        )}
-                        <span>
-                          <strong>{s.courseCode}</strong> — {s.courseTitle}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {s.creditLec + s.creditLab}u
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={bulkSearch}
+                    onChange={(e) => setBulkSearch(e.target.value)}
+                    placeholder="Search subject code or title..."
+                    aria-label="Search subjects to credit"
+                    className="pl-9"
+                  />
+                </div>
+
+                {visibleBulkSubjects.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    No subject matches &ldquo;{bulkSearch}&rdquo;.
+                  </p>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {visibleBulkSubjects.map((s) => {
+                      const isSelected = bulkSubjects.some(
+                        (bs) => bs.courseCode === s.courseCode,
+                      );
+                      return (
+                        <div
+                          key={s.courseCode}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleBulkAddToggle(s)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleBulkAddToggle(s);
+                            }
+                          }}
+                          className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
+                            isSelected
+                              ? "bg-blue-100 text-blue-800"
+                              : "hover:bg-muted"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isSelected ? (
+                              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <div className="h-4 w-4 rounded-full border" />
+                            )}
+                            <span>
+                              <strong>{s.courseCode}</strong> — {s.courseTitle}
+                            </span>
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {s.creditLec + s.creditLab}u
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -702,6 +858,94 @@ export default function CreditedSubjectsManager({
                 />
               </div>
             </div>
+
+            {bulkSubjects.length > 0 && (
+              <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                <div className="flex items-baseline justify-between">
+                  <Label className="text-sm font-medium">
+                    Grade details per subject
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    Entered for each subject individually
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {bulkSubjects.map((s) => (
+                    <div
+                      key={s.courseCode}
+                      className="rounded-md border bg-background p-3"
+                    >
+                      <p className="mb-2 text-sm">
+                        <strong className="font-mono">{s.courseCode}</strong> —{" "}
+                        {s.courseTitle}
+                      </p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div>
+                          <Label
+                            htmlFor={`bulk-grade-${s.courseCode}`}
+                            className="text-xs"
+                          >
+                            Grade
+                          </Label>
+                          <Input
+                            id={`bulk-grade-${s.courseCode}`}
+                            value={s.grade}
+                            onChange={(e) =>
+                              handleBulkFieldChange(
+                                s.courseCode,
+                                "grade",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="e.g., 1.75"
+                          />
+                        </div>
+                        <div>
+                          <Label
+                            htmlFor={`bulk-remarks-${s.courseCode}`}
+                            className="text-xs"
+                          >
+                            Remarks
+                          </Label>
+                          <Input
+                            id={`bulk-remarks-${s.courseCode}`}
+                            value={s.remarks}
+                            onChange={(e) =>
+                              handleBulkFieldChange(
+                                s.courseCode,
+                                "remarks",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="e.g., PASSED"
+                          />
+                        </div>
+                        <div>
+                          <Label
+                            htmlFor={`bulk-instructor-${s.courseCode}`}
+                            className="text-xs"
+                          >
+                            Instructor
+                          </Label>
+                          <Input
+                            id={`bulk-instructor-${s.courseCode}`}
+                            value={s.instructor}
+                            onChange={(e) =>
+                              handleBulkFieldChange(
+                                s.courseCode,
+                                "instructor",
+                                e.target.value,
+                              )
+                            }
+                            placeholder="e.g., Prof. Dela Cruz"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">

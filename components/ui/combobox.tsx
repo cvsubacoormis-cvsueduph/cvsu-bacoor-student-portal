@@ -144,11 +144,20 @@ export function ComboboxGroup({
 export function ComboboxItem({
     children,
     value,
+    keywords,
     onSelect,
     className,
 }: {
     children: React.ReactNode
     value: string
+    /**
+     * Extra terms to match against when filtering.
+     *
+     * `value` is both the search string and what `onSelect`/`onValueChange`
+     * receive, so this keeps them separate: filter on a title while the value
+     * stays the stable id the caller actually wants.
+     */
+    keywords?: string[]
     onSelect?: (value: string) => void
     className?: string
 }) {
@@ -157,6 +166,7 @@ export function ComboboxItem({
     return (
         <CommandItem
             value={value}
+            keywords={keywords}
             onSelect={(currentValue) => {
                 onSelect?.(currentValue)
                 context?.onValueChange?.(currentValue)

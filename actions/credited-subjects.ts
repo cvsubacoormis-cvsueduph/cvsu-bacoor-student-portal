@@ -15,6 +15,12 @@ const creditedSubjectSchema = z.object({
   creditUnits: z.number().int().min(0, "Credit units must be non-negative"),
   schoolName: z.string().optional(),
   notes: z.string().optional(),
+  // Details of the subject as taken at the previous school. Free text, because
+  // other institutions use grade scales that are not necessarily 1.00–5.00
+  // (e.g. "A", "B+", "90"), so a numeric scale must not be enforced here.
+  grade: z.string().max(50, "Grade is too long").optional(),
+  remarks: z.string().max(200, "Remarks are too long").optional(),
+  instructor: z.string().max(200, "Instructor name is too long").optional(),
 });
 
 const bulkCreditedSubjectsSchema = z.object({
@@ -26,6 +32,9 @@ const bulkCreditedSubjectsSchema = z.object({
       creditUnits: z.number().int().min(0),
       schoolName: z.string().optional(),
       notes: z.string().optional(),
+      grade: z.string().max(50, "Grade is too long").optional(),
+      remarks: z.string().max(200, "Remarks are too long").optional(),
+      instructor: z.string().max(200, "Instructor name is too long").optional(),
     }),
   ),
 });
@@ -40,6 +49,18 @@ export type RemoveCreditedSubjectInput = z.infer<
 >;
 
 // ─── Auth Guard ─────────────────────────────────────────────────────────
+
+/**
+ * Normalises an optional free-text field for storage.
+ *
+ * Whitespace-only input means "not provided" and is stored as NULL rather than
+ * an empty string, so the UI can distinguish empty from filled with a simple
+ * truthiness check.
+ */
+function cleanText(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
 
 async function requireAuthorizedRole(): Promise<void> {
   const { userId, sessionClaims } = await auth();
@@ -94,6 +115,31 @@ export async function getCreditedSubjects(studentNumber: string) {
 }
 
 /**
+ * Redis key for a student's credited-course map.
+ *
+ * Single source of truth: the reader and the invalidators both go through this,
+ * so a rename cannot silently leave mutations writing to a stale cache.
+ */
+function creditedCodesCacheKey(studentNumber: string): string {
+  return `cache:creditedCodes:${studentNumber}:v1`;
+}
+
+/**
+ * Drops the cached credited-course map for a student.
+ *
+ * {@link getCreditedSubjectCodes} caches for 600s, so without this the
+ * curriculum checklist can keep showing a subject as "Not Taken" for up to ten
+ * minutes after it was credited (or the reverse, after a removal).
+ */
+async function invalidateCreditedCodesCache(
+  studentNumber: string,
+): Promise<void> {
+  await withRedisFallback(async () => {
+    await redis.del(creditedCodesCacheKey(studentNumber));
+  });
+}
+
+/**
  * Get the map of credited course codes for a student — keyed by courseCode.
  * Returns a plain Record (JSON-safe) so it can be serialized across server-action boundaries.
  */
@@ -101,7 +147,7 @@ export async function getCreditedSubjectCodes(
   studentNumber: string,
 ): Promise<Record<string, { courseTitle: string; creditUnits: number }>> {
   // ── Redis cache (TTL 600s — credits don't change often) ──────────────────
-  const cacheKey = `cache:creditedCodes:${studentNumber}:v1`;
+  const cacheKey = creditedCodesCacheKey(studentNumber);
 
   const cached = await withRedisFallback(async () => {
     const raw = await redis.get(cacheKey);
@@ -154,8 +200,17 @@ export async function addCreditedSubject(
     };
   }
 
-  const { studentNumber, courseCode, courseTitle, creditUnits, schoolName, notes } =
-    parsed.data;
+  const {
+    studentNumber,
+    courseCode,
+    courseTitle,
+    creditUnits,
+    schoolName,
+    notes,
+    grade,
+    remarks,
+    instructor,
+  } = parsed.data;
 
   // Verify student exists
   const student = await prisma.student.findUnique({
@@ -187,10 +242,15 @@ export async function addCreditedSubject(
       courseCode: courseCode.toUpperCase(),
       courseTitle: courseTitle.toUpperCase(),
       creditUnits,
-      schoolName: schoolName || null,
-      notes: notes || null,
+      schoolName: cleanText(schoolName),
+      notes: cleanText(notes),
+      grade: cleanText(grade),
+      remarks: cleanText(remarks),
+      instructor: cleanText(instructor),
     },
   });
+
+  await invalidateCreditedCodesCache(studentNumber);
 
   return {
     success: true,
@@ -254,10 +314,15 @@ export async function bulkAddCreditedSubjects(
       courseCode: s.courseCode.toUpperCase(),
       courseTitle: s.courseTitle.toUpperCase(),
       creditUnits: s.creditUnits,
-      schoolName: s.schoolName || null,
-      notes: s.notes || null,
+      schoolName: cleanText(s.schoolName),
+      notes: cleanText(s.notes),
+      grade: cleanText(s.grade),
+      remarks: cleanText(s.remarks),
+      instructor: cleanText(s.instructor),
     })),
   });
+
+  await invalidateCreditedCodesCache(studentNumber);
 
   return {
     success: true,
@@ -294,6 +359,8 @@ export async function removeCreditedSubject(
     where: { id: parsed.data.id },
   });
 
+  await invalidateCreditedCodesCache(existing.studentNumber);
+
   return {
     success: true,
     message: `Credited subject "${existing.courseCode}" removed successfully.`,
@@ -319,6 +386,8 @@ export async function clearCreditedSubjects(
   await prisma.creditedSubject.deleteMany({
     where: { studentNumber },
   });
+
+  await invalidateCreditedCodesCache(studentNumber);
 
   return {
     success: true,
