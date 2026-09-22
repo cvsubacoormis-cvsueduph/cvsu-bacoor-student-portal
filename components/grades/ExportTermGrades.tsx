@@ -27,7 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { COG_GENERATION_ROLES } from "@/lib/cog-roles";
+import { GRADE_EXPORT_ROLES } from "@/lib/cog-roles";
 import { formatAcademicYear } from "@/lib/grade-utils";
 import { semesterMap } from "@/lib/utils";
 
@@ -163,7 +163,7 @@ export function ExportTermGrades() {
   };
 
   // Don't render for roles that can't export — the API rejects them anyway.
-  if (!isLoaded || !role || !COG_GENERATION_ROLES.includes(role as never)) {
+  if (!isLoaded || !role || !GRADE_EXPORT_ROLES.includes(role as never)) {
     return null;
   }
 

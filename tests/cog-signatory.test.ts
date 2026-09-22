@@ -31,17 +31,18 @@ describe("resolveSignatory", () => {
       expect(result.position).toBe(expectedPosition);
     });
 
-    it("does not self-sign for registrar_staff, who cannot generate a COG", () => {
-      // COG_SIGNING_ROLES mirrors COG_GENERATION_ROLES, which excludes
-      // registrar_staff, so they must fall back to the program's registrar.
+    it("signs as a registrar clerk when registrar_staff generates", () => {
+      // COG_SIGNING_ROLES is derived from COG_GENERATION_ROLES, which includes
+      // registrar_staff — they issue certificates too, so they sign their own
+      // name with their own position.
       const result = resolveSignatory({
         role: "registrar_staff",
         ...STAFF,
         course: "BSIT",
       });
 
-      expect(result).toEqual(resolveDefaultSignatory("BSIT"));
-      expect(result.name).not.toBe("Jane Reyes");
+      expect(result.name).toBe("Jane Reyes");
+      expect(result.position).toBe("Registrar Clerk");
     });
 
     it("does not use the course roster when a staff member is acting", () => {

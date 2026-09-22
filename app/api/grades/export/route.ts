@@ -2,7 +2,10 @@ import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
-import { canGenerateCOG, COG_FORBIDDEN_MESSAGE } from "@/lib/cog-roles";
+import {
+  canExportGrades,
+  GRADE_EXPORT_FORBIDDEN_MESSAGE,
+} from "@/lib/cog-roles";
 import {
   GRADE_EXPORT_COLUMN_WIDTHS,
   GRADE_EXPORT_HEADERS,
@@ -143,8 +146,11 @@ export async function GET(request: NextRequest) {
 
   // --- Authorization: admin + registrar only ---
   const role = (sessionClaims?.metadata as { role?: string })?.role;
-  if (!canGenerateCOG(role)) {
-    return NextResponse.json({ error: COG_FORBIDDEN_MESSAGE }, { status: 403 });
+  if (!canExportGrades(role)) {
+    return NextResponse.json(
+      { error: GRADE_EXPORT_FORBIDDEN_MESSAGE },
+      { status: 403 },
+    );
   }
 
   // --- Rate limiting: 5 exports per 60s per user ---

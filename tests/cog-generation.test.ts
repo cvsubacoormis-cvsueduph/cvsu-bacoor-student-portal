@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import prisma from "@/lib/prisma";
 import {
+  canExportGrades,
   canGenerateCOG,
   COG_GENERATION_ROLES,
   COG_FORBIDDEN_MESSAGE,
+  GRADE_EXPORT_ROLES,
 } from "@/lib/cog-roles";
 import {
   clerkClient,
@@ -15,9 +17,6 @@ import {
   setAuthStudent,
   setAuthUnauthenticated,
 } from "./__mocks__/clerk";
-
-/** The clause text describing the gate, used to keep the comment honest. */
-const STRICT_ADMIN_REGISTRAR = "only admins and registrars";
 
 function mockClerkRole(role: string) {
   (clerkClient as any).mockReturnValue({
@@ -34,23 +33,43 @@ function mockClerkRole(role: string) {
 }
 
 describe("COG role gate", () => {
-  it("permits exactly admin and registrar", () => {
-    expect([...COG_GENERATION_ROLES]).toEqual(["admin", "registrar"]);
+  it("permits admin, registrar and registrar staff to generate a COG", () => {
+    expect([...COG_GENERATION_ROLES]).toEqual([
+      "admin",
+      "registrar",
+      "registrar_staff",
+    ]);
     expect(canGenerateCOG("admin")).toBe(true);
     expect(canGenerateCOG("registrar")).toBe(true);
+    // Registrar staff issue certificates as day-to-day registrar work.
+    expect(canGenerateCOG("registrar_staff")).toBe(true);
   });
 
-  // The product decision was "strictly admin + registrar", deliberately
-  // narrower than the /list/grades-lists page access list.
-  it.each(["superuser", "registrar_staff", "faculty", "student", undefined, "", null])(
+  it.each(["superuser", "faculty", "student", "csg", undefined, "", null])(
     "denies %s",
     (role) => {
       expect(canGenerateCOG(role)).toBe(false);
     },
   );
 
-  it("describes the gate as admin-and-registrar in its message", () => {
-    expect(COG_FORBIDDEN_MESSAGE).toContain(STRICT_ADMIN_REGISTRAR);
+  it("describes the gate accurately in its message", () => {
+    expect(COG_FORBIDDEN_MESSAGE).toContain("admins");
+    expect(COG_FORBIDDEN_MESSAGE).toContain("registrars");
+    expect(COG_FORBIDDEN_MESSAGE).toContain("registrar staff");
+  });
+
+  /**
+   * Generation and export are separate privileges and must not share a list.
+   * Collapsing them once removed a capability registrar staff had always had.
+   */
+  it("keeps the grade export gate narrower than COG generation", () => {
+    expect([...GRADE_EXPORT_ROLES]).toEqual(["admin", "registrar"]);
+    expect(canExportGrades("admin")).toBe(true);
+    expect(canExportGrades("registrar")).toBe(true);
+    // Registrar staff may generate a COG but may not bulk-export a term.
+    expect(canGenerateCOG("registrar_staff")).toBe(true);
+    expect(canExportGrades("registrar_staff")).toBe(false);
+    expect(canExportGrades("superuser")).toBe(false);
   });
 });
 
@@ -101,7 +120,7 @@ describe("generateCOGAdminWithRateLimit", () => {
     ).rejects.toThrow("Unauthorized");
   });
 
-  it.each(["faculty", "superuser", "registrar_staff", "student"])(
+  it.each(["faculty", "superuser", "student", "csg"])(
     "rejects the %s role",
     async (role) => {
       setAuthAdmin();
@@ -112,14 +131,19 @@ describe("generateCOGAdminWithRateLimit", () => {
     },
   );
 
-  it.each(["admin", "registrar"])("permits the %s role", async (role) => {
-    if (role === "admin") setAuthAdmin();
-    else setAuthRegistrar();
-    mockClerkRole(role);
+  it.each(["admin", "registrar", "registrar_staff"])(
+    "permits the %s role",
+    async (role) => {
+      if (role === "admin") setAuthAdmin();
+      else if (role === "registrar") setAuthRegistrar();
+      else setAuthRegistrarStaff();
 
-    const result = await generate("student-a", "AY_2024_2025", "FIRST");
-    expect(result.student.studentNumber).toBe("20210010");
-  });
+      mockClerkRole(role);
+
+      const result = await generate("student-a", "AY_2024_2025", "FIRST");
+      expect(result.student.studentNumber).toBe("20210010");
+    },
+  );
 
   it("requires an academic year and semester", async () => {
     setAuthRegistrar();

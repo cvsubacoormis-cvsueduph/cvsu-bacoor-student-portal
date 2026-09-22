@@ -16,6 +16,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
 import { storeCogVerification } from "@/actions/cog-verification";
+import { COG_GENERATION_ROLES } from "@/lib/cog-roles";
 import {
   courseClerkshipMap,
   courseMap,
@@ -137,23 +138,24 @@ const PDF_PERMISSIONS: ["print"] = ["print"];
  * Roles that sign a COG as themselves rather than deferring to the program's
  * assigned registrar.
  *
- * This mirrors {@link COG_GENERATION_ROLES} in `lib/cog-roles.ts` exactly —
- * `registrar_staff` is deliberately excluded there and therefore never reaches
- * a COG surface, so it must not be listed here either. Keeping the two in step
- * means the signing branch can only run for a role that is allowed to generate
- * the document in the first place.
+ * Derived from the shared COG generation gate rather than duplicated, so the
+ * two can never drift: any role allowed to generate a COG is also a role that
+ * signs it.
  */
-const COG_SIGNING_ROLES = ["admin", "registrar"] as const;
+const COG_SIGNING_ROLES = COG_GENERATION_ROLES;
 
 type CogSigningRole = (typeof COG_SIGNING_ROLES)[number];
 
 /**
  * Position printed beneath a staff signatory's name.
  *
- * Both permitted roles sign in the capacity of the campus registrar.
+ * Registrar staff are clerks; admin and registrar sign in the capacity of the
+ * campus registrar.
  */
 function coursePositionForRole(role: CogSigningRole): string {
   switch (role) {
+    case "registrar_staff":
+      return "Registrar Clerk";
     case "registrar":
     case "admin":
       return "Campus Registrar";
