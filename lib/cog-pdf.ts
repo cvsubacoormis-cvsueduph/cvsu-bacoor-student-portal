@@ -373,7 +373,7 @@ function drawStudentBlock(
   semester: string,
   yearLevel: string,
 ) {
-  const fullName = `${student.firstName}, ${student.middleInit || ""} ${
+  const fullName = `${student.firstName} ${student.middleInit || ""}. ${
     student.lastName
   }`;
   const studentNo = student.studentNumber;
