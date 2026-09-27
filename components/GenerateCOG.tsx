@@ -33,7 +33,7 @@ const yearLevels = ["FIRST YEAR", "SECOND YEAR", "THIRD YEAR", "FOURTH YEAR"];
 const purposes = [
   "Enrollment/Evaluation Purposes Only",
   // "Work Purposes",
-  // "Scholarship",
+  "For Provincial Scholarship Program",
   "Personal Copy",
 ];
 
