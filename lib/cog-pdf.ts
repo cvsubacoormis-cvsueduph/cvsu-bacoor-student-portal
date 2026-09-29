@@ -173,6 +173,10 @@ const FAILING_GRADES = ["DRP", "INC", "4.00", "5.00", "US"];
 /** Remarks rendered in red. */
 const FAILING_REMARKS = ["FAILED", "CON. FAILURE", "LACK OF REQ", "DROPPED"];
 
+/** Table cell colours. Declared as tuples so jsPDF's Color type accepts them. */
+const BLACK: [number, number, number] = [0, 0, 0];
+const FAIL_RED: [number, number, number] = [255, 0, 0];
+
 /**
  * Resolves the grade used for GPA math.
  * INC/DRP fall back to the re-exam; otherwise the better of the two passes.
@@ -200,6 +204,46 @@ export function resolveFinalGrade(grade: {
   if (originalGrade === null) return reExamGrade;
   if (reExamGrade === null) return originalGrade;
   return Math.min(originalGrade, reExamGrade);
+}
+
+/**
+ * The outcome that decides a subject's fate: the re-exam when one was taken,
+ * otherwise the original grade.
+ *
+ * A re-exam supersedes the original grade. That is the rule `computeFinalRemarks`
+ * in `lib/grade-utils.ts` already applies to REMARKS, which is why a 4.00 with a
+ * passing re-exam prints "PASSED". Deciding credit from the raw grade instead
+ * made the COG contradict its own remarks column and print 0 units for a subject
+ * the student had already passed.
+ */
+export function resolveOutcome(grade: {
+  grade: string;
+  reExam?: string | null;
+}): string {
+  const reExam = (grade.reExam ?? "").trim();
+  return (reExam || grade.grade || "").trim().toUpperCase();
+}
+
+/**
+ * True when the subject earned its credit units.
+ *
+ * Decided from the resolved outcome, so a conditional failure (4.00) or a
+ * failure (5.00) that was passed on re-exam earns its units, while one that was
+ * never resolved does not.
+ */
+export function earnsCredit(grade: {
+  grade: string;
+  reExam?: string | null;
+}): boolean {
+  return !NON_CREDIT_GRADES.includes(resolveOutcome(grade));
+}
+
+/** True when the subject's outcome is a failing one, rendered in red. */
+export function isFailingOutcome(grade: {
+  grade: string;
+  reExam?: string | null;
+}): boolean {
+  return FAILING_GRADES.includes(resolveOutcome(grade));
 }
 
 /**
@@ -484,39 +528,74 @@ function drawGradesTable(doc: jsPDF, grades: CogGrade[]) {
         "FACULTY",
       ],
     ],
-    body: grades.map((g) => [
-      g.courseCode,
-      FAILING_GRADES.includes(g.grade) ? "0" : g.creditUnit.toString(),
-      g.courseTitle,
-      FAILING_GRADES.includes(g.grade)
-        ? { content: g.grade || "-", styles: { textColor: [255, 0, 0] } }
-        : { content: g.grade || "-", styles: { textColor: [0, 0, 0] } },
-      g.reExam || "",
-      FAILING_REMARKS.includes(g.remarks)
-        ? { content: g.remarks || "", styles: { textColor: [255, 0, 0] } }
-        : { content: g.remarks || "", styles: { textColor: [0, 0, 0] } },
-      g.instructor || "",
-    ]),
+    body: buildGradeTableBody(grades),
   });
 }
 
 /**
- * Totals block. Unit/GPA math intentionally matches the original documents:
- * DRP/INC/FAILED/4.00/5.00/US earn no credit, and CVSU 101 "S" counts toward
- * the GPA denominator but contributes no grade points.
+ * Builds the grades table body.
+ *
+ * Pure, and exported, so the rendered cells can be asserted without a PDF — the
+ * UNITS cell in particular decides what the registrar reads as credited work.
+ *
+ * Units and colour both follow the *resolved* outcome, so a conditional failure
+ * passed on re-exam shows its units and is not printed in red.
  */
-function drawTotals(doc: jsPDF, grades: CogGrade[], purpose: string) {
-  const lastY = (doc as any).lastAutoTable.finalY;
+export function buildGradeTableBody(
+  grades: CogGrade[],
+): (string | { content: string; styles: { textColor: [number, number, number] } })[][] {
+  return grades.map((g) => {
+    const failing = isFailingOutcome(g);
+    return [
+      g.courseCode,
+      earnsCredit(g) ? g.creditUnit.toString() : "0",
+      g.courseTitle,
+      {
+        content: g.grade || "-",
+        styles: { textColor: failing ? FAIL_RED : BLACK },
+      },
+      g.reExam || "",
+      FAILING_REMARKS.includes(g.remarks)
+        ? { content: g.remarks || "", styles: { textColor: FAIL_RED } }
+        : { content: g.remarks || "", styles: { textColor: BLACK } },
+      g.instructor || "",
+    ];
+  });
+}
 
+/** Aggregate figures printed in the totals block and stored with the verification record. */
+export type CogTotals = {
+  gpa: string;
+  totalSubjectsEnrolled: number;
+  totalUnitsEnrolled: number;
+  totalGPAUnits: number;
+  totalCreditsEarned: number;
+};
+
+/**
+ * Computes the totals block.
+ *
+ * Pure, and exported, so the figures can be tested without rendering a PDF —
+ * they are printed on an official document and stored with the verification
+ * record.
+ *
+ * Unit/GPA math intentionally matches the original documents: subjects whose
+ * *resolved* outcome is DRP/INC/FAILED/4.00/5.00/US earn no credit, and CVSU 101
+ * "S" counts toward the GPA denominator but contributes no grade points.
+ *
+ * The outcome is resolved through the re-exam, so a conditional failure that was
+ * passed on re-exam is counted — the same rule the REMARKS column follows.
+ */
+export function computeTotals(grades: CogGrade[]): CogTotals {
   const totalSubjectsEnrolled = grades.length;
 
   const totalUnitsEnrolled = grades.reduce((acc, g) => {
-    if (NON_CREDIT_GRADES.includes(String(g.grade))) return acc;
+    if (!earnsCredit(g)) return acc;
     return acc + g.creditUnit;
   }, 0);
 
   const totalGPAUnits = grades.reduce((acc, cur) => {
-    if (NON_CREDIT_GRADES.includes(String(cur.grade))) return acc;
+    if (!earnsCredit(cur)) return acc;
     if (cur.courseCode === "CVSU 101" && cur.grade === "S") {
       return acc + cur.creditUnit;
     }
@@ -526,7 +605,7 @@ function drawTotals(doc: jsPDF, grades: CogGrade[], purpose: string) {
   }, 0);
 
   const totalCreditsEarned = grades.reduce((acc, cur) => {
-    if (NON_CREDIT_GRADES.includes(String(cur.grade))) return acc;
+    if (!earnsCredit(cur)) return acc;
     if (cur.courseCode === "CVSU 101") return acc;
     const finalGrade = resolveFinalGrade(cur);
     if (finalGrade === null || isNaN(finalGrade)) return acc;
@@ -537,6 +616,22 @@ function drawTotals(doc: jsPDF, grades: CogGrade[], purpose: string) {
     totalGPAUnits > 0 && !isNaN(totalCreditsEarned)
       ? (totalCreditsEarned / totalGPAUnits).toFixed(2)
       : "0.00";
+
+  return {
+    gpa,
+    totalSubjectsEnrolled,
+    totalUnitsEnrolled,
+    totalGPAUnits,
+    totalCreditsEarned,
+  };
+}
+
+/** Draws the totals block. The figures themselves come from {@link computeTotals}. */
+function drawTotals(doc: jsPDF, grades: CogGrade[], purpose: string) {
+  const lastY = (doc as any).lastAutoTable.finalY;
+
+  const { gpa, totalSubjectsEnrolled, totalUnitsEnrolled, totalCreditsEarned } =
+    computeTotals(grades);
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);

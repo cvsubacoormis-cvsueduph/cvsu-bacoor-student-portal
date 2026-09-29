@@ -8,10 +8,10 @@ import {
  * The signature block is the part of a COG a reader trusts, so who ends up on
  * it is worth pinning down explicitly.
  *
- * Rule: `admin` and `registrar` sign as themselves; anyone else — including a
- * student generating their own copy — gets the registrar assigned to the
- * student's program. `registrar_staff` is excluded because it is not in
- * COG_GENERATION_ROLES and so cannot reach a COG surface at all.
+ * Rule: members of COG_GENERATION_ROLES — `admin`, `registrar` and
+ * `registrar_staff` — sign as themselves. Anyone else, including a student
+ * generating their own copy, gets the registrar assigned to the student's
+ * program instead.
  */
 describe("resolveSignatory", () => {
   const STAFF = { firstName: "Jane", lastName: "Reyes" };
