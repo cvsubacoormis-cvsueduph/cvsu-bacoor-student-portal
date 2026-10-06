@@ -20,14 +20,14 @@ services:
   app:
     build: .
     ports:
-      - "3006:3001"
+      - "3013:3001"
     env_file: .env
     environment:
       NODE_ENV: production
       REDIS_HOST: cvsu-portal-redis-prod
       REDIS_PORT: 6379
       HOST: 0.0.0.0
-      PORT: 3001
+      PORT: 3013
     depends_on:
       redis:
         condition: service_healthy
