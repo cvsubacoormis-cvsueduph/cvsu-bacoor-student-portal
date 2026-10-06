@@ -12,7 +12,10 @@ COPY . .
 
 RUN npx prisma generate
 
-RUN npm run build 2>&1 || true
+# Fail the build if `next build` fails. Swallowing the error here (previously
+# `|| true`) shipped a partial .next directory that only blew up at runtime as a
+# crash loop. Verify the expected output instead of trusting the exit code.
+RUN npm run build && test -f .next/BUILD_ID && test -d .next/server
 
 FROM node:23-alpine
 
@@ -43,7 +46,10 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001 || exit 1
+# Keep this URL on the same port as ENV PORT above; `next start` binds to $PORT.
+# Probes /api/health rather than / because unauthenticated / is redirected to
+# /sign-in by middleware.ts, and busybox wget does not follow redirects.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
 
 CMD ["npm", "run", "start"]
