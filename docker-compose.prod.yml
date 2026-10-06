@@ -18,7 +18,15 @@ services:
       - prod-network
 
   app:
-    build: .
+    build:
+      context: .
+      # `docker compose --env-file .env` only feeds the compose file itself and
+      # the container's runtime env — it does NOT reach `docker build`. These are
+      # required because `next build` inlines NEXT_PUBLIC_* into the client
+      # bundle and prerenders pages wrapped in <ClerkProvider>.
+      args:
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
     ports:
       - "3013:3001"
     env_file: .env

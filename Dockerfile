@@ -1,5 +1,10 @@
 FROM node:23-alpine AS builder
 
+# Declared before FROM so the value is available to `FROM` itself; must be
+# redeclared in each stage that uses it (https://docs.docker.com/reference/dockerfile/#2).
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_APP_URL
+
 RUN apk add --no-cache openssl
 
 WORKDIR /app
@@ -9,6 +14,13 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+
+# `next build` runs here, and `NEXT_PUBLIC_*` values are inlined into the client
+# bundle at build time. Without this the build dies with
+# "@clerk/clerk-react: Missing publishableKey" the moment it prerenders a page
+# under the root layout's <ClerkProvider> (app/layout.tsx:32).
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 RUN npx prisma generate
 
